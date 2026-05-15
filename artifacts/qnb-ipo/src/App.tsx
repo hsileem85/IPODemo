@@ -17,8 +17,10 @@ import {
   CheckCircle2, Globe, Users, ShieldCheck, ClipboardList, UserPlus,
   ScrollText, LogIn, LockKeyhole, UserCheck, Eye, Layers,
   Moon, Sun, Bell, BellOff, User, Settings, LogOut, ChevronDown,
-  MessageSquare, Mail, Smartphone, Megaphone, Upload as UploadIcon,
+  MessageSquare, Mail, Smartphone, Upload as UploadIcon,
   Filter, Send as SendIcon, CheckCheck, AlertCircle, X,
+  FileUser, Building2, MapPin, CreditCard, AlertTriangle,
+  ClipboardCheck, FileCheck, ChevronRight, ListFilter,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,6 +32,8 @@ type UserRole = "FrontOffice" | "BackOffice" | "Supervisor" | "SystemAdmin" | "C
 type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded";
 type CommChannel = "email" | "sms" | "notification";
 type CommAudience = "all" | "group" | "individual" | "upload";
+type KYCStatus = "Draft" | "Pending Review" | "Approved" | "Rejected";
+type KYCClientType = "individual" | "corporate";
 
 interface ClientRecord {
   nameAr: string; nameEn: string; unifiedCode: string; nationalId: string;
@@ -66,8 +70,37 @@ interface CommMessage {
   subject: string; body: string; recipients: number; status: "Sent" | "Pending" | "Failed";
   sentBy: string;
 }
-interface UserPrefs {
-  darkMode: boolean; notifications: boolean; lang: Lang;
+interface UserPrefs { darkMode: boolean; notifications: boolean; lang: Lang; }
+
+interface KYCRecord {
+  id: string; clientType: KYCClientType; status: KYCStatus;
+  submittedAt: string; submittedBy: string; branch: string;
+  // Individual
+  nameAr: string; nameEn: string; dob: string; nationality: string;
+  gender: string; motherName: string; maritalStatus: string;
+  nationalId: string; passportNo: string; idExpiry: string;
+  // Corporate
+  companyNameAr: string; companyNameEn: string;
+  commercialRegNo: string; taxId: string; industryType: string;
+  legalForm: string; incorporationDate: string;
+  // Common identity
+  unifiedCode: string;
+  // Address
+  addressLine1: string; addressLine2: string;
+  city: string; governorate: string; postalCode: string; country: string;
+  mailingAddressSame: boolean; mailingAddress: string;
+  // Contact
+  email: string; mobile: string; phone: string;
+  // Bank
+  bankName: string; accountNo: string; iban: string; accountCurrency: string;
+  // Risk
+  riskLevel: "Low" | "Medium" | "High";
+  sourceOfFunds: string; occupation: string;
+  pepStatus: boolean; sanctionsCheck: boolean;
+  annualIncome: string; netWorth: string;
+  // Documents & POA
+  uploadedDocs: string[];
+  hasPOA: boolean; poaHolderName: string; poaExpiry: string; poaScope: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,6 +232,65 @@ const T = {
     eventSOO: "Sinawy Olive Oil IPO (SOO)", eventCAP: "زيادة رأس مال - بنك التكنولوجيا المتقدمة", eventRIGHTS: "أسهم أولوية - دلتا للتأمين",
     egp: "ج.م", shares: "سهم",
     logout: "تسجيل الخروج", profile: "الملف الشخصي", settings: "الإعدادات",
+    // KYC
+    foTabSubs: "الاكتتابات", foTabKYC: "تسجيل KYC",
+    kycModuleTitle: "تسجيل بيانات العميل (KYC)", kycModuleDesc: "تسجيل بيانات العملاء الأفراد والشركات مع اعتماد المشرف",
+    kycTabNew: "تسجيل جديد", kycTabList: "قائمة السجلات",
+    kycNewBtn: "+ تسجيل عميل جديد",
+    kycTypeLabel: "نوع العميل", kycTypeIndividual: "فرد", kycTypeCorporate: "شركة / جهة اعتبارية",
+    kycStep1: "البيانات الأساسية", kycStep2: "الهوية والعنوان", kycStep3: "الحساب البنكي", kycStep4: "تقييم المخاطر", kycStep5: "المستندات والتوكيل",
+    // Basic info — individual
+    nameArLabel: "الاسم بالعربية", nameEnLabel: "الاسم بالإنجليزية",
+    dobLabel: "تاريخ الميلاد", nationalityLabel: "الجنسية",
+    genderLabel: "الجنس", genderMale: "ذكر", genderFemale: "أنثى",
+    motherNameLabel: "اسم الأم", maritalStatusLabel: "الحالة الاجتماعية",
+    maritalSingle: "أعزب", maritalMarried: "متزوج", maritalDivorced: "مطلق", maritalWidowed: "أرمل",
+    // Basic info — corporate
+    companyNameArLabel: "اسم الشركة بالعربية", companyNameEnLabel: "اسم الشركة بالإنجليزية",
+    commRegNoLabel: "رقم السجل التجاري", taxIdLabel: "الرقم الضريبي",
+    industryLabel: "القطاع", legalFormLabel: "الشكل القانوني",
+    incDateLabel: "تاريخ التأسيس",
+    legalFormJSC: "شركة مساهمة", legalFormLLC: "شركة ذات مسؤولية محدودة", legalFormSP: "ملكية فردية", legalFormOther: "أخرى",
+    // Identity
+    natIdLabel: "رقم البطاقة القومية", passportLabel: "رقم جواز السفر",
+    idExpiryLabel: "تاريخ انتهاء الهوية",
+    // Address
+    addressLine1Label: "العنوان — السطر الأول", addressLine2Label: "العنوان — السطر الثاني (اختياري)",
+    cityLabel: "المدينة", governorateLabel: "المحافظة",
+    postalCodeLabel: "الرمز البريدي", countryLabel: "الدولة",
+    mailingAddressSameLabel: "عنوان المراسلة مطابق لعنوان الإقامة",
+    mailingAddressLabel: "عنوان المراسلة",
+    // Contact
+    mobileLabel: "رقم الجوال", phoneLabel: "رقم الهاتف (اختياري)",
+    // Bank
+    bankNameLabel: "اسم البنك", ibanLabel: "رقم IBAN",
+    currencyLabel: "عملة الحساب",
+    // Risk
+    riskLevelLabel: "مستوى المخاطرة", riskLow: "منخفض", riskMedium: "متوسط", riskHigh: "مرتفع",
+    sourceOfFundsLabel: "مصدر الأموال", occupationLabel: "المهنة",
+    pepStatusLabel: "شخص مكشوف سياسياً (PEP)", sanctionsLabel: "فحص قوائم العقوبات",
+    annualIncomeLabel: "الدخل السنوي التقديري", netWorthLabel: "صافي الثروة",
+    // Documents
+    docsSectionTitle: "المستندات المطلوبة",
+    kycDocNatId: "صورة البطاقة القومية (وجهين)", kycDocPassport: "صورة جواز السفر",
+    kycDocAddress: "إثبات العنوان (فاتورة / مستند حكومي)", kycDocBankStmt: "كشف حساب بنكي (3 أشهر)",
+    kycDocCommReg: "السجل التجاري", kycDocTaxCard: "البطاقة الضريبية",
+    kycDocBoardRes: "قرار مجلس الإدارة", kycDocSigAuth: "نماذج التوقيعات المعتمدة",
+    poaSectionTitle: "بيانات التوكيل الرسمي (POA)",
+    hasPOALabel: "يوجد توكيل رسمي", poaHolderLabel: "اسم صاحب التوكيل",
+    poaExpiryLabel: "تاريخ انتهاء التوكيل", poaScopeLabel: "نطاق التوكيل",
+    // KYC checker
+    kycCheckerTitle: "مراجعة طلبات KYC", kycCheckerDesc: "مراجعة واعتماد تسجيلات KYC المقدمة من الفروع",
+    kycPendingCount: (n: number) => `${n} طلب KYC في انتظار الاعتماد`,
+    kycApprovedToast: "تم اعتماد KYC", kycApprovedDesc: (n: number) => `تم اعتماد ${n} سجل بنجاح.`,
+    kycRejectedToast: "تم رفض KYC", kycRejectedDesc: "تم رفض الطلب المحدد.",
+    kycSubmittedToast: "تم الإرسال", kycSubmittedDesc: (id: string) => `تم إرسال ملف ${id} للمشرف.`,
+    colClientType: "نوع العميل", colKYCID: "رقم الطلب",
+    kycStatusDraft: "مسودة", kycStatusPending: "في الانتظار",
+    kycStatusApproved: "معتمد", kycStatusRejected: "مرفوض",
+    kycIndividual: "فرد", kycCorporate: "شركة",
+    supTabSubs: "الاكتتابات", supTabKYC: "مراجعة KYC",
+    viewDetailsBtn: "عرض التفاصيل",
   },
   en: {
     appTitle: "IPO Management System",
@@ -325,6 +417,56 @@ const T = {
     eventSOO: "Sinawy Olive Oil IPO (SOO)", eventCAP: "Capital Increase — Advanced Technology Bank", eventRIGHTS: "Rights Issue — Delta Insurance",
     egp: "EGP", shares: "shares",
     logout: "Logout", profile: "My Profile", settings: "Settings",
+    // KYC
+    foTabSubs: "Subscriptions", foTabKYC: "KYC Registration",
+    kycModuleTitle: "Client KYC Registration", kycModuleDesc: "Register individual and corporate client profiles — maker entry, checker approval",
+    kycTabNew: "New Registration", kycTabList: "Records List",
+    kycNewBtn: "+ Register New Client",
+    kycTypeLabel: "Client Type", kycTypeIndividual: "Individual", kycTypeCorporate: "Corporate / Entity",
+    kycStep1: "Basic Information", kycStep2: "Identity & Address", kycStep3: "Bank Account", kycStep4: "Risk Assessment", kycStep5: "Documents & POA",
+    nameArLabel: "Name (Arabic)", nameEnLabel: "Name (English)",
+    dobLabel: "Date of Birth", nationalityLabel: "Nationality",
+    genderLabel: "Gender", genderMale: "Male", genderFemale: "Female",
+    motherNameLabel: "Mother's Name", maritalStatusLabel: "Marital Status",
+    maritalSingle: "Single", maritalMarried: "Married", maritalDivorced: "Divorced", maritalWidowed: "Widowed",
+    companyNameArLabel: "Company Name (Arabic)", companyNameEnLabel: "Company Name (English)",
+    commRegNoLabel: "Commercial Registration No.", taxIdLabel: "Tax ID",
+    industryLabel: "Industry / Sector", legalFormLabel: "Legal Form",
+    incDateLabel: "Incorporation Date",
+    legalFormJSC: "Joint Stock Company", legalFormLLC: "Limited Liability Co.", legalFormSP: "Sole Proprietorship", legalFormOther: "Other",
+    natIdLabel: "National ID Number", passportLabel: "Passport Number",
+    idExpiryLabel: "ID Expiry Date",
+    addressLine1Label: "Address Line 1", addressLine2Label: "Address Line 2 (optional)",
+    cityLabel: "City", governorateLabel: "Governorate / State",
+    postalCodeLabel: "Postal Code", countryLabel: "Country",
+    mailingAddressSameLabel: "Mailing address same as residential",
+    mailingAddressLabel: "Mailing Address",
+    mobileLabel: "Mobile Number", phoneLabel: "Phone (optional)",
+    bankNameLabel: "Bank Name", ibanLabel: "IBAN",
+    currencyLabel: "Account Currency",
+    riskLevelLabel: "Risk Level", riskLow: "Low", riskMedium: "Medium", riskHigh: "High",
+    sourceOfFundsLabel: "Source of Funds", occupationLabel: "Occupation / Job Title",
+    pepStatusLabel: "Politically Exposed Person (PEP)", sanctionsLabel: "Sanctions & Watchlist Cleared",
+    annualIncomeLabel: "Estimated Annual Income", netWorthLabel: "Estimated Net Worth",
+    docsSectionTitle: "Required Documents",
+    kycDocNatId: "National ID (front & back)", kycDocPassport: "Passport Copy",
+    kycDocAddress: "Proof of Address (utility bill / gov. doc)", kycDocBankStmt: "Bank Statement (last 3 months)",
+    kycDocCommReg: "Commercial Registration Certificate", kycDocTaxCard: "Tax Card",
+    kycDocBoardRes: "Board Resolution / Authorization Letter", kycDocSigAuth: "Authorized Signature Specimens",
+    poaSectionTitle: "Power of Attorney (POA)",
+    hasPOALabel: "This client has a POA", poaHolderLabel: "POA Holder Name",
+    poaExpiryLabel: "POA Expiry Date", poaScopeLabel: "POA Scope / Limitations",
+    kycCheckerTitle: "KYC Review Queue", kycCheckerDesc: "Review and approve KYC registrations submitted by branch staff",
+    kycPendingCount: (n: number) => `${n} KYC record(s) awaiting approval`,
+    kycApprovedToast: "KYC Approved", kycApprovedDesc: (n: number) => `${n} KYC record(s) approved successfully.`,
+    kycRejectedToast: "KYC Rejected", kycRejectedDesc: "The selected record has been rejected.",
+    kycSubmittedToast: "Submitted", kycSubmittedDesc: (id: string) => `KYC file ${id} sent to supervisor.`,
+    colClientType: "Client Type", colKYCID: "KYC ID",
+    kycStatusDraft: "Draft", kycStatusPending: "Pending Review",
+    kycStatusApproved: "Approved", kycStatusRejected: "Rejected",
+    kycIndividual: "Individual", kycCorporate: "Corporate",
+    supTabSubs: "Subscriptions", supTabKYC: "KYC Review",
+    viewDetailsBtn: "View Details",
   },
 } as const;
 
@@ -368,9 +510,9 @@ const INITIAL_USERS: SystemUser[] = [
 ];
 
 const INITIAL_GROUPS = [
-  { id: "GRP-001", nameAr: "موظفو الفرع", nameEn: "Branch Officers", members: 12, permissions: ["create_subscription", "view_clients", "print_receipt"] },
+  { id: "GRP-001", nameAr: "موظفو الفرع", nameEn: "Branch Officers", members: 12, permissions: ["create_subscription", "view_clients", "print_receipt", "kyc_maker"] },
   { id: "GRP-002", nameAr: "موظفو المقاصة", nameEn: "Clearing Officers", members: 5, permissions: ["view_subscriptions", "reconcile", "allocate", "export_data"] },
-  { id: "GRP-003", nameAr: "المشرفون", nameEn: "Supervisors", members: 3, permissions: ["approve_subscription", "reject_subscription", "view_branch_data"] },
+  { id: "GRP-003", nameAr: "المشرفون", nameEn: "Supervisors", members: 3, permissions: ["approve_subscription", "reject_subscription", "kyc_checker", "view_branch_data"] },
   { id: "GRP-004", nameAr: "مديرو النظام", nameEn: "System Admins", members: 2, permissions: ["manage_users", "manage_groups", "view_audit", "full_access"] },
 ];
 
@@ -383,10 +525,48 @@ const INITIAL_AUDIT = [
   { id: 6, timestamp: "2026-05-14 09:10:22", user: "mahmoud.s", role: "Back Office Ops", action: "Execute Allocation", entity: "IPO Event / SOO-2026", oldValue: "Verified", newValue: "Allocated (45%)", ip: "10.0.1.55" },
 ];
 
-const INITIAL_COMM_HISTORY: CommMessage[] = [
-  { id: "MSG-001", timestamp: "2026-05-13 10:00", channel: "email", audience: "All Clients", subject: "IPO Subscription Confirmation", body: "Your subscription has been received...", recipients: 240, status: "Sent", sentBy: "admin" },
-  { id: "MSG-002", timestamp: "2026-05-14 09:00", channel: "sms", audience: "Individual Investors", subject: "Allocation Result", body: "Dear client, your shares have been allocated...", recipients: 185, status: "Sent", sentBy: "admin" },
-  { id: "MSG-003", timestamp: "2026-05-14 11:30", channel: "notification", audience: "Corporate Clients", subject: "Refund Processing Notice", body: "Your refund is being processed...", recipients: 55, status: "Pending", sentBy: "admin" },
+const INITIAL_COMM_HISTORY = [
+  { id: "MSG-001", timestamp: "2026-05-13 10:00", channel: "email" as CommChannel, audience: "All Clients", subject: "IPO Subscription Confirmation", body: "Your subscription has been received...", recipients: 240, status: "Sent" as const, sentBy: "admin" },
+  { id: "MSG-002", timestamp: "2026-05-14 09:00", channel: "sms" as CommChannel, audience: "Individual Investors", subject: "Allocation Result", body: "Dear client, your shares have been allocated...", recipients: 185, status: "Sent" as const, sentBy: "admin" },
+  { id: "MSG-003", timestamp: "2026-05-14 11:30", channel: "notification" as CommChannel, audience: "Corporate Clients", subject: "Refund Processing Notice", body: "Your refund is being processed...", recipients: 55, status: "Pending" as const, sentBy: "admin" },
+];
+
+const INITIAL_KYC_RECORDS: KYCRecord[] = [
+  {
+    id: "KYC-0011", clientType: "individual", status: "Approved",
+    submittedAt: "2026-05-12 09:00", submittedBy: "ahmed.h", branch: "Cairo-Main",
+    nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali",
+    dob: "1990-01-10", nationality: "Egyptian", gender: "Male", motherName: "Fatma Ibrahim", maritalStatus: "Married",
+    nationalId: "29001011234567", passportNo: "A12345678", idExpiry: "2028-05-01",
+    companyNameAr: "", companyNameEn: "", commercialRegNo: "", taxId: "", industryType: "", legalForm: "", incorporationDate: "",
+    unifiedCode: "7700123",
+    addressLine1: "12 Nile St, Dokki", addressLine2: "Apt 5", city: "Giza", governorate: "Giza",
+    postalCode: "12311", country: "Egypt", mailingAddressSame: true, mailingAddress: "",
+    email: "ahmed.ali@email.com", mobile: "+201112345678", phone: "",
+    bankName: "QNB Al Ahli", accountNo: "100234567", iban: "EG290011-23456-78", accountCurrency: "EGP",
+    riskLevel: "Low", sourceOfFunds: "Employment Income", occupation: "Engineer",
+    pepStatus: false, sanctionsCheck: true, annualIncome: "300,000 EGP", netWorth: "1,200,000 EGP",
+    uploadedDocs: ["National ID", "Bank Statement"],
+    hasPOA: false, poaHolderName: "", poaExpiry: "", poaScope: "",
+  },
+  {
+    id: "KYC-0012", clientType: "corporate", status: "Pending Review",
+    submittedAt: "2026-05-14 14:30", submittedBy: "ahmed.h", branch: "Cairo-Main",
+    nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan",
+    dob: "", nationality: "", gender: "", motherName: "", maritalStatus: "",
+    nationalId: "", passportNo: "", idExpiry: "",
+    companyNameAr: "شركة دلتا للاستثمار", companyNameEn: "Delta Investment Co.",
+    commercialRegNo: "12345/Cairo/2018", taxId: "200-456-789", industryType: "Financial Services", legalForm: "Joint Stock Company", incorporationDate: "2018-03-15",
+    unifiedCode: "7700456",
+    addressLine1: "45 Tahrir Sq, Downtown", addressLine2: "", city: "Cairo", governorate: "Cairo",
+    postalCode: "11511", country: "Egypt", mailingAddressSame: false, mailingAddress: "PO Box 456, Cairo",
+    email: "sara.hassan@corp.com", mobile: "+201223456789", phone: "+20222345678",
+    bankName: "CIB", accountNo: "100234568", iban: "EG290033-56789-01", accountCurrency: "EGP",
+    riskLevel: "Medium", sourceOfFunds: "Business Revenue", occupation: "CEO",
+    pepStatus: false, sanctionsCheck: true, annualIncome: "5,000,000 EGP", netWorth: "25,000,000 EGP",
+    uploadedDocs: ["Commercial Registration", "Tax Card"],
+    hasPOA: true, poaHolderName: "Mahmoud Kamal", poaExpiry: "2027-12-31", poaScope: "Trading and investment activities",
+  },
 ];
 
 const queryClient = new QueryClient();
@@ -414,6 +594,17 @@ function SubBadge({ status }: { status: SubStatus }) {
   const { label, cls } = map[status];
   return <Badge variant="outline" className={`${cls} whitespace-nowrap`}>{label}</Badge>;
 }
+function KYCBadge({ status }: { status: KYCStatus }) {
+  const { t } = useLang();
+  const map: Record<KYCStatus, { label: string; cls: string }> = {
+    "Draft": { label: t.kycStatusDraft, cls: "bg-muted text-muted-foreground border-border" },
+    "Pending Review": { label: t.kycStatusPending, cls: "bg-orange-500/10 text-orange-600 border-orange-500/20" },
+    "Approved": { label: t.kycStatusApproved, cls: "bg-green-500/10 text-green-600 border-green-500/20" },
+    "Rejected": { label: t.kycStatusRejected, cls: "bg-red-500/10 text-red-600 border-red-500/20" },
+  };
+  const { label, cls } = map[status];
+  return <Badge variant="outline" className={`${cls} whitespace-nowrap`}>{label}</Badge>;
+}
 function TabBtn({ id, active, onClick, icon: Icon, children }: { id: string; active: boolean; onClick: () => void; icon?: React.ElementType; children: React.ReactNode }) {
   return (
     <button data-testid={`tab-${id}`} onClick={onClick}
@@ -427,6 +618,17 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     <button onClick={() => onChange(!checked)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${checked ? "bg-primary" : "bg-muted-foreground/30"}`}>
       <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-1"}`} />
     </button>
+  );
+}
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-3 mt-5 first:mt-0 border-b border-primary/10 pb-1.5">{children}</p>;
+}
+function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">{label}</label>
+      {children}
+    </div>
   );
 }
 function exportCSV(data: Subscription[], lang: Lang) {
@@ -463,7 +665,7 @@ function downloadReceipt(sub: Subscription, lang: Lang) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Profile / Settings panel (slide-over)
+// Profile / Settings panel
 // ─────────────────────────────────────────────────────────────────────────────
 function ProfilePanel({ user, prefs, onPrefsChange, onClose }: {
   user: SystemUser; prefs: UserPrefs;
@@ -474,17 +676,13 @@ function ProfilePanel({ user, prefs, onPrefsChange, onClose }: {
   return (
     <div className="fixed inset-0 z-50 flex" dir={isRTL ? "rtl" : "ltr"}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative ms-auto h-full w-full max-w-sm bg-card border-s border-border shadow-2xl flex flex-col`}>
-        {/* Header */}
+      <div className="relative ms-auto h-full w-full max-w-sm bg-card border-s border-border shadow-2xl flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-border">
           <h2 className="font-black text-lg">{t.profileTitle}</h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"><X className="w-5 h-5" /></button>
         </div>
-        {/* Avatar + identity */}
         <div className="p-6 flex flex-col items-center gap-3 border-b border-border">
-          <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-3xl font-black">
-            {user.name.charAt(0).toUpperCase()}
-          </div>
+          <div className="w-20 h-20 rounded-full bg-primary/10 text-primary flex items-center justify-center text-3xl font-black">{user.name.charAt(0).toUpperCase()}</div>
           <div className="text-center">
             <p className="font-black text-xl">{user.name}</p>
             <p className="text-sm text-muted-foreground">@{user.username}</p>
@@ -494,44 +692,587 @@ function ProfilePanel({ user, prefs, onPrefsChange, onClose }: {
             <Badge variant="outline" className="bg-muted text-muted-foreground text-xs">{user.branch}</Badge>
           </div>
         </div>
-        {/* Details */}
         <div className="p-5 space-y-3 border-b border-border">
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground font-bold">{t.emailLabel}</span>
-            <span className="font-mono">{user.email}</span>
-          </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground font-bold">{t.lastLoginLabel}</span>
-            <span className="font-mono text-xs">{user.lastLogin}</span>
-          </div>
+          <div className="flex justify-between items-center text-sm"><span className="text-muted-foreground font-bold">{t.emailLabel}</span><span className="font-mono">{user.email}</span></div>
+          <div className="flex justify-between items-center text-sm"><span className="text-muted-foreground font-bold">{t.lastLoginLabel}</span><span className="font-mono text-xs">{user.lastLogin}</span></div>
         </div>
-        {/* Settings */}
         <div className="p-5 space-y-5 flex-1">
           <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{t.settingsTitle}</p>
-          {/* Dark mode */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {prefs.darkMode ? <Moon className="w-4 h-4 text-primary" /> : <Sun className="w-4 h-4 text-amber-500" />}
-              <div>
-                <p className="font-bold text-sm">{t.darkModeLabel}</p>
-                <p className="text-xs text-muted-foreground">{t.darkModeDesc}</p>
-              </div>
+              <div><p className="font-bold text-sm">{t.darkModeLabel}</p><p className="text-xs text-muted-foreground">{t.darkModeDesc}</p></div>
             </div>
             <Toggle checked={prefs.darkMode} onChange={v => onPrefsChange({ darkMode: v })} />
           </div>
-          {/* Notifications */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {prefs.notifications ? <Bell className="w-4 h-4 text-primary" /> : <BellOff className="w-4 h-4 text-muted-foreground" />}
-              <div>
-                <p className="font-bold text-sm">{t.notifLabel}</p>
-                <p className="text-xs text-muted-foreground">{t.notifDesc}</p>
-              </div>
+              <div><p className="font-bold text-sm">{t.notifLabel}</p><p className="text-xs text-muted-foreground">{t.notifDesc}</p></div>
             </div>
             <Toggle checked={prefs.notifications} onChange={v => onPrefsChange({ notifications: v })} />
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// KYC Module
+// ─────────────────────────────────────────────────────────────────────────────
+function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
+  records: KYCRecord[];
+  onNewRecord: (r: KYCRecord) => void;
+  onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
+  isChecker?: boolean;
+}) {
+  const { t, lang } = useLang();
+  const { toast } = useToast();
+  const [kycTab, setKycTab] = useState<"list" | "form">(isChecker ? "list" : "list");
+  const [kycStep, setKycStep] = useState(1);
+  const [clientType, setClientType] = useState<KYCClientType>("individual");
+  const [detailRecord, setDetailRecord] = useState<KYCRecord | null>(null);
+  const [filterStatus, setFilterStatus] = useState<"All" | KYCStatus>("All");
+
+  // Form state
+  const [form, setForm] = useState({
+    nameAr: "", nameEn: "", dob: "", nationality: "Egyptian", gender: "Male",
+    motherName: "", maritalStatus: "Single",
+    companyNameAr: "", companyNameEn: "", commercialRegNo: "", taxId: "",
+    industryType: "Financial Services", legalForm: "Joint Stock Company", incorporationDate: "",
+    nationalId: "", passportNo: "", idExpiry: "", unifiedCode: "",
+    addressLine1: "", addressLine2: "", city: "", governorate: "", postalCode: "", country: "Egypt",
+    mailingAddressSame: true, mailingAddress: "",
+    email: "", mobile: "", phone: "",
+    bankName: "QNB Al Ahli", accountNo: "", iban: "", accountCurrency: "EGP",
+    riskLevel: "Low" as "Low" | "Medium" | "High",
+    sourceOfFunds: "", occupation: "",
+    pepStatus: false, sanctionsCheck: true, annualIncome: "", netWorth: "",
+    hasPOA: false, poaHolderName: "", poaExpiry: "", poaScope: "",
+  });
+  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
+  const docRef = useRef<HTMLInputElement>(null);
+
+  const KYC_STEPS = [t.kycStep1, t.kycStep2, t.kycStep3, t.kycStep4, t.kycStep5];
+  const INDIVIDUAL_DOCS = [t.kycDocNatId, t.kycDocPassport, t.kycDocAddress, t.kycDocBankStmt];
+  const CORPORATE_DOCS = [t.kycDocCommReg, t.kycDocTaxCard, t.kycDocBoardRes, t.kycDocSigAuth];
+  const DOCS = clientType === "individual" ? INDIVIDUAL_DOCS : CORPORATE_DOCS;
+
+  const pendingKYC = records.filter(r => r.status === "Pending Review");
+  const filteredRecords = filterStatus === "All" ? records : records.filter(r => r.status === filterStatus);
+
+  const handleSubmitKYC = () => {
+    const displayName = clientType === "individual" ? form.nameEn || form.nameAr : form.companyNameEn || form.companyNameAr;
+    const id = "KYC-" + Math.floor(1000 + Math.random() * 9000);
+    const record: KYCRecord = {
+      id, clientType, status: "Pending Review",
+      submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
+      submittedBy: "ahmed.h", branch: "Cairo-Main",
+      nameAr: form.nameAr, nameEn: form.nameEn,
+      dob: form.dob, nationality: form.nationality, gender: form.gender,
+      motherName: form.motherName, maritalStatus: form.maritalStatus,
+      nationalId: form.nationalId, passportNo: form.passportNo, idExpiry: form.idExpiry,
+      companyNameAr: form.companyNameAr, companyNameEn: form.companyNameEn,
+      commercialRegNo: form.commercialRegNo, taxId: form.taxId,
+      industryType: form.industryType, legalForm: form.legalForm, incorporationDate: form.incorporationDate,
+      unifiedCode: form.unifiedCode,
+      addressLine1: form.addressLine1, addressLine2: form.addressLine2,
+      city: form.city, governorate: form.governorate, postalCode: form.postalCode, country: form.country,
+      mailingAddressSame: form.mailingAddressSame, mailingAddress: form.mailingAddress,
+      email: form.email, mobile: form.mobile, phone: form.phone,
+      bankName: form.bankName, accountNo: form.accountNo, iban: form.iban, accountCurrency: form.accountCurrency,
+      riskLevel: form.riskLevel, sourceOfFunds: form.sourceOfFunds, occupation: form.occupation,
+      pepStatus: form.pepStatus, sanctionsCheck: form.sanctionsCheck,
+      annualIncome: form.annualIncome, netWorth: form.netWorth,
+      uploadedDocs,
+      hasPOA: form.hasPOA, poaHolderName: form.poaHolderName, poaExpiry: form.poaExpiry, poaScope: form.poaScope,
+    };
+    onNewRecord(record);
+    toast({ title: t.kycSubmittedToast, description: t.kycSubmittedDesc(id) });
+    setKycTab("list"); setKycStep(1); setUploadedDocs([]);
+    setForm(prev => ({ ...prev, nameAr: "", nameEn: "", unifiedCode: "", nationalId: "", mobile: "", email: "", accountNo: "", iban: "", addressLine1: "", city: "" }));
+  };
+
+  const handleApprove = (id: string) => {
+    onApproveKYC(id, "Approved");
+    toast({ title: t.kycApprovedToast, description: t.kycApprovedDesc(1) });
+    setDetailRecord(null);
+  };
+  const handleReject = (id: string) => {
+    onApproveKYC(id, "Rejected");
+    toast({ title: t.kycRejectedToast, description: t.kycRejectedDesc });
+    setDetailRecord(null);
+  };
+
+  const RISK_COLORS: Record<string, string> = {
+    Low: "bg-green-500/10 text-green-600 border-green-500/20",
+    Medium: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    High: "bg-red-500/10 text-red-600 border-red-500/20",
+  };
+
+  // Detail panel
+  if (detailRecord) {
+    const isCorp = detailRecord.clientType === "corporate";
+    const displayName = isCorp ? (lang === "ar" ? detailRecord.companyNameAr : detailRecord.companyNameEn) : clientName(detailRecord.nameAr, detailRecord.nameEn, lang);
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setDetailRecord(null)} className="text-muted-foreground hover:text-foreground transition-colors text-sm font-bold flex items-center gap-1">
+            ← {lang === "ar" ? "عودة للقائمة" : "Back to List"}
+          </button>
+          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          <span className="font-black text-sm">{detailRecord.id}</span>
+          <KYCBadge status={detailRecord.status} />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Left: summary card */}
+          <Card className="lg:col-span-1">
+            <CardContent className="pt-6 flex flex-col items-center gap-4 text-center">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${isCorp ? "bg-blue-500/10" : "bg-primary/10"}`}>
+                {isCorp ? <Building2 className="w-8 h-8 text-blue-600" /> : <FileUser className="w-8 h-8 text-primary" />}
+              </div>
+              <div>
+                <p className="font-black text-lg">{displayName}</p>
+                <p className="text-xs text-muted-foreground">{detailRecord.unifiedCode}</p>
+                <Badge variant="outline" className={`mt-2 ${isCorp ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : "bg-primary/10 text-primary border-primary/20"}`}>
+                  {isCorp ? t.kycCorporate : t.kycIndividual}
+                </Badge>
+              </div>
+              <div className="w-full text-start space-y-2 pt-3 border-t border-border">
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">{lang === "ar" ? "الفرع" : "Branch"}</span><span className="font-bold">{detailRecord.branch}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">{lang === "ar" ? "مقدم بواسطة" : "Submitted by"}</span><span className="font-bold font-mono">{detailRecord.submittedBy}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">{lang === "ar" ? "تاريخ التقديم" : "Submitted at"}</span><span className="font-bold text-xs">{detailRecord.submittedAt}</span></div>
+              </div>
+              {isChecker && detailRecord.status === "Pending Review" && (
+                <div className="w-full space-y-2 pt-3 border-t border-border">
+                  <Button className="w-full" onClick={() => handleApprove(detailRecord.id)}><CheckCircle2 className="w-4 h-4 me-2" />{t.approveBtn}</Button>
+                  <Button variant="outline" className="w-full border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleReject(detailRecord.id)}><X className="w-4 h-4 me-2" />{t.rejectBtn}</Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          {/* Right: details */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Basic info */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><FileUser className="w-4 h-4 text-primary" />{t.kycStep1}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  {isCorp ? <>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.companyNameEnLabel}</p><p className="font-bold mt-0.5">{detailRecord.companyNameEn}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.commRegNoLabel}</p><p className="font-bold mt-0.5 font-mono">{detailRecord.commercialRegNo}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.taxIdLabel}</p><p className="font-bold mt-0.5 font-mono">{detailRecord.taxId}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.legalFormLabel}</p><p className="font-bold mt-0.5">{detailRecord.legalForm}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.industryLabel}</p><p className="font-bold mt-0.5">{detailRecord.industryType}</p></div>
+                  </> : <>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.nameEnLabel}</p><p className="font-bold mt-0.5">{detailRecord.nameEn}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.dobLabel}</p><p className="font-bold mt-0.5 font-mono">{detailRecord.dob}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.nationalityLabel}</p><p className="font-bold mt-0.5">{detailRecord.nationality}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.genderLabel}</p><p className="font-bold mt-0.5">{detailRecord.gender}</p></div>
+                    <div><p className="text-xs text-muted-foreground font-bold">{t.maritalStatusLabel}</p><p className="font-bold mt-0.5">{detailRecord.maritalStatus}</p></div>
+                  </>}
+                </div>
+              </CardContent>
+            </Card>
+            {/* Identity & Address */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />{t.kycStep2}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  {!isCorp && <><div><p className="text-xs text-muted-foreground font-bold">{t.natIdLabel}</p><p className="font-mono font-bold mt-0.5">{detailRecord.nationalId}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.idExpiryLabel}</p><p className="font-mono font-bold mt-0.5">{detailRecord.idExpiry}</p></div></>}
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.unifiedCodeLabel}</p><p className="font-mono font-bold mt-0.5">{detailRecord.unifiedCode}</p></div>
+                  <div className="col-span-2 md:col-span-3"><p className="text-xs text-muted-foreground font-bold">{t.addressLine1Label}</p><p className="font-bold mt-0.5">{detailRecord.addressLine1}{detailRecord.addressLine2 ? ", " + detailRecord.addressLine2 : ""}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.cityLabel}</p><p className="font-bold mt-0.5">{detailRecord.city}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.governorateLabel}</p><p className="font-bold mt-0.5">{detailRecord.governorate}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.mobileLabel}</p><p className="font-mono font-bold mt-0.5">{detailRecord.mobile}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Bank */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" />{t.kycStep3}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.bankNameLabel}</p><p className="font-bold mt-0.5">{detailRecord.bankName}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.accountNo}</p><p className="font-mono font-bold mt-0.5">{detailRecord.accountNo}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.ibanLabel}</p><p className="font-mono font-bold mt-0.5">{detailRecord.iban}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Risk */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-primary" />{t.kycStep4}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.riskLevelLabel}</p><Badge variant="outline" className={`mt-1 ${RISK_COLORS[detailRecord.riskLevel]}`}>{detailRecord.riskLevel}</Badge></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.sourceOfFundsLabel}</p><p className="font-bold mt-0.5">{detailRecord.sourceOfFunds}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">PEP</p><Badge variant="outline" className={detailRecord.pepStatus ? "bg-red-500/10 text-red-600" : "bg-green-500/10 text-green-600"}>{detailRecord.pepStatus ? "YES" : "NO"}</Badge></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.annualIncomeLabel}</p><p className="font-bold mt-0.5">{detailRecord.annualIncome}</p></div>
+                  <div><p className="text-xs text-muted-foreground font-bold">{t.netWorthLabel}</p><p className="font-bold mt-0.5">{detailRecord.netWorth}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Docs & POA */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><FileCheck className="w-4 h-4 text-primary" />{t.kycStep5}</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {detailRecord.uploadedDocs.map(d => <Badge key={d} variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 gap-1"><CheckCheck className="w-3 h-3" />{d}</Badge>)}
+                </div>
+                {detailRecord.hasPOA && (
+                  <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800">
+                    <p className="font-bold text-amber-700 dark:text-amber-400 text-sm mb-2">{t.poaSectionTitle}</p>
+                    <div className="grid grid-cols-2 gap-2 text-xs"><span className="text-muted-foreground">{t.poaHolderLabel}:</span><span className="font-bold">{detailRecord.poaHolderName}</span>
+                    <span className="text-muted-foreground">{t.poaExpiryLabel}:</span><span className="font-bold font-mono">{detailRecord.poaExpiry}</span>
+                    <span className="text-muted-foreground">{t.poaScopeLabel}:</span><span className="font-bold">{detailRecord.poaScope}</span></div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black tracking-tight">{isChecker ? t.kycCheckerTitle : t.kycModuleTitle}</h2>
+          <p className="text-muted-foreground text-sm">{isChecker ? t.kycCheckerDesc : t.kycModuleDesc}</p>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <TabBtn id="kyc-list" active={kycTab === "list"} onClick={() => setKycTab("list")} icon={ListFilter}>{t.kycTabList}</TabBtn>
+          {!isChecker && <TabBtn id="kyc-form" active={kycTab === "form"} onClick={() => { setKycTab("form"); setKycStep(1); }} icon={UserPlus}>{t.kycTabNew}</TabBtn>}
+        </div>
+      </div>
+
+      {/* Alert banner */}
+      {isChecker && pendingKYC.length > 0 && (
+        <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3 text-orange-700 dark:text-orange-400 font-bold text-sm">
+          {t.kycPendingCount(pendingKYC.length)}
+        </div>
+      )}
+
+      {/* Records list */}
+      {kycTab === "list" && (
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+              <CardTitle className="text-base">{lang === "ar" ? "سجلات KYC" : "KYC Records"}</CardTitle>
+              <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
+                {(["All", "Pending Review", "Approved", "Rejected", "Draft"] as const).map(s => (
+                  <button key={s} onClick={() => setFilterStatus(s)}
+                    className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${filterStatus === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    {s === "All" ? t.filterAll : s === "Pending Review" ? t.kycStatusPending : s === "Approved" ? t.kycStatusApproved : s === "Rejected" ? t.kycStatusRejected : t.kycStatusDraft}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-xl border border-border/50">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-primary/5">
+                    {[t.colKYCID, t.colClientType, lang === "ar" ? "الاسم / الشركة" : "Name / Company", t.colBranch, t.unifiedCodeLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70 whitespace-nowrap">{col}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredRecords.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                  ) : filteredRecords.map(rec => {
+                    const isCorp = rec.clientType === "corporate";
+                    const displayName = isCorp ? (lang === "ar" ? rec.companyNameAr : rec.companyNameEn) : clientName(rec.nameAr, rec.nameEn, lang);
+                    return (
+                      <TableRow key={rec.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-mono font-bold text-sm text-primary">{rec.id}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={isCorp ? "bg-blue-500/10 text-blue-600 border-blue-500/20" : "bg-primary/10 text-primary border-primary/20"}>
+                            {isCorp ? <><Building2 className="w-3 h-3 me-1 inline" />{t.kycCorporate}</> : <><FileUser className="w-3 h-3 me-1 inline" />{t.kycIndividual}</>}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><p className="font-bold text-sm">{displayName}</p></TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{rec.branch}</TableCell>
+                        <TableCell className="font-mono text-sm">{rec.unifiedCode}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{rec.submittedAt}</TableCell>
+                        <TableCell><KYCBadge status={rec.status} /></TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <button onClick={() => setDetailRecord(rec)} className="text-primary font-black text-[10px] uppercase hover:underline">{t.viewDetailsBtn}</button>
+                            {isChecker && rec.status === "Pending Review" && (
+                              <>
+                                <button onClick={() => handleApprove(rec.id)} className="text-green-600 font-black text-[10px] uppercase hover:underline">{t.approveBtn}</button>
+                                <button onClick={() => handleReject(rec.id)} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Registration form */}
+      {kycTab === "form" && !isChecker && (
+        <div className="space-y-5">
+          {/* Step progress */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between max-w-3xl mx-auto">
+                {KYC_STEPS.map((label, i) => (
+                  <div key={label} className="flex flex-col items-center gap-2">
+                    <button type="button" onClick={() => { if (i + 1 < kycStep) setKycStep(i + 1); }}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${kycStep === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : kycStep > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
+                      {kycStep > i + 1 ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
+                    </button>
+                    <span className={`text-[9px] font-bold tracking-wide text-center max-w-[70px] leading-tight ${kycStep === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Step 1: Basic Info */}
+          {kycStep === 1 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><FileUser className="w-5 h-5 text-primary" />{t.kycStep1}</CardTitle>
+                <CardDescription>{t.kycTypeLabel}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* Client type selector */}
+                <div className="grid grid-cols-2 gap-4">
+                  {([["individual", t.kycTypeIndividual, FileUser], ["corporate", t.kycTypeCorporate, Building2]] as [KYCClientType, string, React.ElementType][]).map(([type, label, Icon]) => (
+                    <button key={type} onClick={() => setClientType(type)}
+                      className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all ${clientType === type ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
+                      <div className={`p-3 rounded-xl ${clientType === type ? "bg-primary/10" : "bg-muted"}`}><Icon className={`w-6 h-6 ${clientType === type ? "text-primary" : "text-muted-foreground"}`} /></div>
+                      <span className={`font-black text-sm ${clientType === type ? "text-primary" : "text-foreground"}`}>{label}</span>
+                      {clientType === type && <CheckCircle2 className="w-4 h-4 text-primary" />}
+                    </button>
+                  ))}
+                </div>
+
+                {clientType === "individual" ? (
+                  <>
+                    <SectionLabel>{lang === "ar" ? "البيانات الشخصية" : "Personal Information"}</SectionLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FieldRow label={t.nameArLabel}><Input value={form.nameAr} onChange={e => setForm(p => ({ ...p, nameAr: e.target.value }))} dir="rtl" placeholder="مثال: أحمد محمد علي" /></FieldRow>
+                      <FieldRow label={t.nameEnLabel}><Input value={form.nameEn} onChange={e => setForm(p => ({ ...p, nameEn: e.target.value }))} dir="ltr" placeholder="e.g. Ahmed Mohamed Ali" /></FieldRow>
+                      <FieldRow label={t.dobLabel}><Input type="date" value={form.dob} onChange={e => setForm(p => ({ ...p, dob: e.target.value }))} dir="ltr" /></FieldRow>
+                      <FieldRow label={t.nationalityLabel}><Input value={form.nationality} onChange={e => setForm(p => ({ ...p, nationality: e.target.value }))} dir="auto" /></FieldRow>
+                      <FieldRow label={t.genderLabel}>
+                        <select value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                          <option value="Male">{t.genderMale}</option><option value="Female">{t.genderFemale}</option>
+                        </select>
+                      </FieldRow>
+                      <FieldRow label={t.maritalStatusLabel}>
+                        <select value={form.maritalStatus} onChange={e => setForm(p => ({ ...p, maritalStatus: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                          <option value="Single">{t.maritalSingle}</option><option value="Married">{t.maritalMarried}</option><option value="Divorced">{t.maritalDivorced}</option><option value="Widowed">{t.maritalWidowed}</option>
+                        </select>
+                      </FieldRow>
+                      <FieldRow label={t.motherNameLabel}><Input value={form.motherName} onChange={e => setForm(p => ({ ...p, motherName: e.target.value }))} dir="auto" /></FieldRow>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <SectionLabel>{lang === "ar" ? "بيانات الشركة" : "Company Information"}</SectionLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FieldRow label={t.companyNameArLabel}><Input value={form.companyNameAr} onChange={e => setForm(p => ({ ...p, companyNameAr: e.target.value }))} dir="rtl" placeholder="مثال: شركة دلتا للاستثمار" /></FieldRow>
+                      <FieldRow label={t.companyNameEnLabel}><Input value={form.companyNameEn} onChange={e => setForm(p => ({ ...p, companyNameEn: e.target.value }))} dir="ltr" placeholder="e.g. Delta Investment Co." /></FieldRow>
+                      <FieldRow label={t.commRegNoLabel}><Input value={form.commercialRegNo} onChange={e => setForm(p => ({ ...p, commercialRegNo: e.target.value }))} dir="ltr" placeholder="e.g. 12345/Cairo/2020" /></FieldRow>
+                      <FieldRow label={t.taxIdLabel}><Input value={form.taxId} onChange={e => setForm(p => ({ ...p, taxId: e.target.value }))} dir="ltr" placeholder="e.g. 200-456-789" /></FieldRow>
+                      <FieldRow label={t.legalFormLabel}>
+                        <select value={form.legalForm} onChange={e => setForm(p => ({ ...p, legalForm: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                          <option value="Joint Stock Company">{t.legalFormJSC}</option><option value="LLC">{t.legalFormLLC}</option><option value="Sole Proprietorship">{t.legalFormSP}</option><option value="Other">{t.legalFormOther}</option>
+                        </select>
+                      </FieldRow>
+                      <FieldRow label={t.industryLabel}><Input value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))} dir="auto" /></FieldRow>
+                      <FieldRow label={t.incDateLabel}><Input type="date" value={form.incorporationDate} onChange={e => setForm(p => ({ ...p, incorporationDate: e.target.value }))} dir="ltr" /></FieldRow>
+                    </div>
+                  </>
+                )}
+                <div className="flex justify-end pt-3 border-t border-border">
+                  <Button onClick={() => setKycStep(2)}>{t.nextStep} →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 2: Identity & Address */}
+          {kycStep === 2 && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" />{t.kycStep2}</CardTitle></CardHeader>
+              <CardContent className="space-y-5">
+                <SectionLabel>{lang === "ar" ? "بيانات الهوية" : "Identity Details"}</SectionLabel>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {clientType === "individual" && <>
+                    <FieldRow label={t.natIdLabel}><Input value={form.nationalId} onChange={e => setForm(p => ({ ...p, nationalId: e.target.value }))} dir="ltr" placeholder="28512111234567" maxLength={14} /></FieldRow>
+                    <FieldRow label={t.passportLabel}><Input value={form.passportNo} onChange={e => setForm(p => ({ ...p, passportNo: e.target.value }))} dir="ltr" /></FieldRow>
+                    <FieldRow label={t.idExpiryLabel}><Input type="date" value={form.idExpiry} onChange={e => setForm(p => ({ ...p, idExpiry: e.target.value }))} dir="ltr" /></FieldRow>
+                  </>}
+                  <FieldRow label={t.unifiedCodeLabel}><Input value={form.unifiedCode} onChange={e => setForm(p => ({ ...p, unifiedCode: e.target.value }))} dir="ltr" placeholder="7700123" /></FieldRow>
+                </div>
+                <SectionLabel>{lang === "ar" ? "العنوان" : "Address"}</SectionLabel>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FieldRow label={t.addressLine1Label}><Input value={form.addressLine1} onChange={e => setForm(p => ({ ...p, addressLine1: e.target.value }))} dir="auto" /></FieldRow>
+                  <FieldRow label={t.addressLine2Label}><Input value={form.addressLine2} onChange={e => setForm(p => ({ ...p, addressLine2: e.target.value }))} dir="auto" /></FieldRow>
+                  <FieldRow label={t.cityLabel}><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} dir="auto" /></FieldRow>
+                  <FieldRow label={t.governorateLabel}><Input value={form.governorate} onChange={e => setForm(p => ({ ...p, governorate: e.target.value }))} dir="auto" /></FieldRow>
+                  <FieldRow label={t.postalCodeLabel}><Input value={form.postalCode} onChange={e => setForm(p => ({ ...p, postalCode: e.target.value }))} dir="ltr" /></FieldRow>
+                  <FieldRow label={t.countryLabel}><Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} dir="auto" /></FieldRow>
+                </div>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={form.mailingAddressSame} onChange={e => setForm(p => ({ ...p, mailingAddressSame: e.target.checked }))} className="rounded" />
+                  <span className="text-sm font-bold">{t.mailingAddressSameLabel}</span>
+                </label>
+                {!form.mailingAddressSame && <FieldRow label={t.mailingAddressLabel}><textarea value={form.mailingAddress} onChange={e => setForm(p => ({ ...p, mailingAddress: e.target.value }))} rows={2} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" dir="auto" /></FieldRow>}
+                <SectionLabel>{lang === "ar" ? "بيانات التواصل" : "Contact Information"}</SectionLabel>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FieldRow label={t.emailLabel}><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} dir="ltr" /></FieldRow>
+                  <FieldRow label={t.mobileLabel}><Input value={form.mobile} onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))} dir="ltr" placeholder="+20100..." /></FieldRow>
+                  <FieldRow label={t.phoneLabel}><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} dir="ltr" /></FieldRow>
+                </div>
+                <div className="flex justify-between pt-3 border-t border-border">
+                  <Button variant="outline" onClick={() => setKycStep(1)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button onClick={() => setKycStep(3)}>{t.nextStep} →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 3: Bank Account */}
+          {kycStep === 3 && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-primary" />{t.kycStep3}</CardTitle></CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FieldRow label={t.bankNameLabel}>
+                    <select value={form.bankName} onChange={e => setForm(p => ({ ...p, bankName: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                      {["QNB Al Ahli", "CIB", "NBE — National Bank of Egypt", "Banque Misr", "HSBC Egypt", "Crédit Agricole Egypt", "Alex Bank"].map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </FieldRow>
+                  <FieldRow label={t.accountNo}><Input value={form.accountNo} onChange={e => setForm(p => ({ ...p, accountNo: e.target.value }))} dir="ltr" placeholder="100234567" /></FieldRow>
+                  <FieldRow label={t.ibanLabel}><Input value={form.iban} onChange={e => setForm(p => ({ ...p, iban: e.target.value }))} dir="ltr" placeholder="EG290011-23456-78" /></FieldRow>
+                  <FieldRow label={t.currencyLabel}>
+                    <select value={form.accountCurrency} onChange={e => setForm(p => ({ ...p, accountCurrency: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                      {["EGP", "USD", "EUR", "GBP"].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </FieldRow>
+                </div>
+                <div className="flex justify-between pt-3 border-t border-border">
+                  <Button variant="outline" onClick={() => setKycStep(2)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button onClick={() => setKycStep(4)}>{t.nextStep} →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 4: Risk Assessment */}
+          {kycStep === 4 && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-primary" />{t.kycStep4}</CardTitle></CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                  {(["Low", "Medium", "High"] as const).map(lvl => (
+                    <button key={lvl} onClick={() => setForm(p => ({ ...p, riskLevel: lvl }))}
+                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${form.riskLevel === lvl ? (lvl === "Low" ? "border-green-500 bg-green-50 dark:bg-green-900/20" : lvl === "Medium" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-red-500 bg-red-50 dark:bg-red-900/20") : "border-border hover:border-primary/30"}`}>
+                      <AlertTriangle className={`w-5 h-5 ${lvl === "Low" ? "text-green-500" : lvl === "Medium" ? "text-amber-500" : "text-red-500"}`} />
+                      <span className="font-black text-sm">{lvl === "Low" ? t.riskLow : lvl === "Medium" ? t.riskMedium : t.riskHigh}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FieldRow label={t.sourceOfFundsLabel}>
+                    <select value={form.sourceOfFunds} onChange={e => setForm(p => ({ ...p, sourceOfFunds: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                      {["Employment Income", "Business Revenue", "Investment Returns", "Inheritance", "Savings", "Other"].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </FieldRow>
+                  <FieldRow label={t.occupationLabel}><Input value={form.occupation} onChange={e => setForm(p => ({ ...p, occupation: e.target.value }))} dir="auto" /></FieldRow>
+                  <FieldRow label={t.annualIncomeLabel}><Input value={form.annualIncome} onChange={e => setForm(p => ({ ...p, annualIncome: e.target.value }))} dir="ltr" placeholder="e.g. 300,000 EGP" /></FieldRow>
+                  <FieldRow label={t.netWorthLabel}><Input value={form.netWorth} onChange={e => setForm(p => ({ ...p, netWorth: e.target.value }))} dir="ltr" placeholder="e.g. 1,200,000 EGP" /></FieldRow>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-muted/40 rounded-xl border">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={form.pepStatus} onChange={e => setForm(p => ({ ...p, pepStatus: e.target.checked }))} className="rounded" />
+                    <span className="text-sm font-bold">{t.pepStatusLabel}</span>
+                    {form.pepStatus && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px]">PEP</Badge>}
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={form.sanctionsCheck} onChange={e => setForm(p => ({ ...p, sanctionsCheck: e.target.checked }))} className="rounded" />
+                    <span className="text-sm font-bold">{t.sanctionsLabel}</span>
+                    {form.sanctionsCheck && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">✓ Clear</Badge>}
+                  </label>
+                </div>
+                <div className="flex justify-between pt-3 border-t border-border">
+                  <Button variant="outline" onClick={() => setKycStep(3)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button onClick={() => setKycStep(5)}>{t.nextStep} →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 5: Documents & POA */}
+          {kycStep === 5 && (
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><FileCheck className="w-5 h-5 text-primary" />{t.kycStep5}</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <SectionLabel>{t.docsSectionTitle}</SectionLabel>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {DOCS.map(doc => {
+                    const uploaded = uploadedDocs.includes(doc);
+                    return (
+                      <div key={doc} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${uploaded ? "border-green-500/40 bg-green-50/50 dark:bg-green-900/10" : "border-dashed border-border hover:border-primary/40"}`}>
+                        <div className="flex items-center gap-3">
+                          {uploaded ? <CheckCheck className="w-5 h-5 text-green-600 shrink-0" /> : <Upload className="w-5 h-5 text-muted-foreground shrink-0" />}
+                          <span className="font-bold text-sm">{doc}</span>
+                        </div>
+                        {!uploaded ? (
+                          <label className="cursor-pointer">
+                            <input type="file" className="hidden" onChange={() => setUploadedDocs(prev => [...prev, doc])} />
+                            <span className="flex items-center gap-1 text-xs font-black text-primary hover:underline">{t.uploadBtn}</span>
+                          </label>
+                        ) : <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">✓ Uploaded</Badge>}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* POA */}
+                <div className="border-t border-border pt-5">
+                  <SectionLabel>{t.poaSectionTitle}</SectionLabel>
+                  <label className="flex items-center gap-3 cursor-pointer mb-4">
+                    <input type="checkbox" checked={form.hasPOA} onChange={e => setForm(p => ({ ...p, hasPOA: e.target.checked }))} className="rounded" />
+                    <span className="text-sm font-bold">{t.hasPOALabel}</span>
+                  </label>
+                  {form.hasPOA && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-amber-50/50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800">
+                      <FieldRow label={t.poaHolderLabel}><Input value={form.poaHolderName} onChange={e => setForm(p => ({ ...p, poaHolderName: e.target.value }))} dir="auto" /></FieldRow>
+                      <FieldRow label={t.poaExpiryLabel}><Input type="date" value={form.poaExpiry} onChange={e => setForm(p => ({ ...p, poaExpiry: e.target.value }))} dir="ltr" /></FieldRow>
+                      <FieldRow label={t.poaScopeLabel}><Input value={form.poaScope} onChange={e => setForm(p => ({ ...p, poaScope: e.target.value }))} dir="auto" /></FieldRow>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-between pt-3 border-t border-border">
+                  <Button variant="outline" onClick={() => setKycStep(4)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button onClick={handleSubmitKYC} className="px-8 gap-2"><ClipboardCheck className="w-4 h-4" />{t.submitForReview}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -558,8 +1299,8 @@ function CustomerComms() {
 
   const TEMPLATES = [
     { key: "status", label: t.templateIPOStatus, subject: lang === "ar" ? "تحديث حالة اكتتابك" : "Your IPO Subscription Status Update", body: lang === "ar" ? "عزيزي العميل،\n\nنود إعلامك بأن طلب اكتتابك قيد المعالجة. سيتم إخطارك بنتائج التخصيص خلال 5 أيام عمل.\n\nشكراً لثقتك بنا." : "Dear Client,\n\nWe would like to inform you that your subscription request is being processed. You will be notified of the allocation results within 5 business days.\n\nThank you for your trust." },
-    { key: "alloc", label: t.templateAlloc, subject: lang === "ar" ? "نتيجة تخصيص الأسهم" : "IPO Allocation Result", body: lang === "ar" ? "عزيزي العميل،\n\nيسعدنا إبلاغك بنتيجة تخصيص أسهم الاكتتاب. يمكنك الاطلاع على تفاصيل التخصيص من خلال تسجيل الدخول للمنصة.\n\nشكراً." : "Dear Client,\n\nWe are pleased to inform you of your IPO allocation result. Please log in to the platform to view your allocation details.\n\nThank you." },
-    { key: "refund", label: t.templateRefund, subject: lang === "ar" ? "استرداد المبلغ الفائض" : "Excess Amount Refund Notice", body: lang === "ar" ? "عزيزي العميل،\n\nيتم معالجة استرداد المبلغ الفائض من اكتتابك حالياً. سيتم إيداع المبلغ خلال 3-5 أيام عمل.\n\nشكراً." : "Dear Client,\n\nThe excess amount from your IPO subscription is currently being refunded. The amount will be credited within 3-5 business days.\n\nThank you." },
+    { key: "alloc", label: t.templateAlloc, subject: lang === "ar" ? "نتيجة تخصيص الأسهم" : "IPO Allocation Result", body: lang === "ar" ? "عزيزي العميل،\n\nيسعدنا إبلاغك بنتيجة تخصيص أسهم الاكتتاب.\n\nشكراً." : "Dear Client,\n\nWe are pleased to inform you of your IPO allocation result.\n\nThank you." },
+    { key: "refund", label: t.templateRefund, subject: lang === "ar" ? "استرداد المبلغ الفائض" : "Excess Amount Refund Notice", body: lang === "ar" ? "عزيزي العميل،\n\nيتم معالجة استرداد المبلغ الفائض من اكتتابك حالياً.\n\nشكراً." : "Dear Client,\n\nThe excess amount from your IPO subscription is currently being refunded.\n\nThank you." },
   ];
 
   const handleSend = () => {
@@ -586,10 +1327,7 @@ function CustomerComms() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black tracking-tight">{t.commTitle}</h2>
-          <p className="text-muted-foreground text-sm">{t.commDesc}</p>
-        </div>
+        <div><h2 className="text-2xl font-black tracking-tight">{t.commTitle}</h2><p className="text-muted-foreground text-sm">{t.commDesc}</p></div>
         <div className="flex gap-2">
           <TabBtn id="comm-compose" active={tab === "compose"} onClick={() => setTab("compose")} icon={SendIcon}>{t.commTabCompose}</TabBtn>
           <TabBtn id="comm-history" active={tab === "history"} onClick={() => setTab("history")} icon={ScrollText}>{t.commTabHistory}</TabBtn>
@@ -598,9 +1336,7 @@ function CustomerComms() {
 
       {tab === "compose" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Config */}
           <div className="space-y-5">
-            {/* Channel */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm">{t.colChannel}</CardTitle></CardHeader>
               <CardContent className="space-y-2">
@@ -618,8 +1354,6 @@ function CustomerComms() {
                 })}
               </CardContent>
             </Card>
-
-            {/* Audience */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm">{t.colAudience}</CardTitle></CardHeader>
               <CardContent className="space-y-2">
@@ -633,89 +1367,30 @@ function CustomerComms() {
                 ))}
               </CardContent>
             </Card>
-
-            {/* Audience detail */}
-            {audience === "group" && (
-              <Card>
-                <CardContent className="pt-4">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.groupSelectLabel}</label>
-                  <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}
-                    className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                    <option value="groupAllClients">{t.groupAllClients}</option>
-                    <option value="groupIndividuals">{t.groupIndividuals}</option>
-                    <option value="groupCorporates">{t.groupCorporates}</option>
-                  </select>
-                </CardContent>
-              </Card>
-            )}
-            {audience === "individual" && (
-              <Card>
-                <CardContent className="pt-4">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.clientCodeLabel}</label>
-                  <Input value={clientCode} onChange={e => setClientCode(e.target.value)} placeholder="8800318 / +20100..." dir="ltr" />
-                </CardContent>
-              </Card>
-            )}
-            {audience === "upload" && (
-              <Card>
-                <CardContent className="pt-4 space-y-3">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">{t.uploadListLabel}</label>
-                  <input ref={uploadRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => setUploadedFile(e.target.files?.[0]?.name ?? null)} />
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => uploadRef.current?.click()}>
-                    <UploadIcon className="w-4 h-4 me-2" />{t.uploadListBtn}
-                  </Button>
-                  {uploadedFile && <p className="text-xs text-green-600 font-bold flex items-center gap-1"><CheckCheck className="w-3.5 h-3.5" />{uploadedFile}</p>}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Recipients preview */}
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="pt-4 flex items-center justify-between">
-                <span className="text-sm font-bold text-muted-foreground">{t.recipientsLabel}</span>
-                <span className="text-2xl font-black text-primary">{audienceRecipients[audience].toLocaleString()}</span>
-              </CardContent>
-            </Card>
+            {audience === "group" && <Card><CardContent className="pt-4"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.groupSelectLabel}</label><select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none"><option value="groupAllClients">{t.groupAllClients}</option><option value="groupIndividuals">{t.groupIndividuals}</option><option value="groupCorporates">{t.groupCorporates}</option></select></CardContent></Card>}
+            {audience === "individual" && <Card><CardContent className="pt-4"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.clientCodeLabel}</label><Input value={clientCode} onChange={e => setClientCode(e.target.value)} placeholder="8800318 / +20100..." dir="ltr" /></CardContent></Card>}
+            {audience === "upload" && <Card><CardContent className="pt-4 space-y-3"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block">{t.uploadListLabel}</label><input ref={uploadRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => setUploadedFile(e.target.files?.[0]?.name ?? null)} /><Button variant="outline" size="sm" className="w-full" onClick={() => uploadRef.current?.click()}><UploadIcon className="w-4 h-4 me-2" />{t.uploadListBtn}</Button>{uploadedFile && <p className="text-xs text-green-600 font-bold flex items-center gap-1"><CheckCheck className="w-3.5 h-3.5" />{uploadedFile}</p>}</CardContent></Card>}
+            <Card className="bg-primary/5 border-primary/20"><CardContent className="pt-4 flex items-center justify-between"><span className="text-sm font-bold text-muted-foreground">{t.recipientsLabel}</span><span className="text-2xl font-black text-primary">{audienceRecipients[audience].toLocaleString()}</span></CardContent></Card>
           </div>
-
-          {/* Right: Compose */}
           <div className="lg:col-span-2 space-y-5">
-            {/* Templates */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-sm text-muted-foreground">Quick Templates</CardTitle></CardHeader>
               <CardContent className="flex flex-wrap gap-2">
-                {TEMPLATES.map(tpl => (
-                  <button key={tpl.key} onClick={() => { setSubject(tpl.subject); setBody(tpl.body); }}
-                    className="px-3 py-1.5 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 text-xs font-bold text-foreground transition-colors">
-                    {tpl.label}
-                  </button>
-                ))}
+                {TEMPLATES.map(tpl => (<button key={tpl.key} onClick={() => { setSubject(tpl.subject); setBody(tpl.body); }} className="px-3 py-1.5 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/5 text-xs font-bold text-foreground transition-colors">{tpl.label}</button>))}
               </CardContent>
             </Card>
-
             <Card>
               <CardContent className="pt-5 space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.subjectLabel}</label>
-                  <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder={t.subjectPlaceholder} dir="auto" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.messageLabel}</label>
-                  <textarea value={body} onChange={e => setBody(e.target.value)} placeholder={t.messagePlaceholder} dir="auto"
-                    rows={10} className="w-full border border-input rounded-xl px-4 py-3 text-sm bg-background focus:ring-2 focus:ring-ring outline-none resize-none font-sans leading-relaxed" />
-                </div>
+                <div><label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.subjectLabel}</label><Input value={subject} onChange={e => setSubject(e.target.value)} placeholder={t.subjectPlaceholder} dir="auto" /></div>
+                <div><label className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">{t.messageLabel}</label><textarea value={body} onChange={e => setBody(e.target.value)} placeholder={t.messagePlaceholder} dir="auto" rows={10} className="w-full border border-input rounded-xl px-4 py-3 text-sm bg-background focus:ring-2 focus:ring-ring outline-none resize-none font-sans leading-relaxed" /></div>
                 <div className="flex items-center justify-between pt-2 border-t border-border">
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {channel === "email" && <Mail className="w-3.5 h-3.5" />}
-                    {channel === "sms" && <Smartphone className="w-3.5 h-3.5" />}
-                    {channel === "notification" && <Bell className="w-3.5 h-3.5" />}
-                    <span>{channel === "email" ? t.channelEmail : channel === "sms" ? t.channelSMS : t.channelNotif}</span>
-                    <span>•</span>
+                    {channel === "email" && <Mail className="w-3.5 h-3.5" />}{channel === "sms" && <Smartphone className="w-3.5 h-3.5" />}{channel === "notification" && <Bell className="w-3.5 h-3.5" />}
+                    <span>{channel === "email" ? t.channelEmail : channel === "sms" ? t.channelSMS : t.channelNotif}</span><span>•</span>
                     <span>{audienceRecipients[audience]} {lang === "ar" ? "مستلم" : "recipient(s)"}</span>
                   </div>
                   <Button onClick={handleSend} disabled={isSending || !subject.trim() || !body.trim()} className="gap-2">
-                    {isSending ? <span className="animate-spin">⟳</span> : <SendIcon className="w-4 h-4" />}
-                    {t.sendBtn}
+                    {isSending ? <span className="animate-spin">⟳</span> : <SendIcon className="w-4 h-4" />}{t.sendBtn}
                   </Button>
                 </div>
               </CardContent>
@@ -730,33 +1405,18 @@ function CustomerComms() {
           <CardContent>
             <div className="overflow-x-auto rounded-xl border border-border/50">
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    {[t.colSentAt, t.colChannel, t.colAudience, t.colSubject, t.colRecipients, t.colCommStatus].map(col => (
-                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
+                <TableHeader><TableRow className="bg-muted/30">{[t.colSentAt, t.colChannel, t.colAudience, t.colSubject, t.colRecipients, t.colCommStatus].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>
                   {history.map(msg => {
                     const Icon = channelIcon[msg.channel];
                     return (
                       <TableRow key={msg.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{msg.timestamp}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`${channelColors[msg.channel]} gap-1 whitespace-nowrap`}>
-                            <Icon className="w-3 h-3" />
-                            {msg.channel === "email" ? t.channelEmail : msg.channel === "sms" ? t.channelSMS : t.channelNotif}
-                          </Badge>
-                        </TableCell>
+                        <TableCell><Badge variant="outline" className={`${channelColors[msg.channel]} gap-1 whitespace-nowrap`}><Icon className="w-3 h-3" />{msg.channel === "email" ? t.channelEmail : msg.channel === "sms" ? t.channelSMS : t.channelNotif}</Badge></TableCell>
                         <TableCell className="text-sm text-muted-foreground">{msg.audience}</TableCell>
                         <TableCell className="font-bold text-sm max-w-[200px] truncate">{msg.subject}</TableCell>
                         <TableCell className="text-sm font-black text-primary text-right">{msg.recipients.toLocaleString()}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={msg.status === "Sent" ? "bg-green-500/10 text-green-600 border-green-500/20" : msg.status === "Pending" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"}>
-                            {msg.status === "Sent" ? t.commStatusSent : msg.status === "Pending" ? t.commStatusPending : t.commStatusFailed}
-                          </Badge>
-                        </TableCell>
+                        <TableCell><Badge variant="outline" className={msg.status === "Sent" ? "bg-green-500/10 text-green-600 border-green-500/20" : msg.status === "Pending" ? "bg-amber-500/10 text-amber-600 border-amber-500/20" : "bg-red-500/10 text-red-600 border-red-500/20"}>{msg.status === "Sent" ? t.commStatusSent : msg.status === "Pending" ? t.commStatusPending : t.commStatusFailed}</Badge></TableCell>
                       </TableRow>
                     );
                   })}
@@ -771,11 +1431,17 @@ function CustomerComms() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Front Office
+// Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscription) => void }) {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC }: {
+  onNewSubscription: (s: Subscription) => void;
+  kycRecords: KYCRecord[];
+  onNewKYC: (r: KYCRecord) => void;
+  onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
+}) {
   const { t, lang } = useLang();
   const { toast } = useToast();
+  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
   const [step, setStep] = useState(1);
   const [ucInput, setUcInput] = useState("");
   const [foundClient, setFoundClient] = useState<ClientRecord | null>(null);
@@ -810,216 +1476,220 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-between max-w-2xl mx-auto">
-            {STEPS.map((label, i) => (
-              <div key={label} className="flex flex-col items-center gap-2">
-                <button type="button" onClick={() => { if (i + 1 < step) setStep(i + 1); }}
-                  className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : step > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
-                  {step > i + 1 ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
-                </button>
-                <span className={`text-[10px] font-bold tracking-wide text-center max-w-[80px] leading-tight ${step === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-5">
+      {/* Top sub-tabs */}
+      <div className="flex gap-2 border-b border-border pb-3">
+        <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
+        <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
+      </div>
 
-      {step === 1 && (
-        <Card>
-          <CardHeader><CardTitle>{t.kycTitle}</CardTitle><CardDescription>{t.kycDesc}</CardDescription></CardHeader>
-          <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.unifiedCodeLabel}</label>
-                <Input value={ucInput} onChange={e => { setUcInput(e.target.value); setFoundClient(null); }} onBlur={() => setFoundClient(MOCK_CLIENTS[ucInput] ?? null)} placeholder={t.unifiedCodePlaceholder} dir="ltr" />
-                <p className="text-xs text-muted-foreground">{t.unifiedCodeHint}</p>
+      {/* KYC sub-module */}
+      {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
+
+      {/* Subscription flow */}
+      {foTab === "subs" && (
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between max-w-2xl mx-auto">
+                {STEPS.map((label, i) => (
+                  <div key={label} className="flex flex-col items-center gap-2">
+                    <button type="button" onClick={() => { if (i + 1 < step) setStep(i + 1); }}
+                      className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : step > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
+                      {step > i + 1 ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
+                    </button>
+                    <span className={`text-[10px] font-bold tracking-wide text-center max-w-[80px] leading-tight ${step === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
-                <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                  {EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}
-                </select>
-              </div>
-            </div>
-            {foundClient && (
-              <div className="bg-primary text-primary-foreground p-6 rounded-2xl shadow-lg space-y-4">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div>
-                    <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">{t.mcdrVerified}</p>
-                    <h3 className="text-xl font-bold">{clientName(foundClient.nameAr, foundClient.nameEn, lang)}</h3>
-                    <div className="flex flex-wrap gap-3 mt-2 text-sm text-primary-foreground/80">
-                      <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
-                      <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
-                      <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-white/10 text-primary-foreground/70 border-white/20"}>
-                        {foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}
-                      </Badge>
+            </CardContent>
+          </Card>
+
+          {step === 1 && (
+            <Card>
+              <CardHeader><CardTitle>{t.kycTitle}</CardTitle><CardDescription>{t.kycDesc}</CardDescription></CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.unifiedCodeLabel}</label>
+                    <Input value={ucInput} onChange={e => { setUcInput(e.target.value); setFoundClient(null); }} onBlur={() => setFoundClient(MOCK_CLIENTS[ucInput] ?? null)} placeholder={t.unifiedCodePlaceholder} dir="ltr" />
+                    <p className="text-xs text-muted-foreground">{t.unifiedCodeHint}</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
+                    <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">{EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}</select>
+                  </div>
+                </div>
+                {foundClient && (
+                  <div className="bg-primary text-primary-foreground p-6 rounded-2xl shadow-lg space-y-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                      <div>
+                        <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">{t.mcdrVerified}</p>
+                        <h3 className="text-xl font-bold">{clientName(foundClient.nameAr, foundClient.nameEn, lang)}</h3>
+                        <div className="flex flex-wrap gap-3 mt-2 text-sm text-primary-foreground/80">
+                          <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
+                          <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
+                          <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-white/10 text-primary-foreground/70 border-white/20"}>{foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}</Badge>
+                        </div>
+                        {foundClient.isBankClient && <p className="text-xs text-primary-foreground/70 mt-1">{t.bankAccLabel}: <span className="font-mono text-primary-foreground">{foundClient.bankAccountNo}</span></p>}
+                      </div>
+                      <Button variant="secondary" className="shrink-0 font-bold" onClick={() => setStep(2)}>{t.nextStep}</Button>
                     </div>
-                    {foundClient.isBankClient && <p className="text-xs text-primary-foreground/70 mt-1">{t.bankAccLabel}: <span className="font-mono text-primary-foreground">{foundClient.bankAccountNo}</span></p>}
+                    <div className="grid grid-cols-2 gap-3 border-t border-white/20 pt-4">
+                      <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.cashBalanceLabel}</p><p className="font-black text-lg">{foundClient.cashBalance.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.egp}</span></p></div>
+                      <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p></div>
+                    </div>
                   </div>
-                  <Button variant="secondary" className="shrink-0 font-bold" onClick={() => setStep(2)}>{t.nextStep}</Button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 border-t border-white/20 pt-4">
-                  <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.cashBalanceLabel}</p><p className="font-black text-lg">{foundClient.cashBalance.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.egp}</span></p></div>
-                  <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p></div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-      {step === 2 && (
-        <Card>
-          <CardHeader><CardTitle>{t.ektitabTitle}</CardTitle><CardDescription>{t.ektitabDesc}</CardDescription></CardHeader>
-          <CardContent>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmitStep2)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2 space-y-4">
-                    <FormField control={form.control} name="requestedShares" render={({ field }) => (
-                      <FormItem><FormLabel>{t.sharesLabel}</FormLabel><FormControl><Input type="number" placeholder="0" dir="ltr" {...field} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="paymentMethod" render={({ field }) => (
-                      <FormItem><FormLabel>{t.paymentLabel}</FormLabel><FormControl>
-                        <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" {...field}>
-                          <option value="Direct Debit">{t.payDirect}</option>
-                          <option value="Cash Deposit">{t.payCash}</option>
-                          <option value="Certified Check">{t.payCheck}</option>
-                        </select>
-                      </FormControl><FormMessage /></FormItem>
-                    )} />
-                    {foundClient && (
-                      <div className="grid grid-cols-2 gap-3 p-4 bg-muted/50 rounded-xl border">
-                        <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.cashBalanceLabel}</p><p className="font-black text-primary">{foundClient.cashBalance.toLocaleString(numLocale)} {t.egp}</p></div>
-                        <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div>
+          {step === 2 && (
+            <Card>
+              <CardHeader><CardTitle>{t.ektitabTitle}</CardTitle><CardDescription>{t.ektitabDesc}</CardDescription></CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmitStep2)} className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="md:col-span-2 space-y-4">
+                        <FormField control={form.control} name="requestedShares" render={({ field }) => (<FormItem><FormLabel>{t.sharesLabel}</FormLabel><FormControl><Input type="number" placeholder="0" dir="ltr" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                        <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>{t.paymentLabel}</FormLabel><FormControl><select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" {...field}><option value="Direct Debit">{t.payDirect}</option><option value="Cash Deposit">{t.payCash}</option><option value="Certified Check">{t.payCheck}</option></select></FormControl><FormMessage /></FormItem>)} />
+                        {foundClient && <div className="grid grid-cols-2 gap-3 p-4 bg-muted/50 rounded-xl border"><div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.cashBalanceLabel}</p><p className="font-black text-primary">{foundClient.cashBalance.toLocaleString(numLocale)} {t.egp}</p></div><div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div></div>}
                       </div>
-                    )}
-                  </div>
-                  <Card className="bg-muted/50 border-dashed">
-                    <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle></CardHeader>
-                    <CardContent className="space-y-2 text-sm">
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t.stockPriceLabel}</span><span className="font-bold">{TOTAL_PER_SHARE} {t.egp}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t.parValue}</span><span className="font-bold">{PAR_VALUE} {t.egp}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{t.issueFees}</span><span className="font-bold">{ISSUE_FEES} {t.egp}</span></div>
-                      <div className="border-t pt-3 flex justify-between items-center">
-                        <span className="font-bold">{t.totalDue}</span>
-                        <span className="text-xl font-black text-primary">{totalDue.toLocaleString(numLocale)} {t.egp}</span>
-                      </div>
+                      <Card className="bg-muted/50 border-dashed">
+                        <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle></CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-muted-foreground">{t.stockPriceLabel}</span><span className="font-bold">{TOTAL_PER_SHARE} {t.egp}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">{t.parValue}</span><span className="font-bold">{PAR_VALUE} {t.egp}</span></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">{t.issueFees}</span><span className="font-bold">{ISSUE_FEES} {t.egp}</span></div>
+                          <div className="border-t pt-3 flex justify-between items-center"><span className="font-bold">{t.totalDue}</span><span className="text-xl font-black text-primary">{totalDue.toLocaleString(numLocale)} {t.egp}</span></div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                    <Button type="submit" className="px-10">{t.confirmDocs}</Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          )}
+
+          {step === 3 && (
+            <Card>
+              <CardHeader><CardTitle>{t.docsTitle}</CardTitle><CardDescription>{t.docsDesc}</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {DOCS.map(doc => (<div key={doc} className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors"><span className="font-bold text-sm">{doc}</span><label className="cursor-pointer"><input type="file" className="hidden" /><span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span></label></div>))}
+                </div>
+                <Button className="mt-2 px-10" onClick={() => setStep(4)}>{t.reviewReceipt}</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {step === 4 && pendingSub && (
+            <Card>
+              <CardContent className="pt-8">
+                <div className="max-w-xl mx-auto text-center space-y-6">
+                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8" /></div>
+                  <div><h2 className="text-2xl font-black">{t.subPrepared}</h2><p className="text-muted-foreground mt-1">{t.txPrefix}: <span className="font-mono font-bold text-foreground">{pendingSub.id}</span></p></div>
+                  <Card className="bg-muted/50">
+                    <CardContent className="pt-5 grid grid-cols-2 gap-4 text-sm">
+                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.clientLabel}</p><p className="font-bold">{clientName(pendingSub.nameAr, pendingSub.nameEn, lang)}</p></div>
+                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p><p className="font-bold text-primary">{pendingSub.requestedShares.toLocaleString(numLocale)} {t.shares}</p></div>
+                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p><p className="font-bold">{pendingSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
+                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p><p className="font-bold text-orange-500">{t.awaitingVerif}</p></div>
                     </CardContent>
                   </Card>
+                  <div className="flex gap-3 justify-center flex-wrap">
+                    <Button variant="outline" onClick={() => downloadReceipt(pendingSub, lang)}><Printer className="w-4 h-4 me-2" />{t.printReceipt}</Button>
+                    <Button onClick={handleFinalSubmit}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+                  </div>
                 </div>
-                <Button type="submit" className="px-10">{t.confirmDocs}</Button>
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 3 && (
-        <Card>
-          <CardHeader><CardTitle>{t.docsTitle}</CardTitle><CardDescription>{t.docsDesc}</CardDescription></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {DOCS.map(doc => (
-                <div key={doc} className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors">
-                  <span className="font-bold text-sm">{doc}</span>
-                  <label className="cursor-pointer">
-                    <input type="file" className="hidden" />
-                    <span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span>
-                  </label>
-                </div>
-              ))}
-            </div>
-            <Button className="mt-2 px-10" onClick={() => setStep(4)}>{t.reviewReceipt}</Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === 4 && pendingSub && (
-        <Card>
-          <CardContent className="pt-8">
-            <div className="max-w-xl mx-auto text-center space-y-6">
-              <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8" /></div>
-              <div>
-                <h2 className="text-2xl font-black">{t.subPrepared}</h2>
-                <p className="text-muted-foreground mt-1">{t.txPrefix}: <span className="font-mono font-bold text-foreground">{pendingSub.id}</span></p>
-              </div>
-              <Card className="bg-muted/50">
-                <CardContent className="pt-5 grid grid-cols-2 gap-4 text-sm">
-                  <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.clientLabel}</p><p className="font-bold">{clientName(pendingSub.nameAr, pendingSub.nameEn, lang)}</p></div>
-                  <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p><p className="font-bold text-primary">{pendingSub.requestedShares.toLocaleString(numLocale)} {t.shares}</p></div>
-                  <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p><p className="font-bold">{pendingSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
-                  <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p><p className="font-bold text-orange-500">{t.awaitingVerif}</p></div>
-                </CardContent>
-              </Card>
-              <div className="flex gap-3 justify-center flex-wrap">
-                <Button variant="outline" onClick={() => downloadReceipt(pendingSub, lang)}><Printer className="w-4 h-4 me-2" />{t.printReceipt}</Button>
-                <Button onClick={handleFinalSubmit}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Supervisor Checker
+// Supervisor Checker (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function SupervisorChecker({ subscriptions, onApprove }: { subscriptions: Subscription[]; onApprove: (ids: string[]) => void }) {
+function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC }: {
+  subscriptions: Subscription[]; onApprove: (ids: string[]) => void;
+  kycRecords: KYCRecord[]; onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
+}) {
   const { t, lang } = useLang();
   const { toast } = useToast();
+  const [supTab, setSupTab] = useState<"subs" | "kyc">("subs");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const pending = subscriptions.filter(s => s.status === "Pending Review");
-  const shown = subscriptions.filter(s => s.status === "Pending Review" || s.status === "Approved");
+  const shown = subscriptions.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
+  const kycPending = kycRecords.filter(r => r.status === "Pending Review");
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div><h2 className="text-2xl font-black tracking-tight">{t.checkerTitle}</h2><p className="text-muted-foreground text-sm">{t.checkerDesc}</p></div>
-        <div className="flex gap-2 flex-wrap">
-          {selected.size > 0 && <Button size="sm" onClick={() => handleApprove([...selected])}><CheckCircle2 className="w-4 h-4 me-2" />{t.approveBtn} ({selected.size})</Button>}
-          {pending.length > 0 && <Button size="sm" variant="outline" onClick={() => handleApprove(pending.map(s => s.id))}><UserCheck className="w-4 h-4 me-2" />{t.approveAllBtn}</Button>}
-        </div>
+    <div className="space-y-5">
+      {/* Sub-tabs */}
+      <div className="flex gap-2 border-b border-border pb-3">
+        <TabBtn id="sup-subs" active={supTab === "subs"} onClick={() => setSupTab("subs")} icon={ClipboardList}>
+          {t.supTabSubs}
+          {pending.length > 0 && <span className="ms-1.5 bg-orange-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{pending.length}</span>}
+        </TabBtn>
+        <TabBtn id="sup-kyc" active={supTab === "kyc"} onClick={() => setSupTab("kyc")} icon={ClipboardCheck}>
+          {t.supTabKYC}
+          {kycPending.length > 0 && <span className="ms-1.5 bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{kycPending.length}</span>}
+        </TabBtn>
       </div>
-      {pending.length > 0 && <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3 text-orange-700 dark:text-orange-400 font-bold text-sm">{t.pendingReviewCount(pending.length)}</div>}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="overflow-x-auto rounded-xl border border-border/50">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-orange-50/50 dark:bg-orange-900/10">
-                  <TableHead className="w-10"></TableHead>
-                  {[t.colInvestor, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => (
-                    <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shown.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => (
-                  <TableRow key={sub.id} className={`hover:bg-muted/30 transition-colors ${selected.has(sub.id) ? "bg-primary/5" : ""}`}>
-                    <TableCell>{sub.status === "Pending Review" && <input type="checkbox" className="rounded" checked={selected.has(sub.id)} onChange={() => toggleSelect(sub.id)} />}</TableCell>
-                    <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
-                    <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
-                    <TableCell className="text-sm font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
-                    <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
-                    <TableCell><SubBadge status={sub.status} /></TableCell>
-                    <TableCell>{sub.status === "Pending Review" && <div className="flex gap-2"><button onClick={() => handleApprove([sub.id])} className="text-green-600 font-black text-[10px] uppercase hover:underline">{t.approveBtn}</button><button className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button></div>}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+
+      {/* KYC review panel */}
+      {supTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={() => {}} onApproveKYC={onApproveKYC} isChecker={true} />}
+
+      {/* Subscriptions review */}
+      {supTab === "subs" && (
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div><h2 className="text-2xl font-black tracking-tight">{t.checkerTitle}</h2><p className="text-muted-foreground text-sm">{t.checkerDesc}</p></div>
+            <div className="flex gap-2 flex-wrap">
+              {selected.size > 0 && <Button size="sm" onClick={() => handleApprove([...selected])}><CheckCircle2 className="w-4 h-4 me-2" />{t.approveBtn} ({selected.size})</Button>}
+              {pending.length > 0 && <Button size="sm" variant="outline" onClick={() => handleApprove(pending.map(s => s.id))}><UserCheck className="w-4 h-4 me-2" />{t.approveAllBtn}</Button>}
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          {pending.length > 0 && <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3 text-orange-700 dark:text-orange-400 font-bold text-sm">{t.pendingReviewCount(pending.length)}</div>}
+          <Card>
+            <CardContent className="pt-4">
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-orange-50/50 dark:bg-orange-900/10">
+                      <TableHead className="w-10"></TableHead>
+                      {[t.colInvestor, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {shown.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => (
+                      <TableRow key={sub.id} className={`hover:bg-muted/30 transition-colors ${selected.has(sub.id) ? "bg-primary/5" : ""}`}>
+                        <TableCell>{sub.status === "Pending Review" && <input type="checkbox" className="rounded" checked={selected.has(sub.id)} onChange={() => toggleSelect(sub.id)} />}</TableCell>
+                        <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                        <TableCell className="text-sm font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
+                        <TableCell><SubBadge status={sub.status} /></TableCell>
+                        <TableCell>{sub.status === "Pending Review" && <div className="flex gap-2"><button onClick={() => handleApprove([sub.id])} className="text-green-600 font-black text-[10px] uppercase hover:underline">{t.approveBtn}</button><button className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button></div>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -1058,11 +1728,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Su
           {boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {STATS.map((stat, i) => (
-          <Card key={i}><CardContent className="pt-5 pb-5 text-center"><p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{stat.label}</p><p className={`text-3xl font-black mt-1 ${stat.color}`}>{stat.value}</p></CardContent></Card>
-        ))}
-      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{STATS.map((stat, i) => (<Card key={i}><CardContent className="pt-5 pb-5 text-center"><p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{stat.label}</p><p className={`text-3xl font-black mt-1 ${stat.color}`}>{stat.value}</p></CardContent></Card>))}</div>
       <div className="flex flex-wrap gap-1 border-b border-border pb-3">
         <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
         <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
@@ -1152,14 +1818,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Su
                 <Table>
                   <TableHeader><TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">{[t.colName, t.colRefundAmt, t.colAllocShares, t.colStatus].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-emerald-600">{col}</TableHead>)}</TableRow></TableHeader>
                   <TableBody>
-                    {refundedSubs.map(sub => (
-                      <TableRow key={sub.id} className="hover:bg-muted/30">
-                        <TableCell className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</TableCell>
-                        <TableCell className="text-sm font-black text-emerald-600">{sub.refundAmount.toLocaleString(numLocale)} {t.egp}</TableCell>
-                        <TableCell className="text-sm font-black text-primary">{sub.allocatedShares.toLocaleString(numLocale)}</TableCell>
-                        <TableCell><SubBadge status={sub.status} /></TableCell>
-                      </TableRow>
-                    ))}
+                    {refundedSubs.map(sub => (<TableRow key={sub.id} className="hover:bg-muted/30"><TableCell className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</TableCell><TableCell className="text-sm font-black text-emerald-600">{sub.refundAmount.toLocaleString(numLocale)} {t.egp}</TableCell><TableCell className="text-sm font-black text-primary">{sub.allocatedShares.toLocaleString(numLocale)}</TableCell><TableCell><SubBadge status={sub.status} /></TableCell></TableRow>))}
                   </TableBody>
                 </Table>
               </div>
@@ -1173,9 +1832,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Su
           <CardHeader>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
               <CardTitle>{t.reconTitle}</CardTitle>
-              <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
-                {RECON_FILTERS.map(({ key, label }) => <button key={key} onClick={() => setReconFilter(key)} className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${reconFilter === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>)}
-              </div>
+              <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">{RECON_FILTERS.map(({ key, label }) => <button key={key} onClick={() => setReconFilter(key)} className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${reconFilter === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>)}</div>
             </div>
           </CardHeader>
           <CardContent>
@@ -1216,7 +1873,7 @@ function SystemAdmin() {
   const [userGroups] = useState(INITIAL_GROUPS);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
-  const ALL_PERMISSIONS = ["create_subscription", "view_clients", "print_receipt", "view_subscriptions", "reconcile", "allocate", "export_data", "approve_subscription", "reject_subscription", "view_branch_data", "manage_users", "manage_groups", "view_audit", "full_access"];
+  const ALL_PERMISSIONS = ["create_subscription", "view_clients", "print_receipt", "kyc_maker", "view_subscriptions", "reconcile", "allocate", "export_data", "approve_subscription", "reject_subscription", "kyc_checker", "view_branch_data", "manage_users", "manage_groups", "view_audit", "full_access"];
   const createSchema = z.object({ fullName: z.string().min(1, t.requiredField), username: z.string().min(1, t.requiredField), email: z.string().email(t.requiredField), role: z.enum(["Front Office Agent", "Back Office Ops", "Supervisor", "System Admin", "Communications"]), branch: z.string().min(1), groupId: z.string().min(1) });
   const form = useForm<z.infer<typeof createSchema>>({ resolver: zodResolver(createSchema), defaultValues: { fullName: "", username: "", email: "", role: "Front Office Agent", branch: "Cairo-Main", groupId: "GRP-001" } });
   const filteredUsers = useMemo(() => { let list = systemUsers; if (roleFilter !== "All") list = list.filter(u => u.role === roleFilter || u.status === roleFilter); if (searchQuery) list = list.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.username.toLowerCase().includes(searchQuery.toLowerCase())); return list; }, [roleFilter, searchQuery, systemUsers]);
@@ -1247,9 +1904,7 @@ function SystemAdmin() {
               <CardTitle>{t.usersTitle}</CardTitle>
               <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
                 <Input type="text" placeholder={t.searchPlaceholder} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full sm:w-60" dir="auto" />
-                <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none font-bold">
-                  {ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
+                <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none font-bold">{ROLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
               </div>
             </div>
           </CardHeader>
@@ -1308,12 +1963,7 @@ function SystemAdmin() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {userGroups.map(group => (
               <Card key={group.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div><CardTitle className="text-base">{lang === "ar" ? group.nameAr : group.nameEn}</CardTitle><p className="text-xs text-muted-foreground mt-0.5">{group.members} {t.groupMembers}</p></div>
-                    <button className="text-primary font-black text-[10px] uppercase hover:underline">{t.editAction}</button>
-                  </div>
-                </CardHeader>
+                <CardHeader className="pb-3"><div className="flex justify-between items-start"><div><CardTitle className="text-base">{lang === "ar" ? group.nameAr : group.nameEn}</CardTitle><p className="text-xs text-muted-foreground mt-0.5">{group.members} {t.groupMembers}</p></div><button className="text-primary font-black text-[10px] uppercase hover:underline">{t.editAction}</button></div></CardHeader>
                 <CardContent>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">{t.groupPermissions}</p>
                   <div className="flex flex-wrap gap-2">
@@ -1334,18 +1984,7 @@ function SystemAdmin() {
               <Table>
                 <TableHeader><TableRow className="bg-muted/30">{[t.colTimestamp, t.colUser, t.colUserRole, t.colActionAudit, t.colEntity, t.colOldValue, t.colNewValue, t.colIP].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>)}</TableRow></TableHeader>
                 <TableBody>
-                  {INITIAL_AUDIT.map(log => (
-                    <TableRow key={log.id} className="hover:bg-muted/30">
-                      <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{log.timestamp}</TableCell>
-                      <TableCell><p className="font-bold text-sm">{log.user}</p></TableCell>
-                      <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 whitespace-nowrap text-[10px]">{log.role}</Badge></TableCell>
-                      <TableCell className="text-sm font-bold whitespace-nowrap">{log.action}</TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{log.entity}</TableCell>
-                      <TableCell className="text-xs text-red-500 max-w-[120px] truncate">{log.oldValue}</TableCell>
-                      <TableCell className="text-xs text-green-600 max-w-[150px] truncate font-bold">{log.newValue}</TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">{log.ip}</TableCell>
-                    </TableRow>
-                  ))}
+                  {INITIAL_AUDIT.map(log => (<TableRow key={log.id} className="hover:bg-muted/30"><TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{log.timestamp}</TableCell><TableCell><p className="font-bold text-sm">{log.user}</p></TableCell><TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 whitespace-nowrap text-[10px]">{log.role}</Badge></TableCell><TableCell className="text-sm font-bold whitespace-nowrap">{log.action}</TableCell><TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{log.entity}</TableCell><TableCell className="text-xs text-red-500 max-w-[120px] truncate">{log.oldValue}</TableCell><TableCell className="text-xs text-green-600 max-w-[150px] truncate font-bold">{log.newValue}</TableCell><TableCell className="text-xs font-mono text-muted-foreground">{log.ip}</TableCell></TableRow>))}
                 </TableBody>
               </Table>
             </div>
@@ -1363,6 +2002,7 @@ function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
+  const [kycRecords, setKycRecords] = useState<KYCRecord[]>(INITIAL_KYC_RECORDS);
   const [isAuthed, setIsAuthed] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [forgotUsername, setForgotUsername] = useState("");
@@ -1380,13 +2020,11 @@ function IPOSystem() {
   const defaultUsername = "admin";
   const defaultPassword = "12345678";
 
-  // Apply dark mode to document
   useEffect(() => {
-    if (prefs.darkMode) { document.documentElement.classList.add("dark"); }
-    else { document.documentElement.classList.remove("dark"); }
+    if (prefs.darkMode) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
   }, [prefs.darkMode]);
 
-  // Close menu on outside click
   useEffect(() => {
     function handle(e: MouseEvent) { if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false); }
     document.addEventListener("mousedown", handle);
@@ -1394,19 +2032,19 @@ function IPOSystem() {
   }, []);
 
   const handlePrefsChange = (p: Partial<UserPrefs>) => setPrefs(prev => ({ ...prev, ...p }));
-
   const handleLogin = () => {
     if (loginForm.username === defaultUsername && loginForm.password === defaultPassword) {
       setIsAuthed(true); setLoginError(false);
-      const user = INITIAL_USERS.find(u => u.username === loginForm.username) ?? INITIAL_USERS[4];
-      setLoggedInUser(user);
-    } else { setLoginError(true); }
+      setLoggedInUser(INITIAL_USERS.find(u => u.username === loginForm.username) ?? INITIAL_USERS[4]);
+    } else setLoginError(true);
   };
   const handleForgotPassword = () => setRecoveredPassword(forgotUsername === defaultUsername ? defaultPassword : "");
   const handleAllocate = () => setSubscriptions(prev => prev.map(s => s.status !== "Verified" ? s : { ...s, allocatedShares: Math.floor(s.requestedShares * 0.45), status: "Allocated" as const }));
   const handleRefund = () => setSubscriptions(prev => prev.map(s => s.status !== "Allocated" ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
   const handleApprove = (ids: string[]) => setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
   const handleNewSubscription = (s: Subscription) => setSubscriptions(prev => [s, ...prev]);
+  const handleNewKYC = (r: KYCRecord) => setKycRecords(prev => [r, ...prev]);
+  const handleApproveKYC = (id: string, action: "Approved" | "Rejected") => setKycRecords(prev => prev.map(r => r.id === id ? { ...r, status: action } : r));
 
   const ROLES: { key: UserRole; label: string; icon: React.ElementType }[] = [
     { key: "FrontOffice", label: t.roleFront, icon: Landmark },
@@ -1422,9 +2060,7 @@ function IPOSystem() {
         <div dir={isRTL ? "rtl" : "ltr"} className="min-h-[100dvh] bg-gradient-to-br from-background to-muted font-sans flex items-center justify-center p-6">
           <Card className="w-full max-w-md shadow-xl">
             <CardHeader className="text-center pb-2">
-              <div className="flex justify-center mb-4">
-                <div className="bg-primary text-primary-foreground p-3 rounded-2xl shadow-lg"><Landmark className="w-7 h-7" /></div>
-              </div>
+              <div className="flex justify-center mb-4"><div className="bg-primary text-primary-foreground p-3 rounded-2xl shadow-lg"><Landmark className="w-7 h-7" /></div></div>
               <CardTitle className="text-2xl font-black">{authMode === "login" ? t.loginTitle : t.forgotTitle}</CardTitle>
               <CardDescription>{authMode === "login" ? t.loginDesc : t.forgotDesc}</CardDescription>
             </CardHeader>
@@ -1448,12 +2084,8 @@ function IPOSystem() {
             </CardContent>
           </Card>
           <div className="absolute top-4 end-4 flex gap-2">
-            <button onClick={() => setPrefs(p => ({ ...p, darkMode: !p.darkMode }))} className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground transition-colors">
-              {prefs.darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </button>
-            <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-              <Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}
-            </button>
+            <button onClick={() => setPrefs(p => ({ ...p, darkMode: !p.darkMode }))} className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground transition-colors">{prefs.darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}</button>
+            <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
           </div>
         </div>
       </LangContext.Provider>
@@ -1463,19 +2095,12 @@ function IPOSystem() {
   return (
     <LangContext.Provider value={{ lang, t, isRTL }}>
       <div dir={isRTL ? "rtl" : "ltr"} className="min-h-[100dvh] bg-background font-sans">
-
-        {/* Header */}
         <header className="bg-card border-b px-6 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <div className="bg-primary text-primary-foreground p-2 rounded-xl shadow-sm"><Landmark className="w-5 h-5" /></div>
-            <div>
-              <h1 className="text-base font-black tracking-tight text-foreground leading-tight">{t.appTitle}</h1>
-              <p className="text-xs text-muted-foreground hidden sm:block">{t.appSubtitle}</p>
-            </div>
+            <div><h1 className="text-base font-black tracking-tight text-foreground leading-tight">{t.appTitle}</h1><p className="text-xs text-muted-foreground hidden sm:block">{t.appSubtitle}</p></div>
           </div>
-
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Role switcher */}
             <div className="bg-muted p-1 rounded-xl flex gap-1 shadow-inner flex-wrap">
               {ROLES.map(({ key, label, icon: Icon }) => (
                 <button key={key} onClick={() => setUserRole(key)}
@@ -1484,60 +2109,29 @@ function IPOSystem() {
                 </button>
               ))}
             </div>
-
-            {/* Language toggle */}
-            <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors">
-              <Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}
-            </button>
-
-            {/* Notification bell */}
+            <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
             <button className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
               {prefs.notifications ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
               {prefs.notifications && <span className="absolute top-1 end-1 w-2 h-2 bg-primary rounded-full" />}
             </button>
-
-            {/* User menu */}
             <div className="relative" ref={userMenuRef}>
-              <button onClick={() => setShowUserMenu(v => !v)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted transition-colors">
-                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-black">
-                  {loggedInUser.name.charAt(0)}
-                </div>
-                <div className="hidden sm:block text-start">
-                  <p className="text-xs font-black text-foreground leading-tight">{loggedInUser.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{loggedInUser.role}</p>
-                </div>
+              <button onClick={() => setShowUserMenu(v => !v)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted transition-colors">
+                <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-black">{loggedInUser.name.charAt(0)}</div>
+                <div className="hidden sm:block text-start"><p className="text-xs font-black text-foreground leading-tight">{loggedInUser.name}</p><p className="text-[10px] text-muted-foreground">{loggedInUser.role}</p></div>
                 <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${showUserMenu ? "rotate-180" : ""}`} />
               </button>
-
               {showUserMenu && (
                 <div className={`absolute top-full mt-2 ${isRTL ? "left-0" : "right-0"} w-52 bg-card border border-border rounded-2xl shadow-xl z-50 overflow-hidden`}>
-                  {/* Welcome */}
-                  <div className="px-4 py-3 border-b border-border bg-muted/30">
-                    <p className="text-xs text-muted-foreground">{t.welcomeBack}</p>
-                    <p className="font-black text-sm text-foreground">{loggedInUser.name}</p>
-                  </div>
+                  <div className="px-4 py-3 border-b border-border bg-muted/30"><p className="text-xs text-muted-foreground">{t.welcomeBack}</p><p className="font-black text-sm text-foreground">{loggedInUser.name}</p></div>
                   <div className="p-1.5">
-                    <button onClick={() => { setShowProfile(true); setShowUserMenu(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors">
-                      <User className="w-4 h-4 text-muted-foreground" />{t.profile}
-                    </button>
-                    <button onClick={() => { setShowProfile(true); setShowUserMenu(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors">
-                      <Settings className="w-4 h-4 text-muted-foreground" />{t.settings}
-                    </button>
-                    <button onClick={() => { setPrefs(p => ({ ...p, darkMode: !p.darkMode })); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors">
-                      {prefs.darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
-                      {t.darkModeLabel}
+                    <button onClick={() => { setShowProfile(true); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors"><User className="w-4 h-4 text-muted-foreground" />{t.profile}</button>
+                    <button onClick={() => { setShowProfile(true); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors"><Settings className="w-4 h-4 text-muted-foreground" />{t.settings}</button>
+                    <button onClick={() => setPrefs(p => ({ ...p, darkMode: !p.darkMode }))} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-foreground hover:bg-muted transition-colors">
+                      {prefs.darkMode ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-muted-foreground" />}{t.darkModeLabel}
                       <span className="ms-auto"><Toggle checked={prefs.darkMode} onChange={v => handlePrefsChange({ darkMode: v })} /></span>
                     </button>
                     <div className="my-1 border-t border-border" />
-                    <button onClick={() => { setIsAuthed(false); setShowUserMenu(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                      <LogOut className="w-4 h-4" />{t.logout}
-                    </button>
+                    <button onClick={() => { setIsAuthed(false); setShowUserMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"><LogOut className="w-4 h-4" />{t.logout}</button>
                   </div>
                 </div>
               )}
@@ -1545,32 +2139,20 @@ function IPOSystem() {
           </div>
         </header>
 
-        {/* Main */}
         <main className="px-6 py-8">
-          {userRole === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} />}
-          {userRole === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} />}
+          {userRole === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} />}
+          {userRole === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
           {userRole === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} />}
           {userRole === "Communications" && <CustomerComms />}
           {userRole === "SystemAdmin" && <SystemAdmin />}
         </main>
 
-        {/* Profile slide-over */}
-        {showProfile && (
-          <ProfilePanel
-            user={loggedInUser}
-            prefs={prefs}
-            onPrefsChange={handlePrefsChange}
-            onClose={() => setShowProfile(false)}
-          />
-        )}
+        {showProfile && <ProfilePanel user={loggedInUser} prefs={prefs} onPrefsChange={handlePrefsChange} onClose={() => setShowProfile(false)} />}
       </div>
     </LangContext.Provider>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// App entry
-// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
