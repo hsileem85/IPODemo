@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "-dR8wmkKHNf86AT6xOdeU"
+uri = "file://ipo-system-backup-2026-05-15.tar.gz"
+type = "unspecified"
+title = "IPO System — Full Source Backup (2026-05-15)"
