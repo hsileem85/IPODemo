@@ -46,12 +46,15 @@ import {
   ClipboardList,
   UserPlus,
   ScrollText,
+  LogIn,
+  LockKeyhole,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Translations
 // ─────────────────────────────────────────────────────────────────────────────
 type Lang = "ar" | "en";
+type AuthMode = "login" | "forgot";
 
 const T = {
   ar: {
@@ -60,6 +63,20 @@ const T = {
     roleFront: "الفرع",
     roleBack: "المقاصة",
     roleSysAdmin: "مدير النظام",
+    loginTitle: "تسجيل الدخول",
+    loginDesc: "استخدم بيانات الاعتماد الافتراضية للدخول إلى النظام",
+    usernameLabelLogin: "اسم المستخدم",
+    passwordLabelLogin: "كلمة المرور",
+    usernamePlaceholderLogin: "admin",
+    passwordPlaceholderLogin: "12345678",
+    loginBtn: "دخول",
+    forgotPassword: "نسيت كلمة المرور؟",
+    forgotTitle: "استعادة كلمة المرور",
+    forgotDesc: "ادخل اسم المستخدم لعرض كلمة المرور الافتراضية",
+    showPassword: "عرض كلمة المرور",
+    backToLogin: "العودة لتسجيل الدخول",
+    authHint: "البيانات الافتراضية: admin / 12345678",
+    loginError: "اسم المستخدم أو كلمة المرور غير صحيحة",
 
     // Stepper
     step1: "التعريف بالعميل",
@@ -270,6 +287,20 @@ const T = {
     roleFront: "Branch",
     roleBack: "Clearing",
     roleSysAdmin: "SysAdmin",
+    loginTitle: "Sign In",
+    loginDesc: "Use the default credentials to enter the system",
+    usernameLabelLogin: "Username",
+    passwordLabelLogin: "Password",
+    usernamePlaceholderLogin: "admin",
+    passwordPlaceholderLogin: "12345678",
+    loginBtn: "Login",
+    forgotPassword: "Forgot password?",
+    forgotTitle: "Password Recovery",
+    forgotDesc: "Enter the username to reveal the default password",
+    showPassword: "Show Password",
+    backToLogin: "Back to Login",
+    authHint: "Default credentials: admin / 12345678",
+    loginError: "Invalid username or password",
 
     step1: "Identification",
     step2: "Ektitab Entry",
@@ -1277,9 +1308,28 @@ function IPOSystem() {
   const [lang, setLang] = useState<Lang>("ar");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
+  const [isAuthed, setIsAuthed] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [forgotUsername, setForgotUsername] = useState("");
+  const [recoveredPassword, setRecoveredPassword] = useState("");
+  const [loginForm, setLoginForm] = useState({ username: "", password: "" });
 
   const t = T[lang];
   const isRTL = lang === "ar";
+  const defaultUsername = "admin";
+  const defaultPassword = "12345678";
+  const numLocale = lang === "ar" ? "ar-EG" : "en-US";
+
+  const handleLogin = () => {
+    if (loginForm.username === defaultUsername && loginForm.password === defaultPassword) {
+      setIsAuthed(true);
+      return;
+    }
+  };
+
+  const handleForgotPassword = () => {
+    setRecoveredPassword(forgotUsername === defaultUsername ? defaultPassword : "");
+  };
 
   const handleAllocate = () => {
     setSubscriptions((prev) => prev.map((s) => s.status !== "Verified" ? s : { ...s, allocatedShares: Math.floor(s.requestedShares * 0.45), status: "Allocated" as const }));
@@ -1293,6 +1343,52 @@ function IPOSystem() {
     { key: "BackOffice", label: t.roleBack, icon: ClipboardList },
     { key: "SystemAdmin", label: t.roleSysAdmin, icon: ShieldCheck },
   ];
+
+  if (!isAuthed) {
+    return (
+      <LangContext.Provider value={{ lang, t, isRTL }}>
+        <div dir={isRTL ? "rtl" : "ltr"} className="min-h-[100dvh] bg-background font-sans flex items-center justify-center p-6">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <CardTitle>{authMode === "login" ? t.loginTitle : t.forgotTitle}</CardTitle>
+              <CardDescription>{authMode === "login" ? t.loginDesc : t.forgotDesc}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {authMode === "login" ? (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.usernameLabelLogin}</label>
+                    <Input value={loginForm.username} onChange={(e) => setLoginForm((p) => ({ ...p, username: e.target.value }))} placeholder={t.usernamePlaceholderLogin} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.passwordLabelLogin}</label>
+                    <Input type="password" value={loginForm.password} onChange={(e) => setLoginForm((p) => ({ ...p, password: e.target.value }))} placeholder={t.passwordPlaceholderLogin} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{t.authHint}</p>
+                  <Button className="w-full" onClick={handleLogin}><LogIn className="w-4 h-4 mr-2" />{t.loginBtn}</Button>
+                  <button className="text-sm font-bold text-primary w-full" onClick={() => setAuthMode("forgot")}>{t.forgotPassword}</button>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.usernameLabelLogin}</label>
+                    <Input value={forgotUsername} onChange={(e) => setForgotUsername(e.target.value)} placeholder={t.usernamePlaceholderLogin} />
+                  </div>
+                  <Button className="w-full" onClick={handleForgotPassword}><LockKeyhole className="w-4 h-4 mr-2" />{t.showPassword}</Button>
+                  {recoveredPassword && (
+                    <div className="rounded-xl border border-border p-4 text-sm">
+                      <div className="font-bold">{t.passwordLabelLogin}: <span className="font-mono">{recoveredPassword}</span></div>
+                    </div>
+                  )}
+                  <Button variant="outline" className="w-full" onClick={() => setAuthMode("login")}>{t.backToLogin}</Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </LangContext.Provider>
+    );
+  }
 
   return (
     <LangContext.Provider value={{ lang, t, isRTL }}>
