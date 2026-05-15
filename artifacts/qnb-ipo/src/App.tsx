@@ -543,7 +543,7 @@ const INITIAL_KYC_RECORDS: KYCRecord[] = [
     addressLine1: "12 Nile St, Dokki", addressLine2: "Apt 5", city: "Giza", governorate: "Giza",
     postalCode: "12311", country: "Egypt", mailingAddressSame: true, mailingAddress: "",
     email: "ahmed.ali@email.com", mobile: "+201112345678", phone: "",
-    bankName: "QNB Al Ahli", accountNo: "100234567", iban: "EG290011-23456-78", accountCurrency: "EGP",
+    bankName: "National Bank of Egypt", accountNo: "100234567", iban: "EG290011-23456-78", accountCurrency: "EGP",
     riskLevel: "Low", sourceOfFunds: "Employment Income", occupation: "Engineer",
     pepStatus: false, sanctionsCheck: true, annualIncome: "300,000 EGP", netWorth: "1,200,000 EGP",
     uploadedDocs: ["National ID", "Bank Statement"],
@@ -746,7 +746,7 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
     addressLine1: "", addressLine2: "", city: "", governorate: "", postalCode: "", country: "Egypt",
     mailingAddressSame: true, mailingAddress: "",
     email: "", mobile: "", phone: "",
-    bankName: "QNB Al Ahli", accountNo: "", iban: "", accountCurrency: "EGP",
+    bankName: "National Bank of Egypt", accountNo: "", iban: "", accountCurrency: "EGP",
     riskLevel: "Low" as "Low" | "Medium" | "High",
     sourceOfFunds: "", occupation: "",
     pepStatus: false, sanctionsCheck: true, annualIncome: "", netWorth: "",
@@ -987,7 +987,7 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                     placeholder={lang === "ar" ? "ابحث بالاسم أو الرقم القومي أو الكود الموحد..." : "Search by name, ID, or unified code..."}
                     className="h-9 pr-10 text-sm"
                   />
-                  <Search className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">⌕</span>
                 </div>
                 {kycSearch && kycSearchSuggestions.length > 0 && (
                   <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden max-h-56 overflow-y-auto">
@@ -1203,7 +1203,7 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <FieldRow label={t.bankNameLabel}>
                     <select value={form.bankName} onChange={e => setForm(p => ({ ...p, bankName: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                      {["QNB Al Ahli", "CIB", "NBE — National Bank of Egypt", "Banque Misr", "HSBC Egypt", "Crédit Agricole Egypt", "Alex Bank"].map(b => <option key={b} value={b}>{b}</option>)}
+                      {["National Bank of Egypt", "CIB", "Banque Misr", "HSBC Egypt", "Crédit Agricole Egypt", "Alex Bank"].map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </FieldRow>
                   <FieldRow label={t.accountNo}><Input value={form.accountNo} onChange={e => setForm(p => ({ ...p, accountNo: e.target.value }))} dir="ltr" placeholder="100234567" className="h-8 text-sm" /></FieldRow>
