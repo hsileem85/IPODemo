@@ -734,6 +734,7 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
   const [clientType, setClientType] = useState<KYCClientType>("individual");
   const [detailRecord, setDetailRecord] = useState<KYCRecord | null>(null);
   const [filterStatus, setFilterStatus] = useState<"All" | KYCStatus>("All");
+  const [kycSearch, setKycSearch] = useState("");
 
   // Form state
   const [form, setForm] = useState({
@@ -760,7 +761,22 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
   const DOCS = clientType === "individual" ? INDIVIDUAL_DOCS : CORPORATE_DOCS;
 
   const pendingKYC = records.filter(r => r.status === "Pending Review");
-  const filteredRecords = filterStatus === "All" ? records : records.filter(r => r.status === filterStatus);
+  const kycSearchSuggestions = useMemo(() => {
+    const q = kycSearch.trim().toLowerCase();
+    if (!q) return [];
+    return records.filter(rec => {
+      const isCorp = rec.clientType === "corporate";
+      const name = (isCorp ? `${rec.companyNameAr} ${rec.companyNameEn}` : `${rec.nameAr} ${rec.nameEn}`).toLowerCase();
+      return name.includes(q) || rec.nationalId.includes(q) || rec.unifiedCode.includes(q) || rec.id.toLowerCase().includes(q);
+    }).slice(0, 6);
+  }, [kycSearch, records]);
+  const filteredRecords = (filterStatus === "All" ? records : records.filter(r => r.status === filterStatus)).filter(rec => {
+    const q = kycSearch.trim().toLowerCase();
+    if (!q) return true;
+    const isCorp = rec.clientType === "corporate";
+    const name = isCorp ? `${rec.companyNameAr} ${rec.companyNameEn}` : `${rec.nameAr} ${rec.nameEn}`;
+    return name.toLowerCase().includes(q) || rec.nationalId.includes(q) || rec.unifiedCode.includes(q) || rec.id.toLowerCase().includes(q);
+  });
 
   const handleSubmitKYC = () => {
     const displayName = clientType === "individual" ? form.nameEn || form.nameAr : form.companyNameEn || form.companyNameAr;
@@ -963,13 +979,44 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
           <CardHeader>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
               <CardTitle className="text-base">{lang === "ar" ? "سجلات KYC" : "KYC Records"}</CardTitle>
-              <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
-                {(["All", "Pending Review", "Approved", "Rejected", "Draft"] as const).map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)}
-                    className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${filterStatus === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                    {s === "All" ? t.filterAll : s === "Pending Review" ? t.kycStatusPending : s === "Approved" ? t.kycStatusApproved : s === "Rejected" ? t.kycStatusRejected : t.kycStatusDraft}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2 w-full md:w-auto">
+                <div className="relative w-full md:w-[360px]">
+                  <Input
+                    value={kycSearch}
+                    onChange={e => setKycSearch(e.target.value)}
+                    placeholder={lang === "ar" ? "ابحث بالاسم أو الرقم القومي أو الكود الموحد..." : "Search by name, ID, or unified code..."}
+                    className="h-9 pr-10 text-sm"
+                  />
+                  <Search className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                </div>
+                {kycSearch && kycSearchSuggestions.length > 0 && (
+                  <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden max-h-56 overflow-y-auto">
+                    {kycSearchSuggestions.map(client => (
+                      <button
+                        key={`${client.id}-${client.unifiedCode}`}
+                        type="button"
+                        onClick={() => setKycSearch(client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : client.nameEn)}
+                        className="w-full text-start px-3 py-2 hover:bg-muted/50 border-b border-border/50 last:border-b-0"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate">{client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : clientName(client.nameAr, client.nameEn, lang)}</p>
+                            <p className="text-[10px] text-muted-foreground font-mono truncate">{client.nationalId} · {client.unifiedCode}</p>
+                          </div>
+                          <Badge variant="outline" className="shrink-0 text-[10px]">KYC</Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
+                  {(["All", "Pending Review", "Approved", "Rejected", "Draft"] as const).map(s => (
+                    <button key={s} onClick={() => setFilterStatus(s)}
+                      className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${filterStatus === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                      {s === "All" ? t.filterAll : s === "Pending Review" ? t.kycStatusPending : s === "Approved" ? t.kycStatusApproved : s === "Rejected" ? t.kycStatusRejected : t.kycStatusDraft}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </CardHeader>
