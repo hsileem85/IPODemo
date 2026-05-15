@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, createContext, useContext } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -40,10 +40,270 @@ import {
   Send,
   Upload,
   CheckCircle2,
+  Globe,
 } from "lucide-react";
 
 // -------------------------------------------------------
-// Types
+// Translations
+// -------------------------------------------------------
+type Lang = "ar" | "en";
+
+const T = {
+  ar: {
+    appTitle: "QNB نظام إدارة الاكتتابات",
+    appSubtitle: "شركة التكنولوجيا المتقدمة — اكتتاب زيادة رأس مال",
+    roleFront: "الفرع (Front Office)",
+    roleBack: "المقاصة (Back Office)",
+
+    // Steps
+    step1: "التعريف بالعميل",
+    step2: "تفاصيل الاكتتاب",
+    step3: "المستندات",
+    step4: "الإيصال النهائي",
+
+    // Step 1
+    kycTitle: "KYC العميل واختيار الحدث",
+    kycDesc: "أدخل الرقم القومي للبحث في قاعدة بيانات MCDR",
+    nationalIdLabel: "الرقم القومي (14 رقم)",
+    nationalIdPlaceholder: "أدخل الرقم القومي...",
+    nationalIdHint: "للتجربة: 111 أو 29001011234567",
+    eventLabel: "حدث الاكتتاب",
+    mcdrVerified: "مستثمر موثق — MCDR",
+    unifiedCode: "الكود الموحد",
+    accountNo: "الحساب",
+    activeStatus: "نشط",
+    nextStep: "الخطوة التالية",
+
+    // Step 2
+    ektitabTitle: "تفاصيل الاكتتاب (Ektitab)",
+    ektitabDesc: "أدخل عدد الأسهم وطريقة الدفع",
+    sharesLabel: "عدد الأسهم المطلوبة",
+    paymentLabel: "طريقة الدفع",
+    payDirect: "خصم مباشر (تجميد حساب)",
+    payCash: "إيداع نقدي",
+    payCheck: "شيك معتمد",
+    orderSummary: "ملخص الأمر",
+    parValue: "القيمة الاسمية",
+    issueFees: "مصاريف الإصدار",
+    totalDue: "إجمالي المستحق",
+    confirmDocs: "تأكيد ورفع المستندات",
+
+    // Step 3
+    docsTitle: "المستندات المطلوبة",
+    docsDesc: "ارفع نسخ المستندات اللازمة لاستكمال الاكتتاب",
+    doc1: "نسخة البطاقة القومية",
+    doc2: "نموذج الاكتتاب الموقع",
+    doc3: "إيصال التحويل البنكي",
+    doc4: "توكيل رسمي (إن وجد)",
+    uploadBtn: "رفع",
+    reviewReceipt: "مراجعة الملخص النهائي",
+
+    // Step 4
+    subPrepared: "تم تجهيز الاكتتاب",
+    txPrefix: "رقم العملية",
+    clientLabel: "العميل",
+    sharesCol: "الأسهم",
+    totalAmtLabel: "إجمالي المبلغ",
+    statusLabel: "الحالة",
+    awaitingVerif: "في انتظار التحقق",
+    printReceipt: "طباعة الإيصال",
+    submitHQ: "إرسال للمقاصة",
+
+    // Back Office
+    opsHubTitle: "مركز العمليات",
+    opsHubDesc: "المقاصة المركزية والمطابقة — مدير النظام",
+    exportMCDR: "تصدير ملف MCDR",
+    executeAlloc: "تنفيذ التخصيص",
+    processRefund: "رد الفائض",
+
+    stat0: "إجمالي الاكتتابات",
+    stat1: "نسبة التغطية",
+    stat2: "استثناءات",
+    stat3: "إجمالي النقدية (ج.م)",
+
+    reconTitle: "قائمة المطابقة",
+    filterAll: "الكل",
+    filterVerified: "موثق",
+    filterShortfall: "عجز",
+    filterPending: "قيد الدفع",
+    filterAllocated: "مخصص",
+    filterRefunded: "مرتد فائض",
+
+    colInvestor: "المستثمر / الرقم القومي",
+    colBranch: "الفرع",
+    colDue: "المستحق (ج.م)",
+    colPaid: "المدفوع (ج.م)",
+    colAllocated: "المخصص",
+    colRefund: "رد الفائض",
+    colStatus: "الحالة",
+    colAction: "إجراء",
+    noRecords: "لا توجد عمليات",
+    manualMatch: "مطابقة يدوية",
+    refundAction: "رد",
+
+    bankTitle: "تكامل كشف الحساب البنكي",
+    bankDesc: "ارفع ملف MT940 أو Excel لمطابقة الأرصدة تلقائيًا مع الاكتتابات.",
+    uploadStatement: "رفع كشف الحساب",
+
+    // Status labels
+    statusPending: "قيد الدفع",
+    statusVerified: "موثق",
+    statusShortfall: "عجز",
+    statusAllocated: "مخصص",
+    statusRefunded: "مرتد فائض",
+
+    // Toast
+    toastSentTitle: "تم الإرسال للمقاصة",
+    toastSentDesc: (id: string) => `تم تسجيل الاكتتاب ${id} بنجاح.`,
+    toastAllocTitle: "تم التخصيص",
+    toastAllocDesc: "تم معالجة ملف MCDR وتخصيص الأسهم بنسبة 40%.",
+    toastRefundTitle: "رد الفائض",
+    toastRefundDesc: "تم تنفيذ رد الفائض لجميع الحسابات المخصصة.",
+
+    // Validation
+    sharesError: "يجب إدخال عدد أسهم صحيح",
+
+    // Events
+    eventSOO: "Sinawy Olive Oil IPO (SOO)",
+    eventCAP: "زيادة رأس مال - بنك التكنولوجيا المتقدمة",
+    eventRIGHTS: "أسهم أولوية - دلتا للتأمين",
+
+    egp: "ج.م",
+    shares: "سهم",
+    tryHint: "للتجربة",
+  },
+  en: {
+    appTitle: "QNB IPO Management System",
+    appSubtitle: "Advanced Technology Co. — Capital Increase IPO",
+    roleFront: "Branch (Front Office)",
+    roleBack: "Clearing (Back Office)",
+
+    step1: "Identification",
+    step2: "Ektitab Entry",
+    step3: "Documentation",
+    step4: "Final Receipt",
+
+    kycTitle: "Client KYC & Event Selection",
+    kycDesc: "Enter the national ID to look up the client in the MCDR database",
+    nationalIdLabel: "National ID (14 digits)",
+    nationalIdPlaceholder: "Enter national ID...",
+    nationalIdHint: "Try: 111 or 29001011234567",
+    eventLabel: "Subscription Event",
+    mcdrVerified: "MCDR Verified Shareholder",
+    unifiedCode: "Unified Code",
+    accountNo: "Account",
+    activeStatus: "Active",
+    nextStep: "Next Step",
+
+    ektitabTitle: "Subscription (Ektitab) Details",
+    ektitabDesc: "Enter the number of shares and payment method",
+    sharesLabel: "Shares Requested",
+    paymentLabel: "Payment Method",
+    payDirect: "Direct Debit (Account Block)",
+    payCash: "Cash Deposit",
+    payCheck: "Certified Check",
+    orderSummary: "Order Summary",
+    parValue: "Par Value",
+    issueFees: "Issue Fees",
+    totalDue: "Total Due",
+    confirmDocs: "Confirm & Upload Docs",
+
+    docsTitle: "Required Documentation",
+    docsDesc: "Upload copies of the required documents to complete the subscription",
+    doc1: "National ID Copy",
+    doc2: "Signed Subscription Form",
+    doc3: "Bank Transfer Receipt",
+    doc4: "POA (if applicable)",
+    uploadBtn: "Upload",
+    reviewReceipt: "Review Final Summary",
+
+    subPrepared: "Subscription Prepared",
+    txPrefix: "Transaction ID",
+    clientLabel: "Client",
+    sharesCol: "Shares",
+    totalAmtLabel: "Total Amount",
+    statusLabel: "Status",
+    awaitingVerif: "Awaiting Verification",
+    printReceipt: "Print Receipt",
+    submitHQ: "Submit to HQ",
+
+    opsHubTitle: "Operations Hub",
+    opsHubDesc: "Central Clearing & Reconciliation — System Admin",
+    exportMCDR: "Export MCDR File",
+    executeAlloc: "Execute Allocation",
+    processRefund: "Process Refund",
+
+    stat0: "Total Subscriptions",
+    stat1: "Coverage Ratio",
+    stat2: "Exceptions",
+    stat3: "Total Cash (EGP)",
+
+    reconTitle: "Reconciliation Queue",
+    filterAll: "All",
+    filterVerified: "Verified",
+    filterShortfall: "Shortfall",
+    filterPending: "Pending Payment",
+    filterAllocated: "Allocated",
+    filterRefunded: "Refunded",
+
+    colInvestor: "Investor / National ID",
+    colBranch: "Branch",
+    colDue: "Due (EGP)",
+    colPaid: "Paid (EGP)",
+    colAllocated: "Allocated",
+    colRefund: "Refund",
+    colStatus: "Status",
+    colAction: "Action",
+    noRecords: "No records found",
+    manualMatch: "Manual Match",
+    refundAction: "Refund",
+
+    bankTitle: "Bank Statement Integration",
+    bankDesc: "Upload MT940 or Excel to auto-match funds against subscriptions.",
+    uploadStatement: "Upload Statement",
+
+    statusPending: "Pending Payment",
+    statusVerified: "Verified",
+    statusShortfall: "Shortfall",
+    statusAllocated: "Allocated",
+    statusRefunded: "Refunded",
+
+    toastSentTitle: "Submitted to Clearing",
+    toastSentDesc: (id: string) => `Subscription ${id} registered successfully.`,
+    toastAllocTitle: "Allocation Complete",
+    toastAllocDesc: "MCDR file processed — 40% allocation applied.",
+    toastRefundTitle: "Refunds Processed",
+    toastRefundDesc: "Excess refunds executed for all allocated accounts.",
+
+    sharesError: "Please enter a valid number of shares",
+
+    eventSOO: "Sinawy Olive Oil IPO (SOO)",
+    eventCAP: "Capital Increase — Advanced Technology Bank",
+    eventRIGHTS: "Rights Issue — Delta Insurance",
+
+    egp: "EGP",
+    shares: "shares",
+    tryHint: "Try",
+  },
+} as const;
+
+type Translations = typeof T.ar;
+
+// -------------------------------------------------------
+// Language Context
+// -------------------------------------------------------
+const LangContext = createContext<{ lang: Lang; t: Translations; isRTL: boolean }>({
+  lang: "ar",
+  t: T.ar,
+  isRTL: true,
+});
+
+function useLang() {
+  return useContext(LangContext);
+}
+
+// -------------------------------------------------------
+// Types & Constants
 // -------------------------------------------------------
 interface Subscription {
   id: string;
@@ -60,23 +320,14 @@ interface Subscription {
   branch: string;
 }
 
-// -------------------------------------------------------
-// Constants
-// -------------------------------------------------------
 const PAR_VALUE = 1.0;
 const ISSUE_FEES = 0.25;
 const TOTAL_PER_SHARE = PAR_VALUE + ISSUE_FEES;
 
-const SUBSCRIPTION_EVENTS = [
-  { value: "SOO", label: "Sinawy Olive Oil IPO (SOO)" },
-  { value: "CAP-ABC", label: "زيادة رأس مال - بنك التكنولوجيا المتقدمة" },
-  { value: "RIGHTS-DELTA", label: "أسهم أولوية - دلتا للتأمين" },
-];
-
 const MOCK_CLIENTS: Record<string, { name: string; unifiedCode: string; account: string }> = {
-  "111": { name: "حسين سليم محمد علي", unifiedCode: "8800318", account: "100003456" },
-  "29001011234567": { name: "أحمد محمد علي", unifiedCode: "7700123", account: "100234567" },
-  "29505051234568": { name: "سارة محمود حسن", unifiedCode: "7700456", account: "100234568" },
+  "111": { name: "حسين سليم محمد علي / Hussein Salim Mohamed", unifiedCode: "8800318", account: "100003456" },
+  "29001011234567": { name: "أحمد محمد علي / Ahmed Mohamed Ali", unifiedCode: "7700123", account: "100234567" },
+  "29505051234568": { name: "سارة محمود حسن / Sara Mahmoud Hassan", unifiedCode: "7700456", account: "100234568" },
 };
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
@@ -124,66 +375,50 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
   },
 ];
 
-// -------------------------------------------------------
-// Helpers
-// -------------------------------------------------------
 const queryClient = new QueryClient();
 
-const subscriptionFormSchema = z.object({
-  requestedShares: z.coerce.number().min(1, "يجب إدخال عدد أسهم صحيح"),
-  paymentMethod: z.string().min(1),
-});
-
-function getStatusBadge(status: Subscription["status"]) {
-  switch (status) {
-    case "Pending Payment":
-      return (
-        <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 whitespace-nowrap">
-          قيد الدفع
-        </Badge>
-      );
-    case "Verified":
-      return (
-        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
-          موثق
-        </Badge>
-      );
-    case "Shortfall":
-      return (
-        <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20">
-          عجز
-        </Badge>
-      );
-    case "Allocated":
-      return (
-        <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
-          مخصص
-        </Badge>
-      );
-    case "Refunded":
-      return (
-        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
-          مرتد فائض
-        </Badge>
-      );
-  }
+// -------------------------------------------------------
+// Status Badge
+// -------------------------------------------------------
+function StatusBadge({ status }: { status: Subscription["status"] }) {
+  const { t } = useLang();
+  const map: Record<Subscription["status"], { label: string; cls: string }> = {
+    "Pending Payment": { label: t.statusPending, cls: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+    Verified: { label: t.statusVerified, cls: "bg-green-500/10 text-green-600 border-green-500/20" },
+    Shortfall: { label: t.statusShortfall, cls: "bg-red-500/10 text-red-600 border-red-500/20" },
+    Allocated: { label: t.statusAllocated, cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+    Refunded: { label: t.statusRefunded, cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+  };
+  const { label, cls } = map[status];
+  return <Badge variant="outline" className={`${cls} whitespace-nowrap`}>{label}</Badge>;
 }
 
 // -------------------------------------------------------
 // Front Office
 // -------------------------------------------------------
-const STEPS = ["التعريف بالعميل", "تفاصيل الاكتتاب", "المستندات", "الإيصال النهائي"];
-
 function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscription) => void }) {
+  const { t, lang, isRTL } = useLang();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [nationalIdInput, setNationalIdInput] = useState("");
-  const [selectedEvent, setSelectedEvent] = useState(SUBSCRIPTION_EVENTS[0].value);
   const [foundClient, setFoundClient] = useState<{ name: string; unifiedCode: string; account: string } | null>(null);
   const [pendingSubscription, setPendingSubscription] = useState<Subscription | null>(null);
 
-  const form = useForm<z.infer<typeof subscriptionFormSchema>>({
-    resolver: zodResolver(subscriptionFormSchema),
+  const STEPS = [t.step1, t.step2, t.step3, t.step4];
+  const DOCS = [t.doc1, t.doc2, t.doc3, t.doc4];
+  const EVENTS = [
+    { value: "SOO", label: t.eventSOO },
+    { value: "CAP", label: t.eventCAP },
+    { value: "RIGHTS", label: t.eventRIGHTS },
+  ];
+
+  const sharesSchema = z.object({
+    requestedShares: z.coerce.number().min(1, t.sharesError),
+    paymentMethod: z.string().min(1),
+  });
+
+  const form = useForm<z.infer<typeof sharesSchema>>({
+    resolver: zodResolver(sharesSchema),
     defaultValues: { requestedShares: 0, paymentMethod: "Direct Debit" },
   });
 
@@ -195,7 +430,7 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
     setFoundClient(MOCK_CLIENTS[value] ?? null);
   };
 
-  const onSubmitStep2 = (values: z.infer<typeof subscriptionFormSchema>) => {
+  const onSubmitStep2 = (values: z.infer<typeof sharesSchema>) => {
     if (!foundClient) return;
     const sub: Subscription = {
       id: "TX-" + Math.floor(1000 + Math.random() * 9000),
@@ -218,16 +453,15 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
   const handleFinalSubmit = () => {
     if (!pendingSubscription) return;
     onNewSubscription(pendingSubscription);
-    toast({
-      title: "تم الإرسال للمقاصة",
-      description: `تم تسجيل الاكتتاب ${pendingSubscription.id} بنجاح.`,
-    });
+    toast({ title: t.toastSentTitle, description: t.toastSentDesc(pendingSubscription.id) });
     setStep(1);
     setNationalIdInput("");
     setFoundClient(null);
     setPendingSubscription(null);
     form.reset();
   };
+
+  const numLocale = lang === "ar" ? "ar-EG" : "en-US";
 
   return (
     <div className="space-y-6">
@@ -252,7 +486,7 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                   {step > i + 1 ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
                 </button>
                 <span
-                  className={`text-[10px] font-bold tracking-wide text-center max-w-[72px] leading-tight ${
+                  className={`text-[10px] font-bold tracking-wide text-center max-w-[80px] leading-tight ${
                     step === i + 1 ? "text-primary" : "text-muted-foreground"
                   }`}
                 >
@@ -264,39 +498,38 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
         </CardContent>
       </Card>
 
-      {/* Step 1 — Identification */}
+      {/* Step 1 */}
       {step === 1 && (
         <Card>
           <CardHeader>
-            <CardTitle>KYC العميل واختيار الحدث</CardTitle>
-            <CardDescription>أدخل الرقم القومي للبحث في قاعدة بيانات MCDR</CardDescription>
+            <CardTitle>{t.kycTitle}</CardTitle>
+            <CardDescription>{t.kycDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                  الرقم القومي (14 رقم)
+                  {t.nationalIdLabel}
                 </label>
                 <Input
                   data-testid="input-national-id"
                   value={nationalIdInput}
                   onChange={(e) => handleIdChange(e.target.value)}
-                  placeholder="أدخل الرقم القومي..."
+                  placeholder={t.nationalIdPlaceholder}
                   maxLength={14}
+                  dir="ltr"
                 />
-                <p className="text-xs text-muted-foreground">للتجربة: 111 أو 29001011234567</p>
+                <p className="text-xs text-muted-foreground">{t.nationalIdHint}</p>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">
-                  حدث الاكتتاب
+                  {t.eventLabel}
                 </label>
                 <select
                   data-testid="select-subscription-event"
-                  value={selectedEvent}
-                  onChange={(e) => setSelectedEvent(e.target.value)}
                   className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none"
                 >
-                  {SUBSCRIPTION_EVENTS.map((ev) => (
+                  {EVENTS.map((ev) => (
                     <option key={ev.value} value={ev.value}>{ev.label}</option>
                   ))}
                 </select>
@@ -310,13 +543,13 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
               >
                 <div>
                   <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">
-                    مستثمر موثق — MCDR
+                    {t.mcdrVerified}
                   </p>
-                  <h3 className="text-2xl font-bold">{foundClient.name}</h3>
+                  <h3 className="text-xl font-bold leading-snug">{foundClient.name}</h3>
                   <div className="flex flex-wrap gap-4 mt-2 text-sm text-primary-foreground/80">
-                    <span>الكود الموحد: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
-                    <span>الحساب: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
-                    <span className="bg-white/20 px-2 py-0.5 rounded font-bold text-xs">نشط</span>
+                    <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
+                    <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
+                    <span className="bg-white/20 px-2 py-0.5 rounded font-bold text-xs">{t.activeStatus}</span>
                   </div>
                 </div>
                 <Button
@@ -325,7 +558,7 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                   className="shrink-0 font-bold"
                   onClick={() => setStep(2)}
                 >
-                  الخطوة التالية
+                  {t.nextStep}
                 </Button>
               </div>
             )}
@@ -333,12 +566,12 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
         </Card>
       )}
 
-      {/* Step 2 — Subscription Entry */}
+      {/* Step 2 */}
       {step === 2 && (
         <Card>
           <CardHeader>
-            <CardTitle>تفاصيل الاكتتاب (Ektitab)</CardTitle>
-            <CardDescription>أدخل عدد الأسهم وطريقة الدفع</CardDescription>
+            <CardTitle>{t.ektitabTitle}</CardTitle>
+            <CardDescription>{t.ektitabDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
@@ -350,9 +583,9 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                       name="requestedShares"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>عدد الأسهم المطلوبة</FormLabel>
+                          <FormLabel>{t.sharesLabel}</FormLabel>
                           <FormControl>
-                            <Input data-testid="input-shares" type="number" placeholder="0" {...field} />
+                            <Input data-testid="input-shares" type="number" placeholder="0" dir="ltr" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -363,16 +596,16 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                       name="paymentMethod"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>طريقة الدفع</FormLabel>
+                          <FormLabel>{t.paymentLabel}</FormLabel>
                           <FormControl>
                             <select
                               data-testid="select-payment-method"
                               className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none"
                               {...field}
                             >
-                              <option value="Direct Debit">خصم مباشر (تجميد حساب)</option>
-                              <option value="Cash Deposit">إيداع نقدي</option>
-                              <option value="Certified Check">شيك معتمد</option>
+                              <option value="Direct Debit">{t.payDirect}</option>
+                              <option value="Cash Deposit">{t.payCash}</option>
+                              <option value="Certified Check">{t.payCheck}</option>
                             </select>
                           </FormControl>
                           <FormMessage />
@@ -383,21 +616,21 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
 
                   <Card className="bg-muted/50 border-dashed">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">ملخص الأمر</CardTitle>
+                      <CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">القيمة الاسمية</span>
-                        <span className="font-bold">{PAR_VALUE} ج.م</span>
+                        <span className="text-muted-foreground">{t.parValue}</span>
+                        <span className="font-bold">{PAR_VALUE} {t.egp}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">مصاريف الإصدار</span>
-                        <span className="font-bold">{ISSUE_FEES} ج.م</span>
+                        <span className="text-muted-foreground">{t.issueFees}</span>
+                        <span className="font-bold">{ISSUE_FEES} {t.egp}</span>
                       </div>
                       <div className="border-t pt-3 flex justify-between items-center">
-                        <span className="font-bold">إجمالي المستحق</span>
+                        <span className="font-bold">{t.totalDue}</span>
                         <span data-testid="text-total-due" className="text-xl font-black text-primary">
-                          {totalDue.toLocaleString("ar-EG")} ج.م
+                          {totalDue.toLocaleString(numLocale)} {t.egp}
                         </span>
                       </div>
                     </CardContent>
@@ -405,7 +638,7 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                 </div>
 
                 <Button data-testid="button-confirm-docs" type="submit" className="px-10">
-                  تأكيد ورفع المستندات
+                  {t.confirmDocs}
                 </Button>
               </form>
             </Form>
@@ -413,21 +646,16 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
         </Card>
       )}
 
-      {/* Step 3 — Documentation */}
+      {/* Step 3 */}
       {step === 3 && (
         <Card>
           <CardHeader>
-            <CardTitle>المستندات المطلوبة</CardTitle>
-            <CardDescription>ارفع نسخ المستندات اللازمة لاستكمال الاكتتاب</CardDescription>
+            <CardTitle>{t.docsTitle}</CardTitle>
+            <CardDescription>{t.docsDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                "نسخة البطاقة القومية",
-                "نموذج الاكتتاب الموقع",
-                "إيصال التحويل البنكي",
-                "توكيل رسمي (إن وجد)",
-              ].map((doc) => (
+              {DOCS.map((doc) => (
                 <div
                   key={doc}
                   className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors"
@@ -435,26 +663,22 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
                   <span className="font-bold text-sm">{doc}</span>
                   <label className="cursor-pointer">
                     <input data-testid={`file-${doc}`} type="file" className="hidden" />
-                    <span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+                    <span className={`flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isRTL ? "flex-row-reverse" : ""}`}>
                       <Upload className="w-3.5 h-3.5" />
-                      رفع
+                      {t.uploadBtn}
                     </span>
                   </label>
                 </div>
               ))}
             </div>
-            <Button
-              data-testid="button-review-receipt"
-              className="mt-2 px-10"
-              onClick={() => setStep(4)}
-            >
-              مراجعة الملخص النهائي
+            <Button data-testid="button-review-receipt" className="mt-2 px-10" onClick={() => setStep(4)}>
+              {t.reviewReceipt}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 4 — Final Receipt */}
+      {/* Step 4 */}
       {step === 4 && pendingSubscription && (
         <Card>
           <CardContent className="pt-8">
@@ -464,47 +688,47 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
               </div>
               <div>
                 <h2 data-testid="text-subscription-prepared" className="text-2xl font-black">
-                  تم تجهيز الاكتتاب
+                  {t.subPrepared}
                 </h2>
                 <p className="text-muted-foreground mt-1">
-                  رقم العملية:{" "}
+                  {t.txPrefix}:{" "}
                   <span data-testid="text-tx-id" className="font-mono font-bold text-foreground">
                     {pendingSubscription.id}
                   </span>
                 </p>
               </div>
 
-              <Card className="text-right bg-muted/50">
+              <Card className={`bg-muted/50 ${isRTL ? "text-right" : "text-left"}`}>
                 <CardContent className="pt-5 grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">العميل</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.clientLabel}</p>
                     <p className="font-bold">{pendingSubscription.name}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">الأسهم</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p>
                     <p className="font-bold text-primary">
-                      {pendingSubscription.requestedShares.toLocaleString("ar-EG")} سهم
+                      {pendingSubscription.requestedShares.toLocaleString(numLocale)} {t.shares}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">إجمالي المبلغ</p>
-                    <p className="font-bold">{pendingSubscription.amountDue.toLocaleString("ar-EG")} ج.م</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p>
+                    <p className="font-bold">{pendingSubscription.amountDue.toLocaleString(numLocale)} {t.egp}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">الحالة</p>
-                    <p className="font-bold text-amber-500">في انتظار التحقق</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p>
+                    <p className="font-bold text-amber-500">{t.awaitingVerif}</p>
                   </div>
                 </CardContent>
               </Card>
 
               <div className="flex gap-3 justify-center">
                 <Button variant="outline" data-testid="button-print-receipt">
-                  <Printer className="w-4 h-4 ml-2" />
-                  طباعة الإيصال
+                  <Printer className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {t.printReceipt}
                 </Button>
                 <Button data-testid="button-submit-hq" onClick={handleFinalSubmit}>
-                  <Send className="w-4 h-4 ml-2" />
-                  إرسال للمقاصة
+                  <Send className={`w-4 h-4 ${isRTL ? "ml-2" : "mr-2"}`} />
+                  {t.submitHQ}
                 </Button>
               </div>
             </div>
@@ -518,15 +742,6 @@ function FrontOffice({ onNewSubscription }: { onNewSubscription: (s: Subscriptio
 // -------------------------------------------------------
 // Back Office
 // -------------------------------------------------------
-const RECON_FILTERS = [
-  { key: "All", label: "الكل" },
-  { key: "Verified", label: "موثق" },
-  { key: "Shortfall", label: "عجز" },
-  { key: "Pending Payment", label: "قيد الدفع" },
-  { key: "Allocated", label: "مخصص" },
-  { key: "Refunded", label: "مرتد فائض" },
-];
-
 function BackOffice({
   subscriptions,
   onAllocate,
@@ -536,8 +751,19 @@ function BackOffice({
   onAllocate: () => void;
   onRefund: () => void;
 }) {
+  const { t, lang } = useLang();
   const { toast } = useToast();
   const [reconFilter, setReconFilter] = useState("All");
+  const numLocale = lang === "ar" ? "ar-EG" : "en-US";
+
+  const RECON_FILTERS = [
+    { key: "All", label: t.filterAll },
+    { key: "Verified", label: t.filterVerified },
+    { key: "Shortfall", label: t.filterShortfall },
+    { key: "Pending Payment", label: t.filterPending },
+    { key: "Allocated", label: t.filterAllocated },
+    { key: "Refunded", label: t.filterRefunded },
+  ];
 
   const filteredRecon = useMemo(() => {
     if (reconFilter === "All") return subscriptions;
@@ -549,41 +775,40 @@ function BackOffice({
   const totalCashDisplay =
     totalCash >= 1_000_000
       ? `${(totalCash / 1_000_000).toFixed(2)}M`
-      : totalCash.toLocaleString("ar-EG");
+      : totalCash.toLocaleString(numLocale);
 
   const STATS = [
-    { label: "إجمالي الاكتتابات", value: subscriptions.length, color: "text-foreground" },
-    { label: "نسبة التغطية", value: "3.2x", color: "text-green-600" },
-    { label: "استثناءات", value: exceptions, color: "text-red-500" },
-    { label: "إجمالي النقدية (ج.م)", value: totalCashDisplay, color: "text-primary" },
+    { label: t.stat0, value: subscriptions.length, color: "text-foreground" },
+    { label: t.stat1, value: "3.2x", color: "text-green-600" },
+    { label: t.stat2, value: exceptions, color: "text-red-500" },
+    { label: t.stat3, value: totalCashDisplay, color: "text-primary" },
   ];
 
   const handleAllocate = () => {
     onAllocate();
-    toast({ title: "تم التخصيص", description: "تم معالجة ملف MCDR وتخصيص الأسهم بنسبة 40%." });
+    toast({ title: t.toastAllocTitle, description: t.toastAllocDesc });
   };
 
   const handleRefund = () => {
     onRefund();
-    toast({ title: "رد الفائض", description: "تم تنفيذ رد الفائض لجميع الحسابات المخصصة." });
+    toast({ title: t.toastRefundTitle, description: t.toastRefundDesc });
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black tracking-tight">مركز العمليات</h2>
-          <p className="text-muted-foreground text-sm">المقاصة المركزية والمطابقة — مدير النظام</p>
+          <h2 className="text-2xl font-black tracking-tight">{t.opsHubTitle}</h2>
+          <p className="text-muted-foreground text-sm">{t.opsHubDesc}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" size="sm" data-testid="button-export-mcdr">
-            <FileSpreadsheet className="w-4 h-4 ml-2" />
-            تصدير ملف MCDR
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            {t.exportMCDR}
           </Button>
           <Button size="sm" data-testid="button-execute-allocation" onClick={handleAllocate}>
-            <ArrowLeftRight className="w-4 h-4 ml-2" />
-            تنفيذ التخصيص
+            <ArrowLeftRight className="w-4 h-4 mr-2" />
+            {t.executeAlloc}
           </Button>
           <Button
             variant="outline"
@@ -592,12 +817,11 @@ function BackOffice({
             data-testid="button-process-refund"
             onClick={handleRefund}
           >
-            رد الفائض
+            {t.processRefund}
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {STATS.map((stat, i) => (
           <Card key={i}>
@@ -613,11 +837,10 @@ function BackOffice({
         ))}
       </div>
 
-      {/* Reconciliation Queue */}
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-            <CardTitle>قائمة المطابقة</CardTitle>
+            <CardTitle>{t.reconTitle}</CardTitle>
             <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
               {RECON_FILTERS.map(({ key, label }) => (
                 <button
@@ -641,21 +864,21 @@ function BackOffice({
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">المستثمر / الرقم القومي</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">الفرع</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">المستحق (ج.م)</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">المدفوع (ج.م)</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">المخصص</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">رد الفائض</TableHead>
-                  <TableHead className="text-right font-black text-[10px] uppercase tracking-widest text-muted-foreground">الحالة</TableHead>
-                  <TableHead className="text-center font-black text-[10px] uppercase tracking-widest text-muted-foreground">إجراء</TableHead>
+                  {[t.colInvestor, t.colBranch, t.colDue, t.colPaid, t.colAllocated, t.colRefund, t.colStatus, t.colAction].map((col, i) => (
+                    <TableHead
+                      key={i}
+                      className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i === 7 ? "text-center" : "text-right"}`}
+                    >
+                      {col}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRecon.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
-                      لا توجد عمليات
+                      {t.noRecords}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -671,31 +894,31 @@ function BackOffice({
                       </TableCell>
                       <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
                       <TableCell className="text-sm text-right font-bold text-muted-foreground">
-                        {sub.amountDue.toLocaleString("ar-EG")}
+                        {sub.amountDue.toLocaleString(numLocale)}
                       </TableCell>
                       <TableCell className="text-sm text-right font-black text-primary">
-                        {sub.amountPaid.toLocaleString("ar-EG")}
+                        {sub.amountPaid.toLocaleString(numLocale)}
                       </TableCell>
                       <TableCell className="text-sm text-right font-bold">
-                        {sub.allocatedShares > 0 ? sub.allocatedShares.toLocaleString("ar-EG") : "-"}
+                        {sub.allocatedShares > 0 ? sub.allocatedShares.toLocaleString(numLocale) : "-"}
                       </TableCell>
                       <TableCell className="text-sm text-right font-bold text-green-600">
-                        {sub.refundAmount > 0 ? `${sub.refundAmount.toLocaleString("ar-EG")} ج.م` : "-"}
+                        {sub.refundAmount > 0 ? `${sub.refundAmount.toLocaleString(numLocale)} ${t.egp}` : "-"}
                       </TableCell>
-                      <TableCell>{getStatusBadge(sub.status)}</TableCell>
+                      <TableCell><StatusBadge status={sub.status} /></TableCell>
                       <TableCell className="text-center">
                         <div className="flex justify-center gap-3">
                           <button
                             data-testid={`button-manual-match-${sub.id}`}
                             className="text-primary font-black text-[10px] uppercase hover:underline"
                           >
-                            مطابقة يدوية
+                            {t.manualMatch}
                           </button>
                           <button
                             data-testid={`button-refund-${sub.id}`}
                             className="text-red-500 font-black text-[10px] uppercase hover:underline"
                           >
-                            رد
+                            {t.refundAction}
                           </button>
                         </div>
                       </TableCell>
@@ -706,24 +929,21 @@ function BackOffice({
             </Table>
           </div>
 
-          {/* Bank Statement Integration */}
           <div className="p-6 bg-foreground text-background rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4 shadow-xl">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center text-primary-foreground">
                 <Upload className="w-5 h-5" />
               </div>
               <div>
-                <p className="font-black text-base">تكامل كشف الحساب البنكي</p>
-                <p className="text-background/60 text-sm max-w-xs">
-                  ارفع ملف MT940 أو Excel لمطابقة الأرصدة تلقائيًا مع الاكتتابات.
-                </p>
+                <p className="font-black text-base">{t.bankTitle}</p>
+                <p className="text-background/60 text-sm max-w-xs">{t.bankDesc}</p>
               </div>
             </div>
             <button
               data-testid="button-upload-statement"
               className="bg-background text-foreground px-8 py-3 rounded-xl font-black text-sm hover:bg-primary hover:text-primary-foreground transition-colors"
             >
-              رفع كشف الحساب
+              {t.uploadStatement}
             </button>
           </div>
         </CardContent>
@@ -736,8 +956,12 @@ function BackOffice({
 // Root
 // -------------------------------------------------------
 function IPOSystem() {
+  const [lang, setLang] = useState<Lang>("ar");
   const [userRole, setUserRole] = useState<"FrontOffice" | "BackOffice">("FrontOffice");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
+
+  const t = T[lang];
+  const isRTL = lang === "ar";
 
   const handleNewSubscription = (sub: Subscription) => {
     setSubscriptions((prev) => [sub, ...prev]);
@@ -747,11 +971,7 @@ function IPOSystem() {
     setSubscriptions((prev) =>
       prev.map((s) => {
         if (s.status !== "Verified") return s;
-        return {
-          ...s,
-          allocatedShares: Math.floor(s.requestedShares * 0.4),
-          status: "Allocated" as const,
-        };
+        return { ...s, allocatedShares: Math.floor(s.requestedShares * 0.4), status: "Allocated" as const };
       })
     );
   };
@@ -760,70 +980,78 @@ function IPOSystem() {
     setSubscriptions((prev) =>
       prev.map((s) => {
         if (s.status !== "Allocated") return s;
-        return {
-          ...s,
-          refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE,
-          status: "Refunded" as const,
-        };
+        return { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const };
       })
     );
   };
 
   return (
-    <div dir="rtl" className="min-h-[100dvh] bg-background font-sans">
-      <header className="bg-card border-b px-6 py-4 sticky top-0 z-10 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary text-primary-foreground p-2 rounded-md">
-            <Landmark className="w-5 h-5" />
+    <LangContext.Provider value={{ lang, t, isRTL }}>
+      <div dir={isRTL ? "rtl" : "ltr"} className="min-h-[100dvh] bg-background font-sans">
+        <header className="bg-card border-b px-6 py-4 sticky top-0 z-10 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary text-primary-foreground p-2 rounded-md">
+              <Landmark className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold tracking-tight text-foreground">{t.appTitle}</h1>
+              <p className="text-xs text-muted-foreground">{t.appSubtitle}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground">
-              QNB نظام إدارة الاكتتابات
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              شركة التكنولوجيا المتقدمة — اكتتاب زيادة رأس مال
-            </p>
+
+          <div className="flex items-center gap-3">
+            {/* Language Switcher */}
+            <button
+              data-testid="button-toggle-lang"
+              onClick={() => setLang((l) => (l === "ar" ? "en" : "ar"))}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+              title={lang === "ar" ? "Switch to English" : "التبديل إلى العربية"}
+            >
+              <Globe className="w-4 h-4" />
+              {lang === "ar" ? "EN" : "عر"}
+            </button>
+
+            {/* Role Switcher */}
+            <div className="bg-muted p-1 rounded-xl flex gap-1 shadow-inner">
+              <button
+                data-testid="role-front-office"
+                onClick={() => setUserRole("FrontOffice")}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  userRole === "FrontOffice"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.roleFront}
+              </button>
+              <button
+                data-testid="role-back-office"
+                onClick={() => setUserRole("BackOffice")}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                  userRole === "BackOffice"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.roleBack}
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div className="bg-muted p-1 rounded-xl flex gap-1 shadow-inner">
-          <button
-            data-testid="role-front-office"
-            onClick={() => setUserRole("FrontOffice")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              userRole === "FrontOffice"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            الفرع (Front Office)
-          </button>
-          <button
-            data-testid="role-back-office"
-            onClick={() => setUserRole("BackOffice")}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-              userRole === "BackOffice"
-                ? "bg-background text-primary shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            المقاصة (Back Office)
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-6xl mx-auto p-6">
-        {userRole === "FrontOffice" ? (
-          <FrontOffice onNewSubscription={handleNewSubscription} />
-        ) : (
-          <BackOffice
-            subscriptions={subscriptions}
-            onAllocate={handleAllocate}
-            onRefund={handleRefund}
-          />
-        )}
-      </main>
-    </div>
+        <main className="max-w-6xl mx-auto p-6">
+          {userRole === "FrontOffice" ? (
+            <FrontOffice onNewSubscription={handleNewSubscription} />
+          ) : (
+            <BackOffice
+              subscriptions={subscriptions}
+              onAllocate={handleAllocate}
+              onRefund={handleRefund}
+            />
+          )}
+        </main>
+      </div>
+    </LangContext.Provider>
   );
 }
 
