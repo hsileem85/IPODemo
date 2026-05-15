@@ -621,12 +621,12 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   );
 }
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-3 mt-5 first:mt-0 border-b border-primary/10 pb-1.5">{children}</p>;
+  return <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 mt-3 first:mt-0 border-b border-primary/10 pb-1">{children}</p>;
 }
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">{label}</label>
+    <div className="space-y-1">
+      <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wide block">{label}</label>
       {children}
     </div>
   );
@@ -1025,85 +1025,82 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
 
       {/* Registration form */}
       {kycTab === "form" && !isChecker && (
-        <div className="space-y-5">
-          {/* Step progress */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between max-w-3xl mx-auto">
-                {KYC_STEPS.map((label, i) => (
-                  <div key={label} className="flex flex-col items-center gap-2">
-                    <button type="button" onClick={() => { if (i + 1 < kycStep) setKycStep(i + 1); }}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${kycStep === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : kycStep > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
-                      {kycStep > i + 1 ? <CheckCircle2 className="w-4 h-4" /> : i + 1}
-                    </button>
-                    <span className={`text-[9px] font-bold tracking-wide text-center max-w-[70px] leading-tight ${kycStep === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
-                  </div>
-                ))}
+        <div className="space-y-3">
+          {/* Step progress — compact inline bar */}
+          <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center justify-between gap-1">
+            {KYC_STEPS.map((label, i) => (
+              <div key={label} className="flex items-center gap-1 flex-1 last:flex-none">
+                <button type="button" onClick={() => { if (i + 1 < kycStep) setKycStep(i + 1); }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-all whitespace-nowrap text-xs font-bold ${kycStep === i + 1 ? "bg-primary text-primary-foreground shadow-sm" : kycStep > i + 1 ? "bg-green-500/10 text-green-600" : "text-muted-foreground"}`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${kycStep === i + 1 ? "bg-white/20" : kycStep > i + 1 ? "bg-green-500 text-white" : "bg-muted-foreground/20"}`}>
+                    {kycStep > i + 1 ? <CheckCircle2 className="w-3 h-3" /> : i + 1}
+                  </span>
+                  <span className="hidden sm:inline">{label}</span>
+                </button>
+                {i < KYC_STEPS.length - 1 && <div className={`flex-1 h-px mx-1 ${kycStep > i + 1 ? "bg-green-400" : "bg-border"}`} />}
               </div>
-            </CardContent>
-          </Card>
+            ))}
+          </div>
 
           {/* Step 1: Basic Info */}
           {kycStep === 1 && (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2"><FileUser className="w-5 h-5 text-primary" />{t.kycStep1}</CardTitle>
-                <CardDescription>{t.kycTypeLabel}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Client type selector */}
-                <div className="grid grid-cols-2 gap-4">
-                  {([["individual", t.kycTypeIndividual, FileUser], ["corporate", t.kycTypeCorporate, Building2]] as [KYCClientType, string, React.ElementType][]).map(([type, label, Icon]) => (
-                    <button key={type} onClick={() => setClientType(type)}
-                      className={`flex flex-col items-center gap-3 p-5 rounded-2xl border-2 transition-all ${clientType === type ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"}`}>
-                      <div className={`p-3 rounded-xl ${clientType === type ? "bg-primary/10" : "bg-muted"}`}><Icon className={`w-6 h-6 ${clientType === type ? "text-primary" : "text-muted-foreground"}`} /></div>
-                      <span className={`font-black text-sm ${clientType === type ? "text-primary" : "text-foreground"}`}>{label}</span>
-                      {clientType === type && <CheckCircle2 className="w-4 h-4 text-primary" />}
-                    </button>
-                  ))}
+              <CardHeader className="pb-2 pt-4 px-5">
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle className="flex items-center gap-2 text-base"><FileUser className="w-4 h-4 text-primary" />{t.kycStep1}</CardTitle>
+                  {/* Client type compact pill toggle */}
+                  <div className="flex bg-muted p-1 rounded-xl gap-1 shrink-0">
+                    {([["individual", t.kycTypeIndividual, FileUser], ["corporate", t.kycTypeCorporate, Building2]] as [KYCClientType, string, React.ElementType][]).map(([type, label, Icon]) => (
+                      <button key={type} onClick={() => setClientType(type)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${clientType === type ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                        <Icon className="w-3.5 h-3.5" />{label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-
+              </CardHeader>
+              <CardContent className="space-y-3 px-5 pb-4">
                 {clientType === "individual" ? (
                   <>
                     <SectionLabel>{lang === "ar" ? "البيانات الشخصية" : "Personal Information"}</SectionLabel>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FieldRow label={t.nameArLabel}><Input value={form.nameAr} onChange={e => setForm(p => ({ ...p, nameAr: e.target.value }))} dir="rtl" placeholder="مثال: أحمد محمد علي" /></FieldRow>
-                      <FieldRow label={t.nameEnLabel}><Input value={form.nameEn} onChange={e => setForm(p => ({ ...p, nameEn: e.target.value }))} dir="ltr" placeholder="e.g. Ahmed Mohamed Ali" /></FieldRow>
-                      <FieldRow label={t.dobLabel}><Input type="date" value={form.dob} onChange={e => setForm(p => ({ ...p, dob: e.target.value }))} dir="ltr" /></FieldRow>
-                      <FieldRow label={t.nationalityLabel}><Input value={form.nationality} onChange={e => setForm(p => ({ ...p, nationality: e.target.value }))} dir="auto" /></FieldRow>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <FieldRow label={t.nameArLabel}><Input value={form.nameAr} onChange={e => setForm(p => ({ ...p, nameAr: e.target.value }))} dir="rtl" placeholder="مثال: أحمد محمد علي" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.nameEnLabel}><Input value={form.nameEn} onChange={e => setForm(p => ({ ...p, nameEn: e.target.value }))} dir="ltr" placeholder="e.g. Ahmed Mohamed Ali" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.dobLabel}><Input type="date" value={form.dob} onChange={e => setForm(p => ({ ...p, dob: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.nationalityLabel}><Input value={form.nationality} onChange={e => setForm(p => ({ ...p, nationality: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
                       <FieldRow label={t.genderLabel}>
-                        <select value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <select value={form.gender} onChange={e => setForm(p => ({ ...p, gender: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                           <option value="Male">{t.genderMale}</option><option value="Female">{t.genderFemale}</option>
                         </select>
                       </FieldRow>
                       <FieldRow label={t.maritalStatusLabel}>
-                        <select value={form.maritalStatus} onChange={e => setForm(p => ({ ...p, maritalStatus: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <select value={form.maritalStatus} onChange={e => setForm(p => ({ ...p, maritalStatus: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                           <option value="Single">{t.maritalSingle}</option><option value="Married">{t.maritalMarried}</option><option value="Divorced">{t.maritalDivorced}</option><option value="Widowed">{t.maritalWidowed}</option>
                         </select>
                       </FieldRow>
-                      <FieldRow label={t.motherNameLabel}><Input value={form.motherName} onChange={e => setForm(p => ({ ...p, motherName: e.target.value }))} dir="auto" /></FieldRow>
+                      <FieldRow label={t.motherNameLabel}><Input value={form.motherName} onChange={e => setForm(p => ({ ...p, motherName: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
                     </div>
                   </>
                 ) : (
                   <>
                     <SectionLabel>{lang === "ar" ? "بيانات الشركة" : "Company Information"}</SectionLabel>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <FieldRow label={t.companyNameArLabel}><Input value={form.companyNameAr} onChange={e => setForm(p => ({ ...p, companyNameAr: e.target.value }))} dir="rtl" placeholder="مثال: شركة دلتا للاستثمار" /></FieldRow>
-                      <FieldRow label={t.companyNameEnLabel}><Input value={form.companyNameEn} onChange={e => setForm(p => ({ ...p, companyNameEn: e.target.value }))} dir="ltr" placeholder="e.g. Delta Investment Co." /></FieldRow>
-                      <FieldRow label={t.commRegNoLabel}><Input value={form.commercialRegNo} onChange={e => setForm(p => ({ ...p, commercialRegNo: e.target.value }))} dir="ltr" placeholder="e.g. 12345/Cairo/2020" /></FieldRow>
-                      <FieldRow label={t.taxIdLabel}><Input value={form.taxId} onChange={e => setForm(p => ({ ...p, taxId: e.target.value }))} dir="ltr" placeholder="e.g. 200-456-789" /></FieldRow>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <FieldRow label={t.companyNameArLabel}><Input value={form.companyNameAr} onChange={e => setForm(p => ({ ...p, companyNameAr: e.target.value }))} dir="rtl" placeholder="مثال: شركة دلتا للاستثمار" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.companyNameEnLabel}><Input value={form.companyNameEn} onChange={e => setForm(p => ({ ...p, companyNameEn: e.target.value }))} dir="ltr" placeholder="e.g. Delta Investment Co." className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.commRegNoLabel}><Input value={form.commercialRegNo} onChange={e => setForm(p => ({ ...p, commercialRegNo: e.target.value }))} dir="ltr" placeholder="e.g. 12345/Cairo/2020" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.taxIdLabel}><Input value={form.taxId} onChange={e => setForm(p => ({ ...p, taxId: e.target.value }))} dir="ltr" placeholder="e.g. 200-456-789" className="h-8 text-sm" /></FieldRow>
                       <FieldRow label={t.legalFormLabel}>
-                        <select value={form.legalForm} onChange={e => setForm(p => ({ ...p, legalForm: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <select value={form.legalForm} onChange={e => setForm(p => ({ ...p, legalForm: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                           <option value="Joint Stock Company">{t.legalFormJSC}</option><option value="LLC">{t.legalFormLLC}</option><option value="Sole Proprietorship">{t.legalFormSP}</option><option value="Other">{t.legalFormOther}</option>
                         </select>
                       </FieldRow>
-                      <FieldRow label={t.industryLabel}><Input value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))} dir="auto" /></FieldRow>
-                      <FieldRow label={t.incDateLabel}><Input type="date" value={form.incorporationDate} onChange={e => setForm(p => ({ ...p, incorporationDate: e.target.value }))} dir="ltr" /></FieldRow>
+                      <FieldRow label={t.industryLabel}><Input value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.incDateLabel}><Input type="date" value={form.incorporationDate} onChange={e => setForm(p => ({ ...p, incorporationDate: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
                     </div>
                   </>
                 )}
-                <div className="flex justify-end pt-3 border-t border-border">
-                  <Button onClick={() => setKycStep(2)}>{t.nextStep} →</Button>
+                <div className="flex justify-end pt-2 border-t border-border">
+                  <Button size="sm" onClick={() => setKycStep(2)}>{t.nextStep} →</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1112,40 +1109,40 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
           {/* Step 2: Identity & Address */}
           {kycStep === 2 && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><MapPin className="w-5 h-5 text-primary" />{t.kycStep2}</CardTitle></CardHeader>
-              <CardContent className="space-y-5">
+              <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="flex items-center gap-2 text-base"><MapPin className="w-4 h-4 text-primary" />{t.kycStep2}</CardTitle></CardHeader>
+              <CardContent className="space-y-3 px-5 pb-4">
                 <SectionLabel>{lang === "ar" ? "بيانات الهوية" : "Identity Details"}</SectionLabel>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {clientType === "individual" && <>
-                    <FieldRow label={t.natIdLabel}><Input value={form.nationalId} onChange={e => setForm(p => ({ ...p, nationalId: e.target.value }))} dir="ltr" placeholder="28512111234567" maxLength={14} /></FieldRow>
-                    <FieldRow label={t.passportLabel}><Input value={form.passportNo} onChange={e => setForm(p => ({ ...p, passportNo: e.target.value }))} dir="ltr" /></FieldRow>
-                    <FieldRow label={t.idExpiryLabel}><Input type="date" value={form.idExpiry} onChange={e => setForm(p => ({ ...p, idExpiry: e.target.value }))} dir="ltr" /></FieldRow>
+                    <FieldRow label={t.natIdLabel}><Input value={form.nationalId} onChange={e => setForm(p => ({ ...p, nationalId: e.target.value }))} dir="ltr" placeholder="28512111234567" maxLength={14} className="h-8 text-sm" /></FieldRow>
+                    <FieldRow label={t.passportLabel}><Input value={form.passportNo} onChange={e => setForm(p => ({ ...p, passportNo: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
+                    <FieldRow label={t.idExpiryLabel}><Input type="date" value={form.idExpiry} onChange={e => setForm(p => ({ ...p, idExpiry: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
                   </>}
-                  <FieldRow label={t.unifiedCodeLabel}><Input value={form.unifiedCode} onChange={e => setForm(p => ({ ...p, unifiedCode: e.target.value }))} dir="ltr" placeholder="7700123" /></FieldRow>
+                  <FieldRow label={t.unifiedCodeLabel}><Input value={form.unifiedCode} onChange={e => setForm(p => ({ ...p, unifiedCode: e.target.value }))} dir="ltr" placeholder="7700123" className="h-8 text-sm" /></FieldRow>
                 </div>
                 <SectionLabel>{lang === "ar" ? "العنوان" : "Address"}</SectionLabel>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FieldRow label={t.addressLine1Label}><Input value={form.addressLine1} onChange={e => setForm(p => ({ ...p, addressLine1: e.target.value }))} dir="auto" /></FieldRow>
-                  <FieldRow label={t.addressLine2Label}><Input value={form.addressLine2} onChange={e => setForm(p => ({ ...p, addressLine2: e.target.value }))} dir="auto" /></FieldRow>
-                  <FieldRow label={t.cityLabel}><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} dir="auto" /></FieldRow>
-                  <FieldRow label={t.governorateLabel}><Input value={form.governorate} onChange={e => setForm(p => ({ ...p, governorate: e.target.value }))} dir="auto" /></FieldRow>
-                  <FieldRow label={t.postalCodeLabel}><Input value={form.postalCode} onChange={e => setForm(p => ({ ...p, postalCode: e.target.value }))} dir="ltr" /></FieldRow>
-                  <FieldRow label={t.countryLabel}><Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} dir="auto" /></FieldRow>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <FieldRow label={t.addressLine1Label}><Input value={form.addressLine1} onChange={e => setForm(p => ({ ...p, addressLine1: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.addressLine2Label}><Input value={form.addressLine2} onChange={e => setForm(p => ({ ...p, addressLine2: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.cityLabel}><Input value={form.city} onChange={e => setForm(p => ({ ...p, city: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.governorateLabel}><Input value={form.governorate} onChange={e => setForm(p => ({ ...p, governorate: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.postalCodeLabel}><Input value={form.postalCode} onChange={e => setForm(p => ({ ...p, postalCode: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.countryLabel}><Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
                 </div>
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.mailingAddressSame} onChange={e => setForm(p => ({ ...p, mailingAddressSame: e.target.checked }))} className="rounded" />
-                  <span className="text-sm font-bold">{t.mailingAddressSameLabel}</span>
+                  <span className="text-xs font-bold text-muted-foreground">{t.mailingAddressSameLabel}</span>
                 </label>
-                {!form.mailingAddressSame && <FieldRow label={t.mailingAddressLabel}><textarea value={form.mailingAddress} onChange={e => setForm(p => ({ ...p, mailingAddress: e.target.value }))} rows={2} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" dir="auto" /></FieldRow>}
+                {!form.mailingAddressSame && <FieldRow label={t.mailingAddressLabel}><textarea value={form.mailingAddress} onChange={e => setForm(p => ({ ...p, mailingAddress: e.target.value }))} rows={2} className="w-full border border-input rounded-md px-3 py-1.5 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" dir="auto" /></FieldRow>}
                 <SectionLabel>{lang === "ar" ? "بيانات التواصل" : "Contact Information"}</SectionLabel>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FieldRow label={t.emailLabel}><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} dir="ltr" /></FieldRow>
-                  <FieldRow label={t.mobileLabel}><Input value={form.mobile} onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))} dir="ltr" placeholder="+20100..." /></FieldRow>
-                  <FieldRow label={t.phoneLabel}><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} dir="ltr" /></FieldRow>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <FieldRow label={t.emailLabel}><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.mobileLabel}><Input value={form.mobile} onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))} dir="ltr" placeholder="+20100..." className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.phoneLabel}><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-border">
-                  <Button variant="outline" onClick={() => setKycStep(1)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
-                  <Button onClick={() => setKycStep(3)}>{t.nextStep} →</Button>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <Button size="sm" variant="outline" onClick={() => setKycStep(1)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button size="sm" onClick={() => setKycStep(3)}>{t.nextStep} →</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1154,25 +1151,25 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
           {/* Step 3: Bank Account */}
           {kycStep === 3 && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5 text-primary" />{t.kycStep3}</CardTitle></CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="flex items-center gap-2 text-base"><CreditCard className="w-4 h-4 text-primary" />{t.kycStep3}</CardTitle></CardHeader>
+              <CardContent className="space-y-3 px-5 pb-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <FieldRow label={t.bankNameLabel}>
-                    <select value={form.bankName} onChange={e => setForm(p => ({ ...p, bankName: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                    <select value={form.bankName} onChange={e => setForm(p => ({ ...p, bankName: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                       {["QNB Al Ahli", "CIB", "NBE — National Bank of Egypt", "Banque Misr", "HSBC Egypt", "Crédit Agricole Egypt", "Alex Bank"].map(b => <option key={b} value={b}>{b}</option>)}
                     </select>
                   </FieldRow>
-                  <FieldRow label={t.accountNo}><Input value={form.accountNo} onChange={e => setForm(p => ({ ...p, accountNo: e.target.value }))} dir="ltr" placeholder="100234567" /></FieldRow>
-                  <FieldRow label={t.ibanLabel}><Input value={form.iban} onChange={e => setForm(p => ({ ...p, iban: e.target.value }))} dir="ltr" placeholder="EG290011-23456-78" /></FieldRow>
+                  <FieldRow label={t.accountNo}><Input value={form.accountNo} onChange={e => setForm(p => ({ ...p, accountNo: e.target.value }))} dir="ltr" placeholder="100234567" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.ibanLabel}><Input value={form.iban} onChange={e => setForm(p => ({ ...p, iban: e.target.value }))} dir="ltr" placeholder="EG290011-23456-78" className="h-8 text-sm" /></FieldRow>
                   <FieldRow label={t.currencyLabel}>
-                    <select value={form.accountCurrency} onChange={e => setForm(p => ({ ...p, accountCurrency: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                    <select value={form.accountCurrency} onChange={e => setForm(p => ({ ...p, accountCurrency: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                       {["EGP", "USD", "EUR", "GBP"].map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </FieldRow>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-border">
-                  <Button variant="outline" onClick={() => setKycStep(2)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
-                  <Button onClick={() => setKycStep(4)}>{t.nextStep} →</Button>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <Button size="sm" variant="outline" onClick={() => setKycStep(2)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button size="sm" onClick={() => setKycStep(4)}>{t.nextStep} →</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1181,42 +1178,46 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
           {/* Step 4: Risk Assessment */}
           {kycStep === 4 && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-primary" />{t.kycStep4}</CardTitle></CardHeader>
-              <CardContent className="space-y-5">
-                <div className="grid grid-cols-3 gap-3">
-                  {(["Low", "Medium", "High"] as const).map(lvl => (
-                    <button key={lvl} onClick={() => setForm(p => ({ ...p, riskLevel: lvl }))}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${form.riskLevel === lvl ? (lvl === "Low" ? "border-green-500 bg-green-50 dark:bg-green-900/20" : lvl === "Medium" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-red-500 bg-red-50 dark:bg-red-900/20") : "border-border hover:border-primary/30"}`}>
-                      <AlertTriangle className={`w-5 h-5 ${lvl === "Low" ? "text-green-500" : lvl === "Medium" ? "text-amber-500" : "text-red-500"}`} />
-                      <span className="font-black text-sm">{lvl === "Low" ? t.riskLow : lvl === "Medium" ? t.riskMedium : t.riskHigh}</span>
-                    </button>
-                  ))}
+              <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="flex items-center gap-2 text-base"><AlertTriangle className="w-4 h-4 text-primary" />{t.kycStep4}</CardTitle></CardHeader>
+              <CardContent className="space-y-3 px-5 pb-4">
+                {/* Risk level compact pill row */}
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1.5">{lang === "ar" ? "مستوى المخاطر" : "Risk Level"}</p>
+                  <div className="flex gap-2">
+                    {(["Low", "Medium", "High"] as const).map(lvl => (
+                      <button key={lvl} onClick={() => setForm(p => ({ ...p, riskLevel: lvl }))}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${form.riskLevel === lvl ? (lvl === "Low" ? "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700" : lvl === "Medium" ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700" : "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700") : "border-border text-muted-foreground hover:border-primary/30"}`}>
+                        <AlertTriangle className={`w-3 h-3 ${lvl === "Low" ? "text-green-500" : lvl === "Medium" ? "text-amber-500" : "text-red-500"}`} />
+                        {lvl === "Low" ? t.riskLow : lvl === "Medium" ? t.riskMedium : t.riskHigh}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <FieldRow label={t.sourceOfFundsLabel}>
-                    <select value={form.sourceOfFunds} onChange={e => setForm(p => ({ ...p, sourceOfFunds: e.target.value }))} className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                    <select value={form.sourceOfFunds} onChange={e => setForm(p => ({ ...p, sourceOfFunds: e.target.value }))} className="w-full h-8 border border-input rounded-md px-2 py-0 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                       {["Employment Income", "Business Revenue", "Investment Returns", "Inheritance", "Savings", "Other"].map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </FieldRow>
-                  <FieldRow label={t.occupationLabel}><Input value={form.occupation} onChange={e => setForm(p => ({ ...p, occupation: e.target.value }))} dir="auto" /></FieldRow>
-                  <FieldRow label={t.annualIncomeLabel}><Input value={form.annualIncome} onChange={e => setForm(p => ({ ...p, annualIncome: e.target.value }))} dir="ltr" placeholder="e.g. 300,000 EGP" /></FieldRow>
-                  <FieldRow label={t.netWorthLabel}><Input value={form.netWorth} onChange={e => setForm(p => ({ ...p, netWorth: e.target.value }))} dir="ltr" placeholder="e.g. 1,200,000 EGP" /></FieldRow>
+                  <FieldRow label={t.occupationLabel}><Input value={form.occupation} onChange={e => setForm(p => ({ ...p, occupation: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.annualIncomeLabel}><Input value={form.annualIncome} onChange={e => setForm(p => ({ ...p, annualIncome: e.target.value }))} dir="ltr" placeholder="e.g. 300,000 EGP" className="h-8 text-sm" /></FieldRow>
+                  <FieldRow label={t.netWorthLabel}><Input value={form.netWorth} onChange={e => setForm(p => ({ ...p, netWorth: e.target.value }))} dir="ltr" placeholder="e.g. 1,200,000 EGP" className="h-8 text-sm" /></FieldRow>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 bg-muted/40 rounded-xl border">
-                  <label className="flex items-center gap-3 cursor-pointer">
+                <div className="flex gap-6 p-3 bg-muted/40 rounded-lg border">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.pepStatus} onChange={e => setForm(p => ({ ...p, pepStatus: e.target.checked }))} className="rounded" />
-                    <span className="text-sm font-bold">{t.pepStatusLabel}</span>
+                    <span className="text-xs font-bold">{t.pepStatusLabel}</span>
                     {form.pepStatus && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px]">PEP</Badge>}
                   </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={form.sanctionsCheck} onChange={e => setForm(p => ({ ...p, sanctionsCheck: e.target.checked }))} className="rounded" />
-                    <span className="text-sm font-bold">{t.sanctionsLabel}</span>
+                    <span className="text-xs font-bold">{t.sanctionsLabel}</span>
                     {form.sanctionsCheck && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">✓ Clear</Badge>}
                   </label>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-border">
-                  <Button variant="outline" onClick={() => setKycStep(3)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
-                  <Button onClick={() => setKycStep(5)}>{t.nextStep} →</Button>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <Button size="sm" variant="outline" onClick={() => setKycStep(3)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button size="sm" onClick={() => setKycStep(5)}>{t.nextStep} →</Button>
                 </div>
               </CardContent>
             </Card>
@@ -1225,22 +1226,22 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
           {/* Step 5: Documents & POA */}
           {kycStep === 5 && (
             <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><FileCheck className="w-5 h-5 text-primary" />{t.kycStep5}</CardTitle></CardHeader>
-              <CardContent className="space-y-6">
+              <CardHeader className="pb-2 pt-4 px-5"><CardTitle className="flex items-center gap-2 text-base"><FileCheck className="w-4 h-4 text-primary" />{t.kycStep5}</CardTitle></CardHeader>
+              <CardContent className="space-y-3 px-5 pb-4">
                 <SectionLabel>{t.docsSectionTitle}</SectionLabel>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {DOCS.map(doc => {
                     const uploaded = uploadedDocs.includes(doc);
                     return (
-                      <div key={doc} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${uploaded ? "border-green-500/40 bg-green-50/50 dark:bg-green-900/10" : "border-dashed border-border hover:border-primary/40"}`}>
-                        <div className="flex items-center gap-3">
-                          {uploaded ? <CheckCheck className="w-5 h-5 text-green-600 shrink-0" /> : <Upload className="w-5 h-5 text-muted-foreground shrink-0" />}
-                          <span className="font-bold text-sm">{doc}</span>
+                      <div key={doc} className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${uploaded ? "border-green-500/40 bg-green-50/50 dark:bg-green-900/10" : "border-dashed border-border hover:border-primary/40"}`}>
+                        <div className="flex items-center gap-2">
+                          {uploaded ? <CheckCheck className="w-4 h-4 text-green-600 shrink-0" /> : <Upload className="w-4 h-4 text-muted-foreground shrink-0" />}
+                          <span className="font-bold text-xs">{doc}</span>
                         </div>
                         {!uploaded ? (
                           <label className="cursor-pointer">
                             <input type="file" className="hidden" onChange={() => setUploadedDocs(prev => [...prev, doc])} />
-                            <span className="flex items-center gap-1 text-xs font-black text-primary hover:underline">{t.uploadBtn}</span>
+                            <span className="flex items-center gap-1 text-[10px] font-black text-primary hover:underline">{t.uploadBtn}</span>
                           </label>
                         ) : <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-[10px]">✓ Uploaded</Badge>}
                       </div>
@@ -1249,24 +1250,24 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                 </div>
 
                 {/* POA */}
-                <div className="border-t border-border pt-5">
+                <div className="border-t border-border pt-3">
                   <SectionLabel>{t.poaSectionTitle}</SectionLabel>
-                  <label className="flex items-center gap-3 cursor-pointer mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer mb-2">
                     <input type="checkbox" checked={form.hasPOA} onChange={e => setForm(p => ({ ...p, hasPOA: e.target.checked }))} className="rounded" />
-                    <span className="text-sm font-bold">{t.hasPOALabel}</span>
+                    <span className="text-xs font-bold">{t.hasPOALabel}</span>
                   </label>
                   {form.hasPOA && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-amber-50/50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800">
-                      <FieldRow label={t.poaHolderLabel}><Input value={form.poaHolderName} onChange={e => setForm(p => ({ ...p, poaHolderName: e.target.value }))} dir="auto" /></FieldRow>
-                      <FieldRow label={t.poaExpiryLabel}><Input type="date" value={form.poaExpiry} onChange={e => setForm(p => ({ ...p, poaExpiry: e.target.value }))} dir="ltr" /></FieldRow>
-                      <FieldRow label={t.poaScopeLabel}><Input value={form.poaScope} onChange={e => setForm(p => ({ ...p, poaScope: e.target.value }))} dir="auto" /></FieldRow>
+                    <div className="grid grid-cols-3 gap-3 p-3 bg-amber-50/50 dark:bg-amber-900/10 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <FieldRow label={t.poaHolderLabel}><Input value={form.poaHolderName} onChange={e => setForm(p => ({ ...p, poaHolderName: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.poaExpiryLabel}><Input type="date" value={form.poaExpiry} onChange={e => setForm(p => ({ ...p, poaExpiry: e.target.value }))} dir="ltr" className="h-8 text-sm" /></FieldRow>
+                      <FieldRow label={t.poaScopeLabel}><Input value={form.poaScope} onChange={e => setForm(p => ({ ...p, poaScope: e.target.value }))} dir="auto" className="h-8 text-sm" /></FieldRow>
                     </div>
                   )}
                 </div>
 
-                <div className="flex justify-between pt-3 border-t border-border">
-                  <Button variant="outline" onClick={() => setKycStep(4)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
-                  <Button onClick={handleSubmitKYC} className="px-8 gap-2"><ClipboardCheck className="w-4 h-4" />{t.submitForReview}</Button>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <Button size="sm" variant="outline" onClick={() => setKycStep(4)}>← {lang === "ar" ? "السابق" : "Previous"}</Button>
+                  <Button size="sm" onClick={handleSubmitKYC} className="gap-2"><ClipboardCheck className="w-4 h-4" />{t.submitForReview}</Button>
                 </div>
               </CardContent>
             </Card>
