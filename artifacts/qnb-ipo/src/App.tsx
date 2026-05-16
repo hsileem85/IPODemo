@@ -1949,9 +1949,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
         {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
         <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
-        <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>
+        {boActiveStock?.coveredFinalized && <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>}
       </div>
       {isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
+      {!boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && (
         <Card>
