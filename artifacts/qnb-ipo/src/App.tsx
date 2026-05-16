@@ -26,7 +26,7 @@ import {
   ClipboardCheck, FileCheck, ChevronRight, ListFilter,
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
-  Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare, XCircle,
+  Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1682,7 +1682,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         {batch.status === "Pending Review" && (
                           <>
                             <button onClick={() => { onApproveBatch(batch.id, "Approved"); toast({ title: t.batchApproveBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-colors"><CheckCircle2 className="w-3.5 h-3.5" />{t.batchApproveBtn}</button>
-                            <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><XCircle className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
+                            <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><X className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
                           </>
                         )}
                         <button onClick={() => setExpandedBatch(expandedBatch === batch.id ? null : batch.id)} className="px-3 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">{expandedBatch === batch.id ? (lang === "ar" ? "إخفاء" : "Hide") : (lang === "ar" ? "عرض التفاصيل" : "View Details")}</button>
