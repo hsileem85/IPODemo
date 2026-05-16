@@ -1126,17 +1126,16 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   activeStock: IPOStock | null;
-  ipoStocks: IPOStock[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [foTab, setFoTab] = useState<"subs" | "kyc" | "stocks">("subs");
+  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
   const [step, setStep] = useState(1);
   const [requestType, setRequestType] = useState<"individual" | "broker">("individual");
   const [ucInput, setUcInput] = useState("");
@@ -1198,11 +1197,9 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
-        <TabBtn id="fo-stocks" active={foTab === "stocks"} onClick={() => setFoTab("stocks")} icon={BarChart3}>{t.foTabStocks}</TabBtn>
       </div>
 
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
-      {foTab === "stocks" && <IPOStockSetup ipoStocks={ipoStocks} readOnly />}
 
       {foTab === "subs" && (
         <div className="space-y-6">
@@ -1539,11 +1536,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC 
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void; activeStock: IPOStock | null; ipoStocks: IPOStock[] }) {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void; activeStock: IPOStock | null }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const isCovered = !activeStock || activeStock.phase === "covered";
-  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "IPOStocks">("MCDR");
+  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrUploaded, setMcdrUploaded] = useState(false);
   const mcdrRef = useRef<HTMLInputElement>(null);
@@ -1586,7 +1583,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
         {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
         <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
-        <TabBtn id="bo-IPOStocks" active={boTab === "IPOStocks"} onClick={() => setBoTab("IPOStocks")} icon={BarChart3}>{t.boTabStocks}</TabBtn>
       </div>
       {isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
 
@@ -1681,8 +1677,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </Card>
       )}
 
-      {boTab === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} readOnly />}
-
       {boTab === "Reconciliation" && (
         <Card>
           <CardHeader>
@@ -1724,7 +1718,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [adminTab, setAdminTab] = useState<"Users" | "CreateUser" | "Groups" | "AuditLogs" | "IPOStocks">("Users");
+  const [adminTab, setAdminTab] = useState<"Users" | "CreateUser" | "Groups" | "AuditLogs">("Users");
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(INITIAL_USERS);
   const [userGroups] = useState(INITIAL_GROUPS);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1751,7 +1745,6 @@ function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onS
         <TabBtn id="admin-CreateUser" active={adminTab === "CreateUser"} onClick={() => setAdminTab("CreateUser")} icon={UserPlus}>{t.adminTabCreate}</TabBtn>
         <TabBtn id="admin-Groups" active={adminTab === "Groups"} onClick={() => setAdminTab("Groups")} icon={Layers}>{t.adminTabGroups}</TabBtn>
         <TabBtn id="admin-AuditLogs" active={adminTab === "AuditLogs"} onClick={() => setAdminTab("AuditLogs")} icon={ScrollText}>{t.adminTabAudit}</TabBtn>
-        <TabBtn id="admin-IPOStocks" active={adminTab === "IPOStocks"} onClick={() => setAdminTab("IPOStocks")} icon={BarChart3}>{t.ipoStockTab}</TabBtn>
       </div>
 
       {adminTab === "Users" && (
@@ -1849,7 +1842,6 @@ function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onS
         </Card>
       )}
 
-      {adminTab === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={onStocksChange} />}
     </div>
   );
 }
@@ -2496,7 +2488,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
 function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
-  const [activeView, setActiveView] = useState<"dashboard" | UserRole>("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks">("dashboard");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
   const [kycRecords, setKycRecords] = useState<KYCRecord[]>(INITIAL_KYC_RECORDS);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -2612,6 +2604,11 @@ function IPOSystem() {
                   <Icon className="w-3.5 h-3.5" />{label}
                 </button>
               ))}
+              <div className="w-px bg-border self-stretch mx-0.5" />
+              <button onClick={() => setActiveView("IPOStocks")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "IPOStocks" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <BarChart3 className="w-3.5 h-3.5" />{t.ipoStockTab}
+              </button>
             </div>
             <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
             <button className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
@@ -2656,11 +2653,12 @@ function IPOSystem() {
               onStockChange={setActiveStockId}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
+          {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
         </main>
 
         {showProfile && <ProfilePanel user={loggedInUser} prefs={prefs} onPrefsChange={handlePrefsChange} onClose={() => setShowProfile(false)} />}
