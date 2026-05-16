@@ -22,7 +22,7 @@ import {
   FileUser, Building2, MapPin, CreditCard, AlertTriangle,
   ClipboardCheck, FileCheck, ChevronRight, ListFilter,
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
-  BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock,
+  BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2219,6 +2219,19 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate 
 }) {
   const { lang, t, isRTL } = useLang();
   const [drillType, setDrillType] = useState<DrillType>(null);
+  const [lastRefreshed, setLastRefreshed] = useState(new Date());
+  const [spinning, setSpinning] = useState(false);
+
+  const handleRefresh = () => {
+    setSpinning(true);
+    setLastRefreshed(new Date());
+    setTimeout(() => setSpinning(false), 700);
+  };
+
+  useEffect(() => {
+    const id = setInterval(() => { setLastRefreshed(new Date()); }, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const toggle = (type: DrillType) => setDrillType(prev => prev === type ? null : type);
 
@@ -2325,9 +2338,30 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate 
           <h2 className="text-xl font-black text-foreground">{t.dashTitle}</h2>
           <p className="text-sm text-muted-foreground">{t.dashWelcome(loggedInUser.name)} — {t.dashSubtitle}</p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
-          <CalendarClock className="w-3.5 h-3.5" />
-          {new Date().toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
+            <CalendarClock className="w-3.5 h-3.5 shrink-0" />
+            {lastRefreshed.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+            <span className="text-border">|</span>
+            <span className="text-[10px] font-bold text-muted-foreground/70">
+              {lang === "ar" ? "آخر تحديث:" : "Updated:"}{" "}
+              {lastRefreshed.toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-GB", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              title={lang === "ar" ? "تحديث البيانات" : "Refresh data"}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-primary/5 transition-all"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 transition-transform duration-700 ${spinning ? "animate-spin" : ""}`} />
+              {lang === "ar" ? "تحديث" : "Refresh"}
+            </button>
+            <span className="text-[10px] text-muted-foreground/60 italic hidden sm:block">
+              {lang === "ar" ? "يتجدد تلقائياً كل ٥ دقائق" : "Auto-refreshes every 5 min"}
+            </span>
+          </div>
         </div>
       </div>
 
