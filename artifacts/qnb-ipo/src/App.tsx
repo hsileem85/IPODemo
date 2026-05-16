@@ -770,6 +770,16 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
       return name.includes(q) || rec.nationalId.includes(q) || rec.unifiedCode.includes(q) || rec.id.toLowerCase().includes(q);
     }).slice(0, 6);
   }, [kycSearch, records]);
+  const selectedKYCClient = useMemo(() => {
+    const q = kycSearch.trim().toLowerCase();
+    if (!q) return null;
+    return records.find(rec => {
+      const isCorp = rec.clientType === "corporate";
+      const name = (isCorp ? `${rec.companyNameAr} ${rec.companyNameEn}` : `${rec.nameAr} ${rec.nameEn}`).toLowerCase();
+      return name === q || rec.nationalId === q || rec.unifiedCode === q || rec.id.toLowerCase() === q;
+    }) ?? null;
+  }, [kycSearch, records]);
+  const clearKYCSearch = () => setKycSearch("");
   const filteredRecords = (filterStatus === "All" ? records : records.filter(r => r.status === filterStatus)).filter(rec => {
     const q = kycSearch.trim().toLowerCase();
     if (!q) return true;
@@ -977,39 +987,28 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
       {kycTab === "list" && (
         <Card>
           <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-              <CardTitle className="text-base">{lang === "ar" ? "سجلات KYC" : "KYC Records"}</CardTitle>
-              <div className="flex flex-col gap-2 w-full md:w-auto">
-                <div className="relative w-full md:w-[360px]">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <CardTitle className="text-base shrink-0">{lang === "ar" ? "سجلات KYC" : "KYC Records"}</CardTitle>
+                <div className="relative flex-1 min-w-0">
                   <Input
                     value={kycSearch}
                     onChange={e => setKycSearch(e.target.value)}
                     placeholder={lang === "ar" ? "ابحث بالاسم أو الرقم القومي أو الكود الموحد..." : "Search by name, ID, or unified code..."}
-                    className="h-9 pr-10 text-sm"
+                    className="h-9 pr-16 text-sm"
                   />
                   <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">⌕</span>
+                  {selectedKYCClient && (
+                    <button
+                      type="button"
+                      onClick={clearKYCSearch}
+                      className="absolute end-8 top-1/2 -translate-y-1/2 text-[11px] font-black text-muted-foreground hover:text-foreground"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
-                {kycSearch && kycSearchSuggestions.length > 0 && (
-                  <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden max-h-56 overflow-y-auto">
-                    {kycSearchSuggestions.map(client => (
-                      <button
-                        key={`${client.id}-${client.unifiedCode}`}
-                        type="button"
-                        onClick={() => setKycSearch(client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : client.nameEn)}
-                        className="w-full text-start px-3 py-2 hover:bg-muted/50 border-b border-border/50 last:border-b-0"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold truncate">{client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : clientName(client.nameAr, client.nameEn, lang)}</p>
-                            <p className="text-[10px] text-muted-foreground font-mono truncate">{client.nationalId} · {client.unifiedCode}</p>
-                          </div>
-                          <Badge variant="outline" className="shrink-0 text-[10px]">KYC</Badge>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">
+                <div className="flex bg-muted p-1 rounded-xl gap-1 shrink-0 flex-wrap">
                   {(["All", "Pending Review", "Approved", "Rejected", "Draft"] as const).map(s => (
                     <button key={s} onClick={() => setFilterStatus(s)}
                       className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${filterStatus === s ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -1018,6 +1017,34 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                   ))}
                 </div>
               </div>
+              {kycSearch && kycSearchSuggestions.length > 0 && (
+                <div className="rounded-xl border border-border bg-background shadow-sm overflow-hidden max-h-56 overflow-y-auto">
+                  {kycSearchSuggestions.map(client => (
+                    <button
+                      key={`${client.id}-${client.unifiedCode}`}
+                      type="button"
+                      onClick={() => setKycSearch(client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : client.nameEn)}
+                      className="w-full text-start px-3 py-2 hover:bg-muted/50 border-b border-border/50 last:border-b-0"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate">{client.clientType === "corporate" ? (lang === "ar" ? client.companyNameAr : client.companyNameEn) : clientName(client.nameAr, client.nameEn, lang)}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono truncate">{client.nationalId} · {client.unifiedCode}</p>
+                        </div>
+                        <Badge variant="outline" className="shrink-0 text-[10px]">KYC</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedKYCClient && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                    <span className="truncate max-w-[220px]">{selectedKYCClient.clientType === "corporate" ? (lang === "ar" ? selectedKYCClient.companyNameAr : selectedKYCClient.companyNameEn) : clientName(selectedKYCClient.nameAr, selectedKYCClient.nameEn, lang)}</span>
+                    <button type="button" onClick={clearKYCSearch} className="text-[11px] font-black opacity-70 hover:opacity-100">×</button>
+                  </span>
+                </div>
+              )}
             </div>
           </CardHeader>
           <CardContent>
