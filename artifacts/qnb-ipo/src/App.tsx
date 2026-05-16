@@ -1781,6 +1781,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrRows, setMcdrRows] = useState<MCDRRow[]>([]);
   const [selectedBoIpoId, setSelectedBoIpoId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
+  const [coveredHistoryStockId, setCoveredHistoryStockId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
   const [isReconciled, setIsReconciled] = useState(false);
   const [reconRows, setReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const mcdrRef = useRef<HTMLInputElement>(null);
@@ -1820,9 +1821,20 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
 
-  // Covered stage archive totals (for Covered History tab)
+  // Covered stage archive totals — used for the main stock's history inline summary
   const coveredBrokerCount = coveredApprovedBatches.reduce((a, b) => a + b.clients.length, 0);
   const coveredCashTotal = coveredApprovedSubs.reduce((a, s) => a + s.amountPaid, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
+
+  // Covered History tab — independent stock selector data
+  const finalizedStocks = ipoStocks.filter(s => s.coveredFinalized);
+  const chCutoff = ipoStocks.find(s => s.id === coveredHistoryStockId)?.coveredEnd ?? "";
+  const chApprovedSubs = subscriptions.filter(s => s.ipoId === coveredHistoryStockId && (["Verified", "Pending Payment", "Shortfall", "Allocated", "Refunded"] as SubStatus[]).includes(s.status));
+  const chApprovedBatches = brokerBatches.filter(b => b.ipoId === coveredHistoryStockId && b.status === "Approved");
+  const chCoveredSubs = chApprovedSubs.filter(s => !chCutoff || s.date <= chCutoff);
+  const chCoveredBatches = chApprovedBatches.filter(b => !chCutoff || b.submittedAt.split(" ")[0] <= chCutoff);
+  const chSharesTotal = chCoveredSubs.reduce((a, s) => a + s.requestedShares, 0) + chCoveredBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
+  const chBrokerCount = chCoveredBatches.reduce((a, b) => a + b.clients.length, 0);
+  const chCashTotal = chCoveredSubs.reduce((a, s) => a + s.amountPaid, 0) + chCoveredBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
 
   const RECON_FILTERS = [
     { key: "All", label: t.filterAll },
@@ -2172,36 +2184,53 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
       {boTab === "CoveredHistory" && (
         <div className="space-y-5">
-          <div>
-            <h2 className="text-xl font-black tracking-tight">{t.boTabCoveredHistory}</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">{t.coveredHistoryDesc}</p>
+          {/* Header + IPO stock selector */}
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-black tracking-tight">{t.boTabCoveredHistory}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t.coveredHistoryDesc}</p>
+            </div>
+            {finalizedStocks.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-muted/40">
+                <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wide whitespace-nowrap">{t.selectIpoLabel}</label>
+                <select
+                  value={coveredHistoryStockId}
+                  onChange={e => setCoveredHistoryStockId(e.target.value)}
+                  className="border-0 bg-transparent text-sm outline-none font-bold text-foreground"
+                >
+                  {finalizedStocks.map(s => (
+                    <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           {/* Covered stage summary cards */}
           <div className="grid grid-cols-3 gap-3">
             <Card>
               <CardContent className="pt-4 pb-4 px-4">
                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
-                <p className="text-2xl font-black text-foreground mt-0.5">{(coveredApprovedSubs.length + coveredBrokerCount).toLocaleString(numLocale)}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${coveredApprovedSubs.length} فردي · ${coveredBrokerCount} وسيط` : `${coveredApprovedSubs.length} indiv · ${coveredBrokerCount} broker`}</p>
+                <p className="text-2xl font-black text-foreground mt-0.5">{(chCoveredSubs.length + chBrokerCount).toLocaleString(numLocale)}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${chCoveredSubs.length} فردي · ${chBrokerCount} وسيط` : `${chCoveredSubs.length} indiv · ${chBrokerCount} broker`}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4 px-4">
                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalSubscribedCard}</p>
-                <p className="text-2xl font-black text-primary mt-0.5">{coveredSharesTotal.toLocaleString(numLocale)}</p>
+                <p className="text-2xl font-black text-primary mt-0.5">{chSharesTotal.toLocaleString(numLocale)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? "أسهم مكتتب بها" : "Shares subscribed"}</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-4 pb-4 px-4">
                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalCashCard}</p>
-                <p className="text-2xl font-black text-emerald-600 mt-0.5">{coveredCashTotal >= 1_000_000 ? `${(coveredCashTotal / 1_000_000).toFixed(2)}M` : coveredCashTotal.toLocaleString(numLocale)}</p>
+                <p className="text-2xl font-black text-emerald-600 mt-0.5">{chCashTotal >= 1_000_000 ? `${(chCashTotal / 1_000_000).toFixed(2)}M` : chCashTotal.toLocaleString(numLocale)}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{t.egp}</p>
               </CardContent>
             </Card>
           </div>
           {/* Individual subscriptions table */}
-          {coveredApprovedSubs.length > 0 ? (
+          {chCoveredSubs.length > 0 ? (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">{lang === "ar" ? "الاشتراكات الفردية" : "Individual Subscriptions"}</CardTitle>
@@ -2217,7 +2246,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {coveredApprovedSubs.map(sub => (
+                      {chCoveredSubs.map(sub => (
                         <TableRow key={sub.id} className="hover:bg-muted/30">
                           <TableCell>
                             <p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p>
@@ -2243,7 +2272,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </Card>
           )}
           {/* Broker batches — one card per batch with full client breakdown */}
-          {coveredApprovedBatches.length > 0 && (
+          {chCoveredBatches.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-sm font-black text-muted-foreground uppercase tracking-widest">{lang === "ar" ? "دفعات الوسطاء" : "Broker Batches"}</h3>
               {coveredApprovedBatches.map(b => (
