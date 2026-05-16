@@ -1,4 +1,5 @@
 import { useState, useMemo, createContext, useContext, useRef, useEffect } from "react";
+import { type IPOStock, INITIAL_IPO_STOCKS } from "./data/ipoStocks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -104,21 +105,6 @@ interface KYCRecord {
   // Documents & POA
   uploadedDocs: string[];
   hasPOA: boolean; poaHolderName: string; poaExpiry: string; poaScope: string;
-}
-
-interface IPOStock {
-  id: string;
-  securityNameAr: string;
-  securityNameEn: string;
-  code: string;
-  symbol: string;
-  isin: string;
-  coveredStart: string;
-  coveredEnd: string;
-  uncoveredStart: string;
-  uncoveredEnd: string;
-  phase: "covered" | "uncovered";
-  coveredFinalized: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -743,22 +729,6 @@ const INITIAL_KYC_RECORDS: KYCRecord[] = [
   },
 ];
 
-const INITIAL_IPO_STOCKS: IPOStock[] = [
-  {
-    id: "IPO-001",
-    securityNameAr: "شركة تك-إنفست",
-    securityNameEn: "Tech-Invest Co.",
-    code: "TECH",
-    symbol: "TIC",
-    isin: "EGS74081C015",
-    coveredStart: "2026-05-01",
-    coveredEnd: "2026-05-15",
-    uncoveredStart: "2026-05-16",
-    uncoveredEnd: "2026-05-31",
-    phase: "covered",
-    coveredFinalized: false,
-  },
-];
 
 const queryClient = new QueryClient();
 
