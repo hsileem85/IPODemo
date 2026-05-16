@@ -1126,12 +1126,15 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock }: {
+interface BrokerClient { clientName: string; ipoName: string; unifiedCode: string; qty: number; cost: number; }
+
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   activeStock: IPOStock | null;
+  ipoStocks: IPOStock[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1144,11 +1147,14 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [txRef, setTxRef] = useState("");
   const [fixSent, setFixSent] = useState(false);
   const [brokerFile, setBrokerFile] = useState<File | null>(null);
+  const [brokerName, setBrokerName] = useState("");
+  const [brokerIPO, setBrokerIPO] = useState("");
+  const [brokerClients, setBrokerClients] = useState<BrokerClient[]>([]);
   const brokerRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const STEPS = [t.step1, t.step2, t.step3, t.stepFIX, t.step4];
   const DOCS = [t.doc1, t.doc2, t.doc3, t.doc4];
-  const EVENTS = [{ value: "SOO", label: t.eventSOO }, { value: "CAP", label: t.eventCAP }, { value: "RIGHTS", label: t.eventRIGHTS }];
+  const EVENTS = ipoStocks.map(s => ({ value: s.id, label: lang === "ar" ? s.securityNameAr : s.securityNameEn }));
   const paymentOptions = requestType === "broker"
     ? [{ v: "Bank Transfer", l: t.payTransfer }, { v: "Debit Note", l: t.payDebitNote }]
     : [{ v: "Cash Deposit", l: t.payCash }, { v: "Certified Check", l: t.payCheck }];
@@ -1222,56 +1228,141 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                     </button>
                   </div>
                 </div>
-                {activeStock && (
-                  <div className="text-xs text-muted-foreground border border-border rounded-xl px-3 py-2">
-                    <p className="font-black text-foreground">{lang === "ar" ? activeStock.securityNameAr : activeStock.securityNameEn}</p>
-                    <p className="font-mono">{activeStock.isin}</p>
-                  </div>
-                )}
               </div>
             </CardContent>
           </Card>
 
           {/* ── BROKER FLOW ── */}
-          {requestType === "broker" && (
-            <Card>
-              <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
-              <CardContent className="space-y-4">
-                {!brokerFile ? (
-                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 gap-5">
-                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-7 h-7 text-muted-foreground" /></div>
-                    <div className="text-center"><p className="font-bold">{t.brokerUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.brokerUploadDesc}</p></div>
-                    <input ref={brokerRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { if (e.target.files?.[0]) setBrokerFile(e.target.files[0]); }} />
-                    <Button onClick={() => brokerRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                      <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <div><p className="font-bold text-sm">{brokerFile.name}</p><p className="text-xs text-green-600 dark:text-green-500">{t.brokerFileLoaded(24)}</p></div>
-                      </div>
-                      <Button variant="outline" size="sm" onClick={() => setBrokerFile(null)}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}</Button>
+          {requestType === "broker" && (() => {
+            const handleBrokerCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setBrokerFile(file);
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const text = ev.target?.result as string;
+                const lines = text.split('\n').filter(l => l.trim());
+                const clients: BrokerClient[] = lines.slice(1).map(line => {
+                  const p = line.split(',');
+                  return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0 };
+                }).filter(c => c.clientName);
+                setBrokerClients(clients);
+              };
+              reader.readAsText(file);
+              e.target.value = "";
+            };
+            const totalQty = brokerClients.reduce((s, c) => s + c.qty, 0);
+            const totalCost = brokerClients.reduce((s, c) => s + c.cost, 0);
+            return (
+              <Card>
+                <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
+                <CardContent className="space-y-5">
+                  {/* Step 1: Broker + IPO selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.brokerLabel}</p>
+                      <select value={brokerName} onChange={e => setBrokerName(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <option value="">{t.selectBroker}</option>
+                        <option value="EFG">EFG Hermes</option>
+                        <option value="CI Capital">CI Capital</option>
+                        <option value="Beltone">Beltone Financial</option>
+                      </select>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
-                        <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                          <option value="Bank Transfer">{t.payTransfer}</option>
-                          <option value="Debit Note">{t.payDebitNote}</option>
-                        </select>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.txRefLabel}</p>
-                        <Input placeholder={t.txRefPlaceholder} dir="ltr" value={txRef} onChange={e => setTxRef(e.target.value)} />
-                      </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.eventLabel}</p>
+                      <select value={brokerIPO} onChange={e => setBrokerIPO(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <option value="">{t.selectIPO}</option>
+                        {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
+                      </select>
                     </div>
-                    <Button onClick={() => { toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(24) }); setBrokerFile(null); setTxRef(""); }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+
+                  {/* Step 2+: Upload + grid (only when broker & IPO selected) */}
+                  {brokerName && brokerIPO && (
+                    <>
+                      {brokerClients.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-12 gap-4">
+                          <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-muted-foreground" /></div>
+                          <div className="text-center"><p className="font-bold">{t.brokerUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.brokerUploadDesc}</p></div>
+                          <input ref={brokerRef} type="file" accept=".csv" className="hidden" onChange={handleBrokerCSV} />
+                          <Button onClick={() => brokerRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {/* File loaded banner */}
+                          <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                            <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                              <CheckCircle2 className="w-5 h-5" />
+                              <div><p className="font-bold text-sm">{brokerFile?.name}</p><p className="text-xs">{t.brokerFileLoaded(brokerClients.length)}</p></div>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => { setBrokerClients([]); setBrokerFile(null); }}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}</Button>
+                          </div>
+
+                          {/* Summary stats */}
+                          <div className="grid grid-cols-3 gap-3">
+                            {[
+                              { label: t.totalClients, value: brokerClients.length, cls: "text-primary" },
+                              { label: t.shares, value: totalQty.toLocaleString(numLocale), cls: "text-foreground" },
+                              { label: t.totalValue, value: totalCost.toLocaleString(numLocale), cls: "text-green-600" },
+                            ].map(({ label, value, cls }) => (
+                              <Card key={label}><CardContent className="pt-4 text-center">
+                                <p className={`text-xl font-black ${cls}`}>{value}</p>
+                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-0.5">{label}</p>
+                              </CardContent></Card>
+                            ))}
+                          </div>
+
+                          {/* Client grid */}
+                          <div className="overflow-x-auto rounded-xl border border-border/50">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/30">
+                                  {["#", t.colClientName, t.colIPOName, t.colUnifiedCode, t.colSubQty, t.colCost].map((h, i) => (
+                                    <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 4 ? "text-end" : ""}`}>{h}</TableHead>
+                                  ))}
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {brokerClients.map((c, i) => (
+                                  <TableRow key={i} className="hover:bg-muted/30">
+                                    <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
+                                    <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                    <TableCell className="text-sm">{c.ipoName}</TableCell>
+                                    <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                    <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                    <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          {/* Payment + Submit */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
+                              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                                <option value="Bank Transfer">{t.payTransfer}</option>
+                                <option value="Debit Note">{t.payDebitNote}</option>
+                              </select>
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.txRefLabel}</p>
+                              <Input placeholder={t.txRefPlaceholder} dir="ltr" value={txRef} onChange={e => setTxRef(e.target.value)} />
+                            </div>
+                          </div>
+                          <Button onClick={() => {
+                            toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
+                            setBrokerClients([]); setBrokerFile(null); setBrokerName(""); setBrokerIPO(""); setTxRef("");
+                          }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ── INDIVIDUAL FLOW ── */}
           {requestType === "individual" && (
@@ -2653,7 +2744,7 @@ function IPOSystem() {
               onStockChange={setActiveStockId}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
           {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} />}
           {activeView === "Communications" && <CustomerComms />}

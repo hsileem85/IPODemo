@@ -21,8 +21,8 @@ export interface IPOStock {
 export const INITIAL_IPO_STOCKS: IPOStock[] = [
   {
     id: "IPO-ADIB",
-    securityNameAr: "بنك أبوظبي الإسلامي - مصر (زيادة رأس مال - إصدار حقوق)",
-    securityNameEn: "ADIB Egypt – Capital Increase (Rights Issue)",
+    securityNameAr: "بنك أبوظبي الإسلامي - مصر",
+    securityNameEn: "ADIB Egypt",
     code: "ADIB",
     symbol: "ADIB",
     isin: "EGS60121C014",
@@ -35,8 +35,8 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
   },
   {
     id: "IPO-EDITA",
-    securityNameAr: "إيديتا لصناعة الغذاء (زيادة رأس مال - إصدار حقوق)",
-    securityNameEn: "Edita Food Industries – Capital Increase (Rights Issue)",
+    securityNameAr: "إيديتا لصناعة الغذاء",
+    securityNameEn: "Edita Food Industries",
     code: "EDITA",
     symbol: "EDITA",
     isin: "EGS722G1C010",
