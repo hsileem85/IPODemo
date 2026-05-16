@@ -1797,10 +1797,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const approvedBoBatches = brokerBatches.filter(b => b.ipoId === selectedBoIpoId && b.status === "Approved");
   const brokerClientCount = approvedBoBatches.reduce((a, b) => a + b.clients.length, 0);
 
-  const totalSubscriptionsCount = boSubs.length + brokerClientCount;
+  const totalSubscriptionsCount = approvedBoSubs.length + brokerClientCount;
   const totalSharesSubscribed = approvedBoSubs.reduce((a, s) => a + s.requestedShares, 0) + approvedBoBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const eligibleIPOShares = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
-  const totalCashAmount = totalSharesSubscribed * (boActiveStock?.pricePerShare ?? 0);
+  const totalCashAmount = approvedBoSubs.reduce((a, s) => a + s.amountPaid, 0) + approvedBoBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
 
@@ -1885,7 +1885,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
             <p className="text-2xl font-black text-foreground mt-0.5">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${boSubs.length} فردي · ${brokerClientCount} وسيط` : `${boSubs.length} indiv · ${brokerClientCount} broker`}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${approvedBoSubs.length} فردي · ${brokerClientCount} وسيط` : `${approvedBoSubs.length} indiv · ${brokerClientCount} broker`}</p>
           </CardContent>
         </Card>
         <Card>
