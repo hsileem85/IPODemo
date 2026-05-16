@@ -23,6 +23,7 @@ import {
   ClipboardCheck, FileCheck, ChevronRight, ListFilter,
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
+  Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,13 +106,28 @@ interface KYCRecord {
   hasPOA: boolean; poaHolderName: string; poaExpiry: string; poaScope: string;
 }
 
+interface IPOStock {
+  id: string;
+  securityNameAr: string;
+  securityNameEn: string;
+  code: string;
+  symbol: string;
+  isin: string;
+  coveredStart: string;
+  coveredEnd: string;
+  uncoveredStart: string;
+  uncoveredEnd: string;
+  phase: "covered" | "uncovered";
+  coveredFinalized: boolean;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Translations
 // ─────────────────────────────────────────────────────────────────────────────
 const T = {
   ar: {
     appTitle: "نظام إدارة الاكتتابات",
-    appSubtitle: "شركة التكنولوجيا المتقدمة — اكتتاب زيادة رأس مال",
+    appSubtitle: "شركة تك-إنفست - زيادة رأس مال - إصدار حقوق",
     roleFront: "الفرع", roleBack: "المقاصة", roleSysAdmin: "مدير النظام",
     roleSupervisor: "المشرف", roleComms: "التواصل",
     loginTitle: "تسجيل الدخول", loginDesc: "أدخل بيانات الاعتماد للدخول إلى النظام",
@@ -331,10 +347,50 @@ const T = {
     dashLastUpload: "آخر رفع MCDR",
     dashUploadInfo: "mcdr_may2026.xlsx — 240 سجل",
     dashUploadsCount: "ملفات مرفوعة",
+    stepFIX: "رسالة FIX",
+    ipoStockTab: "الأوراق المالية",
+    ipoStockTitle: "إضافة ورقة مالية جديدة",
+    ipoStockDesc: "أدخل تفاصيل الورقة المالية ومواعيد مراحل الاكتتاب",
+    secNameArLabel: "اسم الورقة (عربي)",
+    secNameEnLabel: "اسم الورقة (إنجليزي)",
+    stockCodeLabel: "الكود",
+    stockSymbolLabel: "الرمز",
+    isinLabel: "ISIN",
+    coveredPhaseLabel: "مرحلة المغطى",
+    uncoveredPhaseLabel: "مرحلة الغير مغطى",
+    coveredStartLabel: "تاريخ بداية المغطى",
+    coveredEndLabel: "تاريخ نهاية المغطى",
+    uncoveredStartLabel: "تاريخ بداية الغير مغطى",
+    uncoveredEndLabel: "تاريخ نهاية الغير مغطى",
+    finalizeCoveredBtn: "إغلاق مرحلة المغطى",
+    coveredFinalizedLabel: "تم إغلاق مرحلة المغطى",
+    addStockBtn: "+ إضافة ورقة مالية",
+    saveStockBtn: "حفظ الورقة المالية",
+    stockPhaseLabel: "المرحلة الحالية",
+    coveredPhaseBadge: "المغطى",
+    uncoveredPhaseBadge: "الغير مغطى",
+    filterByStock: "الورقة المالية",
+    allStocks: "كل الأوراق",
+    individualRequest: "اكتتاب فردي",
+    brokerRequest: "اكتتاب وسيط (Broker)",
+    brokerUploadTitle: "رفع ملف طلبات الوسيط",
+    brokerUploadDesc: "ارفع ملف Excel يحتوي على طلبات الاكتتاب بالجملة للوسيط",
+    uploadBrokerBtn: "رفع ملف الوسيط",
+    brokerFileLoaded: (n: number) => `تم تحميل ${n} طلب بنجاح`,
+    txRefLabel: "مرجع العملية",
+    txRefPlaceholder: "أدخل رقم مرجع العملية...",
+    fixMcdrTitle: "رسالة تخصيص FIX-MCDR",
+    fixMcdrDesc: "مراجعة وإرسال رسالة FIX لتخصيص الكمية المطلوبة عبر MCDR",
+    sendFixBtn: "إرسال رسالة FIX",
+    fixSentLabel: "تم إرسال رسالة FIX بنجاح",
+    proceedToReceipt: "الانتقال للإيصال النهائي",
+    payTransfer: "تحويل بنكي",
+    payDebitNote: "جواب خصم",
+    requestTypeLabel: "نوع الطلب",
   },
   en: {
     appTitle: "IPO Management System",
-    appSubtitle: "Advanced Technology Co. — Capital Increase IPO",
+    appSubtitle: "Tech-Invest Co. - Capital Increase-Rights Issue",
     roleFront: "Branch", roleBack: "Clearing", roleSysAdmin: "SysAdmin",
     roleSupervisor: "Supervisor", roleComms: "Comms",
     loginTitle: "Sign In", loginDesc: "Enter your credentials to access the system",
@@ -545,6 +601,46 @@ const T = {
     dashLastUpload: "Last MCDR Upload",
     dashUploadInfo: "mcdr_may2026.xlsx — 240 records",
     dashUploadsCount: "Files Uploaded",
+    stepFIX: "FIX Allocation",
+    ipoStockTab: "IPO Stocks",
+    ipoStockTitle: "Configure New IPO Stock",
+    ipoStockDesc: "Enter security details and subscription phase dates",
+    secNameArLabel: "Security Name (Arabic)",
+    secNameEnLabel: "Security Name (English)",
+    stockCodeLabel: "Code",
+    stockSymbolLabel: "Symbol",
+    isinLabel: "ISIN",
+    coveredPhaseLabel: "Covered Phase",
+    uncoveredPhaseLabel: "Uncovered Phase",
+    coveredStartLabel: "Covered Start Date",
+    coveredEndLabel: "Covered End Date",
+    uncoveredStartLabel: "Uncovered Start Date",
+    uncoveredEndLabel: "Uncovered End Date",
+    finalizeCoveredBtn: "Finalize Covered Phase",
+    coveredFinalizedLabel: "Covered Phase Finalized",
+    addStockBtn: "+ Add Stock",
+    saveStockBtn: "Save Stock",
+    stockPhaseLabel: "Current Phase",
+    coveredPhaseBadge: "Covered",
+    uncoveredPhaseBadge: "Uncovered",
+    filterByStock: "IPO Stock",
+    allStocks: "All Stocks",
+    individualRequest: "Individual Subscription",
+    brokerRequest: "Broker Subscription",
+    brokerUploadTitle: "Upload Broker Subscription File",
+    brokerUploadDesc: "Upload an Excel file with bulk broker subscription requests",
+    uploadBrokerBtn: "Upload Broker File",
+    brokerFileLoaded: (n: number) => `${n} requests loaded successfully`,
+    txRefLabel: "Transaction Reference",
+    txRefPlaceholder: "Enter transaction reference number...",
+    fixMcdrTitle: "FIX-MCDR Allocation Message",
+    fixMcdrDesc: "Review and send the FIX message to allocate the requested quantity via MCDR",
+    sendFixBtn: "Send FIX Message",
+    fixSentLabel: "FIX Message Sent Successfully",
+    proceedToReceipt: "Proceed to Final Receipt →",
+    payTransfer: "Bank Transfer",
+    payDebitNote: "Debit Note",
+    requestTypeLabel: "Request Type",
   },
 } as const;
 
@@ -644,6 +740,23 @@ const INITIAL_KYC_RECORDS: KYCRecord[] = [
     pepStatus: false, sanctionsCheck: true, annualIncome: "5,000,000 EGP", netWorth: "25,000,000 EGP",
     uploadedDocs: ["Commercial Registration", "Tax Card"],
     hasPOA: true, poaHolderName: "Mahmoud Kamal", poaExpiry: "2027-12-31", poaScope: "Trading and investment activities",
+  },
+];
+
+const INITIAL_IPO_STOCKS: IPOStock[] = [
+  {
+    id: "IPO-001",
+    securityNameAr: "شركة تك-إنفست",
+    securityNameEn: "Tech-Invest Co.",
+    code: "TECH",
+    symbol: "TIC",
+    isin: "EGS74081C015",
+    coveredStart: "2026-05-01",
+    coveredEnd: "2026-05-15",
+    uncoveredStart: "2026-05-16",
+    uncoveredEnd: "2026-05-31",
+    phase: "covered",
+    coveredFinalized: false,
   },
 ];
 
@@ -1568,27 +1681,42 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
+  activeStock: IPOStock | null;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
   const [step, setStep] = useState(1);
+  const [requestType, setRequestType] = useState<"individual" | "broker">("individual");
   const [ucInput, setUcInput] = useState("");
   const [foundClient, setFoundClient] = useState<ClientRecord | null>(null);
   const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
+  const [txRef, setTxRef] = useState("");
+  const [fixSent, setFixSent] = useState(false);
+  const [brokerFile, setBrokerFile] = useState<File | null>(null);
+  const brokerRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
-  const STEPS = [t.step1, t.step2, t.step3, t.step4];
+  const STEPS = [t.step1, t.step2, t.step3, t.stepFIX, t.step4];
   const DOCS = [t.doc1, t.doc2, t.doc3, t.doc4];
   const EVENTS = [{ value: "SOO", label: t.eventSOO }, { value: "CAP", label: t.eventCAP }, { value: "RIGHTS", label: t.eventRIGHTS }];
+  const paymentOptions = requestType === "broker"
+    ? [{ v: "Bank Transfer", l: t.payTransfer }, { v: "Debit Note", l: t.payDebitNote }]
+    : [{ v: "Cash Deposit", l: t.payCash }, { v: "Certified Check", l: t.payCheck }];
   const sharesSchema = z.object({ requestedShares: z.coerce.number().min(1, t.sharesError), paymentMethod: z.string().min(1) });
-  const form = useForm<z.infer<typeof sharesSchema>>({ resolver: zodResolver(sharesSchema), defaultValues: { requestedShares: 0, paymentMethod: "Direct Debit" } });
+  const form = useForm<z.infer<typeof sharesSchema>>({ resolver: zodResolver(sharesSchema), defaultValues: { requestedShares: 0, paymentMethod: paymentOptions[0].v } });
   const watchedShares = form.watch("requestedShares");
   const totalDue = (Number(watchedShares) || 0) * TOTAL_PER_SHARE;
+
+  const resetFlow = () => {
+    setStep(1); setUcInput(""); setFoundClient(null); setPendingSub(null);
+    form.reset({ requestedShares: 0, paymentMethod: paymentOptions[0].v });
+    setTxRef(""); setFixSent(false);
+  };
 
   const onSubmitStep2 = (values: z.infer<typeof sharesSchema>) => {
     if (!foundClient) return;
@@ -1607,141 +1735,272 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC }: 
     if (!pendingSub) return;
     onNewSubscription(pendingSub);
     toast({ title: t.toastSentTitle, description: t.toastSentDesc(pendingSub.id) });
-    setStep(1); setUcInput(""); setFoundClient(null); setPendingSub(null); form.reset();
+    resetFlow();
   };
+
+  const fixMessage = pendingSub ? [
+    `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${activeStock?.code ?? "IPO"}`,
+    `56=MCDR`, `34=1`, `52=${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`,
+    `11=${pendingSub.id}`, `1=${pendingSub.account}`, `55=${activeStock?.symbol ?? "IPO"}`,
+    `48=${activeStock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${pendingSub.requestedShares}`,
+    `40=1`, `44=${TOTAL_PER_SHARE}`, `60=${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`,
+    `10=247`,
+  ] : [];
 
   return (
     <div className="space-y-5">
-      {/* Top sub-tabs */}
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
       </div>
 
-      {/* KYC sub-module */}
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
 
-      {/* Subscription flow */}
       {foTab === "subs" && (
         <div className="space-y-6">
+          {/* Request type toggle */}
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between max-w-2xl mx-auto">
-                {STEPS.map((label, i) => (
-                  <div key={label} className="flex flex-col items-center gap-2">
-                    <button type="button" onClick={() => { if (i + 1 < step) setStep(i + 1); }}
-                      className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : step > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
-                      {step > i + 1 ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
+            <CardContent className="pt-5 pb-5">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div>
+                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">{t.requestTypeLabel}</p>
+                  <div className="flex gap-2">
+                    <button type="button"
+                      onClick={() => { setRequestType("individual"); resetFlow(); }}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${requestType === "individual" ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-transparent text-muted-foreground hover:border-primary/30"}`}>
+                      <User className="w-4 h-4" />{t.individualRequest}
                     </button>
-                    <span className={`text-[10px] font-bold tracking-wide text-center max-w-[80px] leading-tight ${step === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
+                    <button type="button"
+                      onClick={() => { setRequestType("broker"); resetFlow(); }}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${requestType === "broker" ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-transparent text-muted-foreground hover:border-primary/30"}`}>
+                      <Building2 className="w-4 h-4" />{t.brokerRequest}
+                    </button>
                   </div>
-                ))}
+                </div>
+                {activeStock && (
+                  <div className="text-xs text-muted-foreground border border-border rounded-xl px-3 py-2">
+                    <p className="font-black text-foreground">{lang === "ar" ? activeStock.securityNameAr : activeStock.securityNameEn}</p>
+                    <p className="font-mono">{activeStock.isin}</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          {step === 1 && (
+          {/* ── BROKER FLOW ── */}
+          {requestType === "broker" && (
             <Card>
-              <CardHeader><CardTitle>{t.kycTitle}</CardTitle><CardDescription>{t.kycDesc}</CardDescription></CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.unifiedCodeLabel}</label>
-                    <Input value={ucInput} onChange={e => { setUcInput(e.target.value); setFoundClient(null); }} onBlur={() => setFoundClient(MOCK_CLIENTS[ucInput] ?? null)} placeholder={t.unifiedCodePlaceholder} dir="ltr" />
-                    <p className="text-xs text-muted-foreground">{t.unifiedCodeHint}</p>
+              <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                {!brokerFile ? (
+                  <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 gap-5">
+                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-7 h-7 text-muted-foreground" /></div>
+                    <div className="text-center"><p className="font-bold">{t.brokerUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.brokerUploadDesc}</p></div>
+                    <input ref={brokerRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => { if (e.target.files?.[0]) setBrokerFile(e.target.files[0]); }} />
+                    <Button onClick={() => brokerRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
-                    <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">{EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}</select>
-                  </div>
-                </div>
-                {foundClient && (
-                  <div className="bg-primary text-primary-foreground p-6 rounded-2xl shadow-lg space-y-4">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div>
-                        <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">{t.mcdrVerified}</p>
-                        <h3 className="text-xl font-bold">{clientName(foundClient.nameAr, foundClient.nameEn, lang)}</h3>
-                        <div className="flex flex-wrap gap-3 mt-2 text-sm text-primary-foreground/80">
-                          <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
-                          <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
-                          <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-white/10 text-primary-foreground/70 border-white/20"}>{foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}</Badge>
-                        </div>
-                        {foundClient.isBankClient && <p className="text-xs text-primary-foreground/70 mt-1">{t.bankAccLabel}: <span className="font-mono text-primary-foreground">{foundClient.bankAccountNo}</span></p>}
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <div><p className="font-bold text-sm">{brokerFile.name}</p><p className="text-xs text-green-600 dark:text-green-500">{t.brokerFileLoaded(24)}</p></div>
                       </div>
-                      <Button variant="secondary" className="shrink-0 font-bold" onClick={() => setStep(2)}>{t.nextStep}</Button>
+                      <Button variant="outline" size="sm" onClick={() => setBrokerFile(null)}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}</Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 border-t border-white/20 pt-4">
-                      <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.cashBalanceLabel}</p><p className="font-black text-lg">{foundClient.cashBalance.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.egp}</span></p></div>
-                      <div className="bg-white/10 rounded-xl p-3"><p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
+                        <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                          <option value="Bank Transfer">{t.payTransfer}</option>
+                          <option value="Debit Note">{t.payDebitNote}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.txRefLabel}</p>
+                        <Input placeholder={t.txRefPlaceholder} dir="ltr" value={txRef} onChange={e => setTxRef(e.target.value)} />
+                      </div>
                     </div>
+                    <Button onClick={() => { toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(24) }); setBrokerFile(null); setTxRef(""); }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
 
-          {step === 2 && (
-            <Card>
-              <CardHeader><CardTitle>{t.ektitabTitle}</CardTitle><CardDescription>{t.ektitabDesc}</CardDescription></CardHeader>
-              <CardContent>
-                <Form {...form}>
-                  <form onSubmit={form.handleSubmit(onSubmitStep2)} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="md:col-span-2 space-y-4">
-                        <FormField control={form.control} name="requestedShares" render={({ field }) => (<FormItem><FormLabel>{t.sharesLabel}</FormLabel><FormControl><Input type="number" placeholder="0" dir="ltr" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                        <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>{t.paymentLabel}</FormLabel><FormControl><select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" {...field}><option value="Direct Debit">{t.payDirect}</option><option value="Cash Deposit">{t.payCash}</option><option value="Certified Check">{t.payCheck}</option></select></FormControl><FormMessage /></FormItem>)} />
-                        {foundClient && <div className="grid grid-cols-2 gap-3 p-4 bg-muted/50 rounded-xl border"><div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.cashBalanceLabel}</p><p className="font-black text-primary">{foundClient.cashBalance.toLocaleString(numLocale)} {t.egp}</p></div><div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div></div>}
+          {/* ── INDIVIDUAL FLOW ── */}
+          {requestType === "individual" && (
+            <>
+              {/* Step progress bar */}
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between max-w-2xl mx-auto">
+                    {STEPS.map((label, i) => (
+                      <div key={label} className="flex flex-col items-center gap-2">
+                        <button type="button" onClick={() => { if (i + 1 < step) setStep(i + 1); }}
+                          className={`w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm transition-all border-2 ${step === i + 1 ? "bg-primary border-primary/20 text-primary-foreground scale-110 shadow-md" : step > i + 1 ? "bg-green-500 border-green-200 text-white" : "bg-muted border-transparent text-muted-foreground"}`}>
+                          {step > i + 1 ? <CheckCircle2 className="w-5 h-5" /> : i + 1}
+                        </button>
+                        <span className={`text-[10px] font-bold tracking-wide text-center max-w-[80px] leading-tight ${step === i + 1 ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
                       </div>
-                      <Card className="bg-muted/50 border-dashed">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle></CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                          <div className="flex justify-between"><span className="text-muted-foreground">{t.stockPriceLabel}</span><span className="font-bold">{TOTAL_PER_SHARE} {t.egp}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">{t.parValue}</span><span className="font-bold">{PAR_VALUE} {t.egp}</span></div>
-                          <div className="flex justify-between"><span className="text-muted-foreground">{t.issueFees}</span><span className="font-bold">{ISSUE_FEES} {t.egp}</span></div>
-                          <div className="border-t pt-3 flex justify-between items-center"><span className="font-bold">{t.totalDue}</span><span className="text-xl font-black text-primary">{totalDue.toLocaleString(numLocale)} {t.egp}</span></div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Step 1 – Identification */}
+              {step === 1 && (
+                <Card>
+                  <CardHeader><CardTitle>{t.kycTitle}</CardTitle><CardDescription>{t.kycDesc}</CardDescription></CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.unifiedCodeLabel}</label>
+                        <Input value={ucInput} onChange={e => { setUcInput(e.target.value); setFoundClient(null); }} onBlur={() => setFoundClient(MOCK_CLIENTS[ucInput] ?? null)} placeholder={t.unifiedCodePlaceholder} dir="ltr" />
+                        <p className="text-xs text-muted-foreground">{t.unifiedCodeHint}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
+                        <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">{EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}</select>
+                      </div>
+                    </div>
+                    {foundClient && (
+                      <div className="bg-primary text-primary-foreground p-6 rounded-2xl shadow-lg space-y-4">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div>
+                            <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">{t.mcdrVerified}</p>
+                            <h3 className="text-xl font-bold">{clientName(foundClient.nameAr, foundClient.nameEn, lang)}</h3>
+                            <div className="flex flex-wrap gap-3 mt-2 text-sm text-primary-foreground/80">
+                              <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
+                              <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
+                              <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-white/10 text-primary-foreground/70 border-white/20"}>{foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}</Badge>
+                            </div>
+                          </div>
+                          <Button variant="secondary" className="shrink-0 font-bold" onClick={() => setStep(2)}>{t.nextStep}</Button>
+                        </div>
+                        <div className="border-t border-white/20 pt-4">
+                          <div className="bg-white/10 rounded-xl p-3 inline-block">
+                            <p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p>
+                            <p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Step 2 – Ektitab */}
+              {step === 2 && (
+                <Card>
+                  <CardHeader><CardTitle>{t.ektitabTitle}</CardTitle><CardDescription>{t.ektitabDesc}</CardDescription></CardHeader>
+                  <CardContent>
+                    <Form {...form}>
+                      <form onSubmit={form.handleSubmit(onSubmitStep2)} className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          <div className="md:col-span-2 space-y-4">
+                            <FormField control={form.control} name="requestedShares" render={({ field }) => (<FormItem><FormLabel>{t.sharesLabel}</FormLabel><FormControl><Input type="number" placeholder="0" dir="ltr" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>{t.paymentLabel}</FormLabel><FormControl><select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" {...field}>{paymentOptions.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select></FormControl><FormMessage /></FormItem>)} />
+                            {foundClient && <div className="p-4 bg-muted/50 rounded-xl border"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div>}
+                          </div>
+                          <Card className="bg-muted/50 border-dashed">
+                            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle></CardHeader>
+                            <CardContent className="space-y-2 text-sm">
+                              <div className="flex justify-between"><span className="text-muted-foreground">{t.stockPriceLabel}</span><span className="font-bold">{TOTAL_PER_SHARE} {t.egp}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">{t.parValue}</span><span className="font-bold">{PAR_VALUE} {t.egp}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">{t.issueFees}</span><span className="font-bold">{ISSUE_FEES} {t.egp}</span></div>
+                              <div className="border-t pt-3 flex justify-between items-center"><span className="font-bold">{t.totalDue}</span><span className="text-xl font-black text-primary">{totalDue.toLocaleString(numLocale)} {t.egp}</span></div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                        <Button type="submit" className="px-10">{t.confirmDocs}</Button>
+                      </form>
+                    </Form>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Step 3 – Documents */}
+              {step === 3 && (
+                <Card>
+                  <CardHeader><CardTitle>{t.docsTitle}</CardTitle><CardDescription>{t.docsDesc}</CardDescription></CardHeader>
+                  <CardContent className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.txRefLabel}</label>
+                      <Input value={txRef} onChange={e => setTxRef(e.target.value)} placeholder={t.txRefPlaceholder} dir="ltr" className="max-w-sm" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {DOCS.map(doc => (<div key={doc} className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors"><span className="font-bold text-sm">{doc}</span><label className="cursor-pointer"><input type="file" className="hidden" /><span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span></label></div>))}
+                    </div>
+                    <Button className="mt-2 px-10" onClick={() => setStep(4)}>{lang === "ar" ? "التالي: رسالة FIX" : "Next: FIX Message"}</Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Step 4 – FIX Allocation Message */}
+              {step === 4 && pendingSub && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><Zap className="w-5 h-5 text-primary" />{t.fixMcdrTitle}</CardTitle>
+                    <CardDescription>{t.fixMcdrDesc}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {!fixSent ? (
+                      <>
+                        <div className="bg-zinc-900 text-green-400 rounded-xl p-5 font-mono text-xs overflow-x-auto leading-relaxed">
+                          <p className="text-zinc-500 mb-3 text-[10px] uppercase tracking-widest">{lang === "ar" ? "رسالة FIX 4.4 — طلب تخصيص جديد (35=D)" : "FIX 4.4 — New Order Single (35=D)"}</p>
+                          {fixMessage.map((tag, i) => {
+                            const eqIdx = tag.indexOf("=");
+                            const key = tag.slice(0, eqIdx);
+                            const val = tag.slice(eqIdx + 1);
+                            return (
+                              <div key={i} className="flex gap-2 py-0.5 border-b border-zinc-800/40">
+                                <span className="text-yellow-400 min-w-[32px]">{key}</span>
+                                <span className="text-zinc-600">=</span>
+                                <span className={["35", "11", "55", "48", "38"].includes(key) ? "text-cyan-300 font-bold" : "text-green-300"}>{val}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <Button onClick={() => setFixSent(true)} className="px-8"><Zap className="w-4 h-4 me-2" />{t.sendFixBtn}</Button>
+                      </>
+                    ) : (
+                      <div className="flex flex-col items-center gap-4 py-10">
+                        <div className="w-14 h-14 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 flex items-center justify-center"><CheckCircle2 className="w-7 h-7" /></div>
+                        <p className="font-black text-lg text-green-600">{t.fixSentLabel}</p>
+                        <p className="text-muted-foreground text-sm font-mono">{lang === "ar" ? `معرف: ${pendingSub.id}` : `ID: ${pendingSub.id}`}</p>
+                        <Button onClick={() => setStep(5)} className="px-10">{t.proceedToReceipt}</Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Step 5 – Final Receipt */}
+              {step === 5 && pendingSub && (
+                <Card>
+                  <CardContent className="pt-8">
+                    <div className="max-w-xl mx-auto text-center space-y-6">
+                      <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8" /></div>
+                      <div><h2 className="text-2xl font-black">{t.subPrepared}</h2><p className="text-muted-foreground mt-1">{t.txPrefix}: <span className="font-mono font-bold text-foreground">{pendingSub.id}</span></p></div>
+                      <Card className="bg-muted/50">
+                        <CardContent className="pt-5 grid grid-cols-2 gap-4 text-sm">
+                          <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.clientLabel}</p><p className="font-bold">{clientName(pendingSub.nameAr, pendingSub.nameEn, lang)}</p></div>
+                          <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p><p className="font-bold text-primary">{pendingSub.requestedShares.toLocaleString(numLocale)} {t.shares}</p></div>
+                          <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p><p className="font-bold">{pendingSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
+                          <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p><p className="font-bold text-orange-500">{t.awaitingVerif}</p></div>
+                          {txRef && <div className="col-span-2"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.txRefLabel}</p><p className="font-mono font-bold">{txRef}</p></div>}
                         </CardContent>
                       </Card>
+                      <div className="flex gap-3 justify-center flex-wrap">
+                        <Button variant="outline" onClick={() => downloadReceipt(pendingSub, lang)}><Printer className="w-4 h-4 me-2" />{t.printReceipt}</Button>
+                        <Button onClick={handleFinalSubmit}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+                      </div>
                     </div>
-                    <Button type="submit" className="px-10">{t.confirmDocs}</Button>
-                  </form>
-                </Form>
-              </CardContent>
-            </Card>
-          )}
-
-          {step === 3 && (
-            <Card>
-              <CardHeader><CardTitle>{t.docsTitle}</CardTitle><CardDescription>{t.docsDesc}</CardDescription></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {DOCS.map(doc => (<div key={doc} className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors"><span className="font-bold text-sm">{doc}</span><label className="cursor-pointer"><input type="file" className="hidden" /><span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span></label></div>))}
-                </div>
-                <Button className="mt-2 px-10" onClick={() => setStep(4)}>{t.reviewReceipt}</Button>
-              </CardContent>
-            </Card>
-          )}
-
-          {step === 4 && pendingSub && (
-            <Card>
-              <CardContent className="pt-8">
-                <div className="max-w-xl mx-auto text-center space-y-6">
-                  <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto"><CheckCircle2 className="w-8 h-8" /></div>
-                  <div><h2 className="text-2xl font-black">{t.subPrepared}</h2><p className="text-muted-foreground mt-1">{t.txPrefix}: <span className="font-mono font-bold text-foreground">{pendingSub.id}</span></p></div>
-                  <Card className="bg-muted/50">
-                    <CardContent className="pt-5 grid grid-cols-2 gap-4 text-sm">
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.clientLabel}</p><p className="font-bold">{clientName(pendingSub.nameAr, pendingSub.nameEn, lang)}</p></div>
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p><p className="font-bold text-primary">{pendingSub.requestedShares.toLocaleString(numLocale)} {t.shares}</p></div>
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p><p className="font-bold">{pendingSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
-                      <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p><p className="font-bold text-orange-500">{t.awaitingVerif}</p></div>
-                    </CardContent>
-                  </Card>
-                  <div className="flex gap-3 justify-center flex-wrap">
-                    <Button variant="outline" onClick={() => downloadReceipt(pendingSub, lang)}><Printer className="w-4 h-4 me-2" />{t.printReceipt}</Button>
-                    <Button onClick={handleFinalSubmit}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
         </div>
       )}
@@ -1832,9 +2091,10 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC 
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void }) {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void; activeStock: IPOStock | null }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
+  const isCovered = !activeStock || activeStock.phase === "covered";
   const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrUploaded, setMcdrUploaded] = useState(false);
@@ -1864,12 +2124,22 @@ function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Su
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{STATS.map((stat, i) => (<Card key={i}><CardContent className="pt-5 pb-5 text-center"><p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider">{stat.label}</p><p className={`text-3xl font-black mt-1 ${stat.color}`}>{stat.value}</p></CardContent></Card>))}</div>
+      {activeStock && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border bg-muted/40 text-sm">
+          <span className="font-black text-foreground">{lang === "ar" ? activeStock.securityNameAr : activeStock.securityNameEn}</span>
+          <span className="font-mono text-muted-foreground text-xs">{activeStock.isin}</span>
+          <Badge variant="outline" className={isCovered ? "bg-amber-500/10 text-amber-600 border-amber-500/30 font-black" : "bg-green-500/10 text-green-600 border-green-500/30 font-black"}>
+            {isCovered ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+          </Badge>
+        </div>
+      )}
       <div className="flex flex-wrap gap-1 border-b border-border pb-3">
         <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-        <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
-        <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
+        {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
+        {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
         <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
       </div>
+      {isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && (
         <Card>
@@ -2000,14 +2270,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund }: { subscriptions: Su
 // ─────────────────────────────────────────────────────────────────────────────
 // System Admin
 // ─────────────────────────────────────────────────────────────────────────────
-function SystemAdmin() {
+function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [adminTab, setAdminTab] = useState<"Users" | "CreateUser" | "Groups" | "AuditLogs">("Users");
+  const [adminTab, setAdminTab] = useState<"Users" | "CreateUser" | "Groups" | "AuditLogs" | "IPOStocks">("Users");
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>(INITIAL_USERS);
   const [userGroups] = useState(INITIAL_GROUPS);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
+  const [showAddStock, setShowAddStock] = useState(false);
+  const [newStock, setNewStock] = useState<Omit<IPOStock, "id" | "phase" | "coveredFinalized">>({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
   const ALL_PERMISSIONS = ["create_subscription", "view_clients", "print_receipt", "kyc_maker", "view_subscriptions", "reconcile", "allocate", "export_data", "approve_subscription", "reject_subscription", "kyc_checker", "view_branch_data", "manage_users", "manage_groups", "view_audit", "full_access"];
   const createSchema = z.object({ fullName: z.string().min(1, t.requiredField), username: z.string().min(1, t.requiredField), email: z.string().email(t.requiredField), role: z.enum(["Front Office Agent", "Back Office Ops", "Supervisor", "System Admin", "Communications"]), branch: z.string().min(1), groupId: z.string().min(1) });
   const form = useForm<z.infer<typeof createSchema>>({ resolver: zodResolver(createSchema), defaultValues: { fullName: "", username: "", email: "", role: "Front Office Agent", branch: "Cairo-Main", groupId: "GRP-001" } });
@@ -2030,6 +2302,7 @@ function SystemAdmin() {
         <TabBtn id="admin-CreateUser" active={adminTab === "CreateUser"} onClick={() => setAdminTab("CreateUser")} icon={UserPlus}>{t.adminTabCreate}</TabBtn>
         <TabBtn id="admin-Groups" active={adminTab === "Groups"} onClick={() => setAdminTab("Groups")} icon={Layers}>{t.adminTabGroups}</TabBtn>
         <TabBtn id="admin-AuditLogs" active={adminTab === "AuditLogs"} onClick={() => setAdminTab("AuditLogs")} icon={ScrollText}>{t.adminTabAudit}</TabBtn>
+        <TabBtn id="admin-IPOStocks" active={adminTab === "IPOStocks"} onClick={() => setAdminTab("IPOStocks")} icon={BarChart3}>{t.ipoStockTab}</TabBtn>
       </div>
 
       {adminTab === "Users" && (
@@ -2126,6 +2399,95 @@ function SystemAdmin() {
           </CardContent>
         </Card>
       )}
+
+      {adminTab === "IPOStocks" && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-black">{t.ipoStockTab}</h3>
+            <Button size="sm" onClick={() => setShowAddStock(v => !v)}><PlusCircle className="w-4 h-4 me-2" />{t.addStockBtn}</Button>
+          </div>
+
+          {showAddStock && (
+            <Card className="border-primary/30">
+              <CardHeader><CardTitle className="text-base">{t.ipoStockTitle}</CardTitle><CardDescription>{t.ipoStockDesc}</CardDescription></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.secNameArLabel}</label><Input value={newStock.securityNameAr} onChange={e => setNewStock(p => ({ ...p, securityNameAr: e.target.value }))} placeholder="شركة تك-إنفست" dir="rtl" /></div>
+                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.secNameEnLabel}</label><Input value={newStock.securityNameEn} onChange={e => setNewStock(p => ({ ...p, securityNameEn: e.target.value }))} placeholder="Tech-Invest Co." dir="ltr" /></div>
+                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.stockCodeLabel}</label><Input value={newStock.code} onChange={e => setNewStock(p => ({ ...p, code: e.target.value }))} placeholder="TECH" dir="ltr" /></div>
+                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.stockSymbolLabel}</label><Input value={newStock.symbol} onChange={e => setNewStock(p => ({ ...p, symbol: e.target.value }))} placeholder="TIC" dir="ltr" /></div>
+                  <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.isinLabel}</label><Input value={newStock.isin} onChange={e => setNewStock(p => ({ ...p, isin: e.target.value }))} placeholder="EGS74081C015" dir="ltr" /></div>
+                </div>
+                <div className="border-t border-border pt-4">
+                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">{t.coveredPhaseLabel}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.coveredStartLabel}</label><Input type="date" value={newStock.coveredStart} onChange={e => setNewStock(p => ({ ...p, coveredStart: e.target.value }))} dir="ltr" /></div>
+                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.coveredEndLabel}</label><Input type="date" value={newStock.coveredEnd} onChange={e => setNewStock(p => ({ ...p, coveredEnd: e.target.value }))} dir="ltr" /></div>
+                  </div>
+                </div>
+                <div className="border-t border-border pt-4">
+                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">{t.uncoveredPhaseLabel}</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.uncoveredStartLabel}</label><Input type="date" value={newStock.uncoveredStart} onChange={e => setNewStock(p => ({ ...p, uncoveredStart: e.target.value }))} dir="ltr" /></div>
+                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.uncoveredEndLabel}</label><Input type="date" value={newStock.uncoveredEnd} onChange={e => setNewStock(p => ({ ...p, uncoveredEnd: e.target.value }))} dir="ltr" /></div>
+                  </div>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button onClick={() => {
+                    if (!newStock.securityNameEn || !newStock.isin) return;
+                    const stock: IPOStock = { ...newStock, id: "IPO-" + Math.floor(100 + Math.random() * 900), phase: "covered", coveredFinalized: false };
+                    onStocksChange([...ipoStocks, stock]);
+                    toast({ title: lang === "ar" ? "تمت الإضافة" : "Stock added", description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn });
+                    setShowAddStock(false);
+                    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
+                  }}><CheckSquare className="w-4 h-4 me-2" />{t.saveStockBtn}</Button>
+                  <Button variant="outline" onClick={() => setShowAddStock(false)}>{t.cancel}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ipoStocks.map(stock => (
+              <Card key={stock.id} className="relative">
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-black text-base">{lang === "ar" ? stock.securityNameAr : stock.securityNameEn}</p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{stock.isin}</p>
+                    </div>
+                    <Badge variant="outline" className={stock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30 font-black" : "bg-green-500/10 text-green-600 border-green-500/30 font-black"}>
+                      {stock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div><p className="text-muted-foreground">{t.stockCodeLabel}</p><p className="font-mono font-bold">{stock.code}</p></div>
+                    <div><p className="text-muted-foreground">{t.stockSymbolLabel}</p><p className="font-mono font-bold">{stock.symbol}</p></div>
+                  </div>
+                  <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-xs">
+                    <div className="flex justify-between"><span className="text-muted-foreground font-bold">{t.coveredPhaseLabel}</span><span className="font-mono">{stock.coveredStart} → {stock.coveredEnd}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground font-bold">{t.uncoveredPhaseLabel}</span><span className="font-mono">{stock.uncoveredStart} → {stock.uncoveredEnd}</span></div>
+                  </div>
+                  {stock.phase === "covered" && !stock.coveredFinalized && (
+                    <Button size="sm" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 font-bold"
+                      onClick={() => {
+                        onStocksChange(ipoStocks.map(s => s.id === stock.id ? { ...s, phase: "uncovered" as const, coveredFinalized: true } : s));
+                        toast({ title: t.coveredFinalizedLabel, description: lang === "ar" ? stock.securityNameAr : stock.securityNameEn });
+                      }}>
+                      <CheckCircle2 className="w-3.5 h-3.5 me-1.5" />{t.finalizeCoveredBtn}
+                    </Button>
+                  )}
+                  {stock.coveredFinalized && (
+                    <div className="flex items-center gap-2 text-xs text-green-600 font-bold"><CheckCircle2 className="w-3.5 h-3.5" />{t.coveredFinalizedLabel}</div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2210,17 +2572,21 @@ function DrillModal({ title, onClose, children }: { title: string; onClose: () =
   );
 }
 
-function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate }: {
+function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate, ipoStocks, activeStockId, onStockChange }: {
   subscriptions: Subscription[];
   kycRecords: KYCRecord[];
   users: SystemUser[];
   loggedInUser: SystemUser;
   onNavigate: (role: UserRole) => void;
+  ipoStocks: IPOStock[];
+  activeStockId: string;
+  onStockChange: (id: string) => void;
 }) {
   const { lang, t, isRTL } = useLang();
   const [drillType, setDrillType] = useState<DrillType>(null);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
   const [spinning, setSpinning] = useState(false);
+  const activeStock = ipoStocks.find(s => s.id === activeStockId) ?? null;
 
   const handleRefresh = () => {
     setSpinning(true);
@@ -2331,7 +2697,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate 
     : "";
 
   return (
-    <div className="space-y-6 max-w-screen-xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -2339,6 +2705,27 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate 
           <p className="text-sm text-muted-foreground">{t.dashWelcome(loggedInUser.name)} — {t.dashSubtitle}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* IPO Stock filter */}
+          {ipoStocks.length > 0 && (
+            <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
+              <BarChart3 className="w-3.5 h-3.5 text-primary shrink-0" />
+              <span className="text-xs font-bold text-muted-foreground">{t.filterByStock}:</span>
+              <select
+                value={activeStockId}
+                onChange={e => onStockChange(e.target.value)}
+                className="text-xs font-bold bg-transparent border-none outline-none text-foreground cursor-pointer"
+              >
+                {ipoStocks.map(s => (
+                  <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>
+                ))}
+              </select>
+              {activeStock && (
+                <Badge variant="outline" className={`text-[10px] font-black ${activeStock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                  {activeStock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                </Badge>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
             <CalendarClock className="w-3.5 h-3.5 shrink-0" />
             {lastRefreshed.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -2760,7 +3147,10 @@ function IPOSystem() {
   const [showProfile, setShowProfile] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<SystemUser>(INITIAL_USERS[4]);
+  const [ipoStocks, setIpoStocks] = useState<IPOStock[]>(INITIAL_IPO_STOCKS);
+  const [activeStockId, setActiveStockId] = useState<string>(INITIAL_IPO_STOCKS[0]?.id ?? "");
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const activeStock = ipoStocks.find(s => s.id === activeStockId) ?? null;
 
   const t = T[lang];
   const isRTL = lang === "ar";
@@ -2899,13 +3289,16 @@ function IPOSystem() {
               users={INITIAL_USERS}
               loggedInUser={loggedInUser}
               onNavigate={(role) => { setUserRole(role); setActiveView(role); }}
+              ipoStocks={ipoStocks}
+              activeStockId={activeStockId}
+              onStockChange={setActiveStockId}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} />}
           {activeView === "Communications" && <CustomerComms />}
-          {activeView === "SystemAdmin" && <SystemAdmin />}
+          {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
         </main>
 
         {showProfile && <ProfilePanel user={loggedInUser} prefs={prefs} onPrefsChange={handlePrefsChange} onClose={() => setShowProfile(false)} />}
