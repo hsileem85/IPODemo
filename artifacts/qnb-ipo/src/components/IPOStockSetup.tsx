@@ -20,6 +20,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
   const [showAddStock, setShowAddStock] = useState(false);
   const [newStock, setNewStock] = useState<Omit<IPOStock, "id" | "phase" | "coveredFinalized">>({
     securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "",
+    pricePerShare: 0,
     coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "",
   });
 
@@ -37,7 +38,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
       description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn,
     });
     setShowAddStock(false);
-    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
+    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
   };
 
   const handleFinalize = (stock: IPOStock) => {
@@ -93,9 +94,13 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.stockSymbolLabel}</label>
                 <Input value={newStock.symbol} onChange={e => setNewStock(p => ({ ...p, symbol: e.target.value }))} placeholder="ADIB" dir="ltr" />
               </div>
-              <div className="space-y-1 md:col-span-2">
+              <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.isinLabel}</label>
                 <Input value={newStock.isin} onChange={e => setNewStock(p => ({ ...p, isin: e.target.value }))} placeholder="EGS60121C014" dir="ltr" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.pricePerShareLabel}</label>
+                <Input type="number" min="0" step="0.01" value={newStock.pricePerShare || ""} onChange={e => setNewStock(p => ({ ...p, pricePerShare: parseFloat(e.target.value) || 0 }))} placeholder="20.00" dir="ltr" />
               </div>
             </div>
             <div className="border-t border-border pt-4">
@@ -151,6 +156,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div><p className="text-muted-foreground">{t.stockCodeLabel}</p><p className="font-mono font-bold">{stock.code}</p></div>
                 <div><p className="text-muted-foreground">{t.stockSymbolLabel}</p><p className="font-mono font-bold">{stock.symbol}</p></div>
+                <div><p className="text-muted-foreground">{t.pricePerShareLabel}</p><p className="font-mono font-bold text-primary">{stock.pricePerShare?.toFixed(2) ?? "—"} {lang === "ar" ? "ج.م" : "EGP"}</p></div>
               </div>
               <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-xs">
                 <div className="flex justify-between">

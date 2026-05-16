@@ -26,7 +26,7 @@ import {
   ClipboardCheck, FileCheck, ChevronRight, ListFilter,
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
-  Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
+  Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare, XCircle,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -51,6 +51,7 @@ interface Subscription {
   unifiedCode: string; requestedShares: number; amountDue: number;
   amountPaid: number; allocatedShares: number; refundAmount: number;
   status: SubStatus; branch: string; submittedAt: string;
+  ipoId: string; date: string;
 }
 interface MCDRClient {
   id: number; nameAr: string; nameEn: string; unifiedCode: string; nationalId: string;
@@ -123,10 +124,10 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
 };
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
-  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10" },
-  { id: "TX-9902", nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan", nationalId: "29505051234568", account: "100234568", unifiedCode: "7700456", requestedShares: 4000, amountDue: 5000, amountPaid: 4500, allocatedShares: 0, refundAmount: 0, status: "Shortfall", branch: "Alex-Branch", submittedAt: "2026-05-13 10:22" },
-  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 0, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45" },
-  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30" },
+  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13" },
+  { id: "TX-9902", nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan", nationalId: "29505051234568", account: "100234568", unifiedCode: "7700456", requestedShares: 4000, amountDue: 5000, amountPaid: 4500, allocatedShares: 0, refundAmount: 0, status: "Shortfall", branch: "Alex-Branch", submittedAt: "2026-05-13 10:22", ipoId: "IPO-ADIB", date: "2026-05-13" },
+  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 0, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14" },
+  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14" },
 ];
 
 const INITIAL_MCDR = [
@@ -1126,15 +1127,22 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-interface BrokerClient { clientName: string; ipoName: string; unifiedCode: string; qty: number; cost: number; }
+interface BrokerClient { clientName: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; }
+interface BrokerBatch {
+  id: string; broker: string; ipoId: string; ipoName: string;
+  clients: BrokerClient[]; paymentMethod: string; txRef: string;
+  fixMessage: string; submittedAt: string;
+  status: "Pending Review" | "Approved" | "Rejected";
+}
 
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, onSubmitBatch }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   activeStock: IPOStock | null;
   ipoStocks: IPOStock[];
+  onSubmitBatch: (batch: BrokerBatch) => void;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1150,6 +1158,10 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [brokerName, setBrokerName] = useState("");
   const [brokerIPO, setBrokerIPO] = useState("");
   const [brokerClients, setBrokerClients] = useState<BrokerClient[]>([]);
+  const [brokerPayMethod, setBrokerPayMethod] = useState("Bank Transfer");
+  const [brokerFIX, setBrokerFIX] = useState("");
+  const [fixCopied, setFixCopied] = useState(false);
+  const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
   const brokerRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const STEPS = [t.step1, t.step2, t.step3, t.stepFIX, t.step4];
@@ -1157,7 +1169,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const EVENTS = ipoStocks.map(s => ({ value: s.id, label: lang === "ar" ? s.securityNameAr : s.securityNameEn }));
   const paymentOptions = requestType === "broker"
     ? [{ v: "Bank Transfer", l: t.payTransfer }, { v: "Debit Note", l: t.payDebitNote }]
-    : [{ v: "Cash Deposit", l: t.payCash }, { v: "Certified Check", l: t.payCheck }];
+    : [{ v: "Cash Deposit", l: t.payCash }, { v: "Transfer", l: t.payTransfer }];
   const sharesSchema = z.object({ requestedShares: z.coerce.number().min(1, t.sharesError), paymentMethod: z.string().min(1) });
   const form = useForm<z.infer<typeof sharesSchema>>({ resolver: zodResolver(sharesSchema), defaultValues: { requestedShares: 0, paymentMethod: paymentOptions[0].v } });
   const watchedShares = form.watch("requestedShares");
@@ -1166,19 +1178,21 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const resetFlow = () => {
     setStep(1); setUcInput(""); setFoundClient(null); setPendingSub(null);
     form.reset({ requestedShares: 0, paymentMethod: paymentOptions[0].v });
-    setTxRef(""); setFixSent(false);
+    setTxRef(""); setFixSent(false); setSubDate(new Date().toISOString().slice(0, 10));
   };
 
   const onSubmitStep2 = (values: z.infer<typeof sharesSchema>) => {
     if (!foundClient) return;
+    const price = activeStock?.pricePerShare ?? TOTAL_PER_SHARE;
     const sub: Subscription = {
       id: "TX-" + Math.floor(1000 + Math.random() * 9000),
       nameAr: foundClient.nameAr, nameEn: foundClient.nameEn,
       nationalId: foundClient.nationalId, account: foundClient.account, unifiedCode: foundClient.unifiedCode,
-      requestedShares: values.requestedShares, amountDue: values.requestedShares * TOTAL_PER_SHARE,
-      amountPaid: values.requestedShares * TOTAL_PER_SHARE,
+      requestedShares: values.requestedShares, amountDue: values.requestedShares * price,
+      amountPaid: values.requestedShares * price,
       allocatedShares: 0, refundAmount: 0, status: "Pending Review",
       branch: "Cairo-Main", submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
+      ipoId: activeStock?.id ?? "", date: subDate,
     };
     setPendingSub(sub); setStep(3);
   };
@@ -1244,7 +1258,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                 const lines = text.split('\n').filter(l => l.trim());
                 const clients: BrokerClient[] = lines.slice(1).map(line => {
                   const p = line.split(',');
-                  return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0 };
+                  return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "" };
                 }).filter(c => c.clientName);
                 setBrokerClients(clients);
               };
@@ -1317,8 +1331,8 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/30">
-                                  {["#", t.colClientName, t.colIPOName, t.colUnifiedCode, t.colSubQty, t.colCost].map((h, i) => (
-                                    <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 4 ? "text-end" : ""}`}>{h}</TableHead>
+                                  {["#", t.colClientName, t.colIPOName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map((h, i) => (
+                                    <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 5 ? "text-end" : ""}`}>{h}</TableHead>
                                   ))}
                                 </TableRow>
                               </TableHeader>
@@ -1329,6 +1343,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                                     <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
                                     <TableCell className="text-sm">{c.ipoName}</TableCell>
                                     <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                    <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
                                     <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                                     <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   </TableRow>
@@ -1337,11 +1352,11 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                             </Table>
                           </div>
 
-                          {/* Payment + Submit */}
+                          {/* Payment + Ref */}
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
-                              <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                              <select value={brokerPayMethod} onChange={e => setBrokerPayMethod(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
                                 <option value="Bank Transfer">{t.payTransfer}</option>
                                 <option value="Debit Note">{t.payDebitNote}</option>
                               </select>
@@ -1351,10 +1366,54 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                               <Input placeholder={t.txRefPlaceholder} dir="ltr" value={txRef} onChange={e => setTxRef(e.target.value)} />
                             </div>
                           </div>
-                          <Button onClick={() => {
-                            toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
-                            setBrokerClients([]); setBrokerFile(null); setBrokerName(""); setBrokerIPO(""); setTxRef("");
-                          }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+
+                          {/* FIX Generation Step */}
+                          {!brokerFIX ? (
+                            <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => {
+                              const stock = ipoStocks.find(s => s.id === brokerIPO);
+                              const symbol = stock?.symbol ?? brokerIPO;
+                              const price = stock?.pricePerShare ?? 0;
+                              const now = new Date();
+                              const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                              const batchId = `BRK${Date.now().toString().slice(-6)}`;
+                              const lines = brokerClients.map((c, i) =>
+                                `8=FIX.4.2|35=D|49=QNB|56=${brokerName}|34=${i+1}|52=${ts}|11=${batchId}-${String(i+1).padStart(3,'0')}|55=${symbol}|54=1|38=${c.qty}|44=${price.toFixed(2)}|40=2|453=1|448=${c.unifiedCode}|447=P|452=1|10=000`
+                              );
+                              setBrokerFIX(`=== GROUP IPO SUBSCRIPTION — FIX 4.2 ===\nBroker: ${brokerName} | Symbol: ${symbol} | Records: ${brokerClients.length} | Batch: ${batchId}\n\n${lines.join('\n')}`);
+                            }}>
+                              <Zap className="w-4 h-4 me-2" />{t.fixGenerateBtn}
+                            </Button>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.fixMsgTitle}</p>
+                                <button
+                                  onClick={() => { navigator.clipboard.writeText(brokerFIX); setFixCopied(true); setTimeout(() => setFixCopied(false), 2000); }}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-all"
+                                >
+                                  {fixCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                                  {fixCopied ? t.fixCopied : t.fixCopyBtn}
+                                </button>
+                              </div>
+                              <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{brokerFIX}</pre>
+                              <Button onClick={() => {
+                                const stock = ipoStocks.find(s => s.id === brokerIPO);
+                                const batch: BrokerBatch = {
+                                  id: `BRK-${Date.now()}`,
+                                  broker: brokerName, ipoId: brokerIPO,
+                                  ipoName: lang === "ar" ? (stock?.securityNameAr ?? brokerIPO) : (stock?.securityNameEn ?? brokerIPO),
+                                  clients: brokerClients, paymentMethod: brokerPayMethod,
+                                  txRef, fixMessage: brokerFIX,
+                                  submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
+                                  status: "Pending Review",
+                                };
+                                onSubmitBatch(batch);
+                                toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
+                                setBrokerClients([]); setBrokerFile(null); setBrokerName(""); setBrokerIPO("");
+                                setTxRef(""); setBrokerFIX(""); setBrokerPayMethod("Bank Transfer");
+                              }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
@@ -1398,6 +1457,10 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
                         <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">{EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}</select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.subDateLabel}</label>
+                        <Input type="date" value={subDate} onChange={e => setSubDate(e.target.value)} dir="ltr" className="max-w-xs" />
                       </div>
                     </div>
                     {foundClient && (
@@ -1547,20 +1610,23 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
 // ─────────────────────────────────────────────────────────────────────────────
 // Supervisor Checker (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC }: {
+function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch }: {
   subscriptions: Subscription[]; onApprove: (ids: string[]) => void;
   kycRecords: KYCRecord[]; onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
+  brokerBatches: BrokerBatch[]; onApproveBatch: (id: string, action: "Approved" | "Rejected") => void;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [supTab, setSupTab] = useState<"subs" | "kyc">("subs");
+  const [supTab, setSupTab] = useState<"subs" | "kyc" | "broker">("subs");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const pending = subscriptions.filter(s => s.status === "Pending Review");
   const shown = subscriptions.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
   const kycPending = kycRecords.filter(r => r.status === "Pending Review");
+  const batchPending = brokerBatches.filter(b => b.status === "Pending Review");
 
   return (
     <div className="space-y-5">
@@ -1574,10 +1640,87 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC 
           {t.supTabKYC}
           {kycPending.length > 0 && <span className="ms-1.5 bg-primary text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{kycPending.length}</span>}
         </TabBtn>
+        <TabBtn id="sup-broker" active={supTab === "broker"} onClick={() => setSupTab("broker")} icon={Building2}>
+          {t.brokerBatchTab}
+          {batchPending.length > 0 && <span className="ms-1.5 bg-teal-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{batchPending.length}</span>}
+        </TabBtn>
       </div>
 
       {/* KYC review panel */}
       {supTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={() => {}} onApproveKYC={onApproveKYC} isChecker={true} />}
+
+      {/* Broker Batches panel */}
+      {supTab === "broker" && (
+        <div className="space-y-6">
+          <div><h2 className="text-2xl font-black tracking-tight">{t.brokerBatchesTitle}</h2><p className="text-muted-foreground text-sm">{t.fixMsgDesc}</p></div>
+          {brokerBatches.length === 0 ? (
+            <Card><CardContent className="py-16 text-center text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-3 opacity-30" /><p className="font-bold">{t.noRecords}</p></CardContent></Card>
+          ) : (
+            <div className="space-y-4">
+              {brokerBatches.map(batch => (
+                <Card key={batch.id} className={`border-2 transition-colors ${batch.status === "Pending Review" ? "border-orange-200 dark:border-orange-800" : batch.status === "Approved" ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-800"}`}>
+                  <CardContent className="pt-5 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-muted-foreground">{batch.id}</span>
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${batch.status === "Pending Review" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : batch.status === "Approved" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700"}`}>{batch.status}</span>
+                        </div>
+                        <p className="font-black text-lg">{batch.broker}</p>
+                        <p className="text-sm text-muted-foreground font-bold">{batch.ipoName} · {t.batchClients(batch.clients.length)} · {batch.paymentMethod}</p>
+                        <p className="text-xs text-muted-foreground font-mono">{lang === "ar" ? "أُرسلت:" : "Submitted:"} {batch.submittedAt}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-end">
+                          <p className="text-xl font-black text-primary">{batch.clients.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)}</p>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">{lang === "ar" ? "إجمالي الأسهم" : "Total Shares"}</p>
+                        </div>
+                        <div className="text-end">
+                          <p className="text-xl font-black">{batch.clients.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)}</p>
+                          <p className="text-[10px] text-muted-foreground font-bold uppercase">{t.egp}</p>
+                        </div>
+                        {batch.status === "Pending Review" && (
+                          <>
+                            <button onClick={() => { onApproveBatch(batch.id, "Approved"); toast({ title: t.batchApproveBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-colors"><CheckCircle2 className="w-3.5 h-3.5" />{t.batchApproveBtn}</button>
+                            <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><XCircle className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
+                          </>
+                        )}
+                        <button onClick={() => setExpandedBatch(expandedBatch === batch.id ? null : batch.id)} className="px-3 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">{expandedBatch === batch.id ? (lang === "ar" ? "إخفاء" : "Hide") : (lang === "ar" ? "عرض التفاصيل" : "View Details")}</button>
+                      </div>
+                    </div>
+                    {expandedBatch === batch.id && (
+                      <div className="space-y-3 pt-2 border-t border-border">
+                        <div className="overflow-x-auto rounded-xl border border-border/50">
+                          <Table>
+                            <TableHeader><TableRow className="bg-muted/30">{[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map(h => <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>)}</TableRow></TableHeader>
+                            <TableBody>
+                              {batch.clients.map((c, i) => (
+                                <TableRow key={i} className="hover:bg-muted/30">
+                                  <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                  <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                  <TableCell className="font-mono text-sm font-bold text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                        {batch.fixMessage && (
+                          <div>
+                            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">{t.fixMsgTitle}</p>
+                            <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-36 leading-relaxed whitespace-pre-wrap">{batch.fixMessage}</pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Subscriptions review */}
       {supTab === "subs" && (
@@ -2017,7 +2160,7 @@ function DrillModal({ title, onClose, children }: { title: string; onClose: () =
   );
 }
 
-function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate, ipoStocks, activeStockId, onStockChange }: {
+function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate, ipoStocks, activeStockId, onStockChange, brokerBatches }: {
   subscriptions: Subscription[];
   kycRecords: KYCRecord[];
   users: SystemUser[];
@@ -2026,6 +2169,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   ipoStocks: IPOStock[];
   activeStockId: string;
   onStockChange: (id: string) => void;
+  brokerBatches: BrokerBatch[];
 }) {
   const { lang, t, isRTL } = useLang();
   const [drillType, setDrillType] = useState<DrillType>(null);
@@ -2046,16 +2190,22 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
 
   const toggle = (type: DrillType) => setDrillType(prev => prev === type ? null : type);
 
-  // ── Subscription stats ──
-  const totalSubs = subscriptions.length;
-  const subPending = subscriptions.filter(s => s.status === "Pending Review").length;
-  const subVerified = subscriptions.filter(s => s.status === "Verified").length;
-  const subShortfall = subscriptions.filter(s => s.status === "Shortfall").length;
-  const subAllocated = subscriptions.filter(s => s.status === "Allocated").length;
-  const subRefunded = subscriptions.filter(s => s.status === "Refunded").length;
-  const totalDue = subscriptions.reduce((a, s) => a + s.amountDue, 0);
-  const totalPaid = subscriptions.reduce((a, s) => a + s.amountPaid, 0);
-  const shortfallAmt = totalDue - totalPaid;
+  // ── Subscription stats (filtered by active stock) ──
+  const filteredSubs = activeStockId ? subscriptions.filter(s => s.ipoId === activeStockId) : subscriptions;
+  const filteredBatches = activeStockId ? brokerBatches.filter(b => b.ipoId === activeStockId) : brokerBatches;
+  const approvedBatches = filteredBatches.filter(b => b.status !== "Rejected");
+  const brokerClientCount = approvedBatches.reduce((a, b) => a + b.clients.length, 0);
+  const brokerTotalCost = approvedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
+  const brokerTotalShares = approvedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
+  const totalSubs = filteredSubs.length + brokerClientCount;
+  const subPending = filteredSubs.filter(s => s.status === "Pending Review").length + filteredBatches.filter(b => b.status === "Pending Review").reduce((a, b) => a + b.clients.length, 0);
+  const subVerified = filteredSubs.filter(s => s.status === "Verified").length;
+  const subShortfall = filteredSubs.filter(s => s.status === "Shortfall").length;
+  const subAllocated = filteredSubs.filter(s => s.status === "Allocated").length;
+  const subRefunded = filteredSubs.filter(s => s.status === "Refunded").length;
+  const totalDue = filteredSubs.reduce((a, s) => a + s.amountDue, 0) + brokerTotalCost;
+  const totalPaid = filteredSubs.reduce((a, s) => a + s.amountPaid, 0) + brokerTotalCost;
+  const shortfallAmt = filteredSubs.reduce((a, s) => a + (s.amountDue - s.amountPaid), 0);
   const collectionPct = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0;
 
   // ── KYC stats ──
@@ -2394,11 +2544,11 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40">
                 <span className="text-muted-foreground">{lang === "ar" ? "إجمالي الأسهم المطلوبة" : "Total Requested Shares"}</span>
-                <span className="font-black">{fmtNum(subscriptions.reduce((a, s) => a + s.requestedShares, 0))}</span>
+                <span className="font-black">{fmtNum(filteredSubs.reduce((a, s) => a + s.requestedShares, 0) + brokerTotalShares)}</span>
               </div>
               <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40">
                 <span className="text-muted-foreground">{lang === "ar" ? "إجمالي الأسهم المخصصة" : "Total Allocated Shares"}</span>
-                <span className="font-black text-indigo-600">{fmtNum(subscriptions.reduce((a, s) => a + s.allocatedShares, 0))}</span>
+                <span className="font-black text-indigo-600">{fmtNum(filteredSubs.reduce((a, s) => a + s.allocatedShares, 0))}</span>
               </div>
             </div>
           </CardContent>
@@ -2594,6 +2744,7 @@ function IPOSystem() {
   const [loggedInUser, setLoggedInUser] = useState<SystemUser>(INITIAL_USERS[4]);
   const [ipoStocks, setIpoStocks] = useState<IPOStock[]>(INITIAL_IPO_STOCKS);
   const [activeStockId, setActiveStockId] = useState<string>(INITIAL_IPO_STOCKS[0]?.id ?? "");
+  const [brokerBatches, setBrokerBatches] = useState<BrokerBatch[]>([]);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const activeStock = ipoStocks.find(s => s.id === activeStockId) ?? null;
 
@@ -2742,10 +2893,11 @@ function IPOSystem() {
               ipoStocks={ipoStocks}
               activeStockId={activeStockId}
               onStockChange={setActiveStockId}
+              brokerBatches={brokerBatches}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} />}
-          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
+          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} />}
           {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}

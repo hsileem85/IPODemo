@@ -10,6 +10,7 @@ export interface IPOStock {
   code: string;
   symbol: string;
   isin: string;
+  pricePerShare: number;
   coveredStart: string;
   coveredEnd: string;
   uncoveredStart: string;
@@ -26,6 +27,7 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     code: "ADIB",
     symbol: "ADIB",
     isin: "EGS60121C014",
+    pricePerShare: 20.00,
     coveredStart: "2026-05-01",
     coveredEnd: "2026-05-20",
     uncoveredStart: "2026-05-21",
@@ -40,6 +42,7 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     code: "EDITA",
     symbol: "EDITA",
     isin: "EGS722G1C010",
+    pricePerShare: 15.50,
     coveredStart: "2026-05-05",
     coveredEnd: "2026-05-25",
     uncoveredStart: "2026-05-26",
