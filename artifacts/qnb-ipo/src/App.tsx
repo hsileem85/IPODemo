@@ -21,6 +21,8 @@ import {
   Filter, Send as SendIcon, CheckCheck, AlertCircle, X,
   FileUser, Building2, MapPin, CreditCard, AlertTriangle,
   ClipboardCheck, FileCheck, ChevronRight, ListFilter,
+  LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
+  BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -291,6 +293,44 @@ const T = {
     kycIndividual: "فرد", kycCorporate: "شركة",
     supTabSubs: "الاكتتابات", supTabKYC: "مراجعة KYC",
     viewDetailsBtn: "عرض التفاصيل",
+    dashHome: "الرئيسية",
+    dashTitle: "لوحة المعلومات",
+    dashSubtitle: "نظرة شاملة على أداء الاكتتاب",
+    dashWelcome: (name: string) => `مرحباً، ${name}`,
+    dashTotalKYC: "إجمالي سجلات KYC",
+    dashTotalSubs: "إجمالي الاكتتابات",
+    dashMCDRClients: "عملاء MCDR",
+    dashActiveUsers: "المستخدمون النشطون",
+    dashIPOBreakdown: "توزيع حالات الاكتتاب",
+    dashKYCPipeline: "مسار KYC",
+    dashAMLInsights: "مؤشرات AML والمخاطر",
+    dashMCDRCoverage: "تغطية MCDR",
+    dashFinancial: "الملخص المالي",
+    dashRecentActivity: "النشاط الأخير",
+    dashTotalDue: "إجمالي المستحق (ج.م)",
+    dashTotalPaid: "إجمالي المدفوع (ج.م)",
+    dashCoverageRatio: "نسبة تغطية الاكتتاب",
+    dashEligibleShares: "الأسهم المؤهلة",
+    dashSubscribedShares: "الأسهم المكتتبة",
+    dashFullSubs: "اكتتاب كامل",
+    dashPartialSubs: "اكتتاب جزئي",
+    dashHighRisk: "عملاء مخاطر عالية",
+    dashMedRisk: "مخاطر متوسطة",
+    dashLowRisk: "مخاطر منخفضة",
+    dashPEP: "أشخاص مكشوفون سياسياً (PEP)",
+    dashSanctions: "منتهون من قوائم العقوبات",
+    dashViewAll: "عرض الكل",
+    dashDrillKYC: "سجلات KYC",
+    dashDrillSubs: "طلبات الاكتتاب",
+    dashDrillMCDR: "بيانات MCDR",
+    dashDrillUsers: "المستخدمون",
+    dashClose: "إغلاق",
+    dashOf: "من",
+    dashCollectionRate: "معدل التحصيل",
+    dashShortfall: "عجز في المدفوعات",
+    dashLastUpload: "آخر رفع MCDR",
+    dashUploadInfo: "mcdr_may2026.xlsx — 240 سجل",
+    dashUploadsCount: "ملفات مرفوعة",
   },
   en: {
     appTitle: "IPO Management System",
@@ -467,6 +507,44 @@ const T = {
     kycIndividual: "Individual", kycCorporate: "Corporate",
     supTabSubs: "Subscriptions", supTabKYC: "KYC Review",
     viewDetailsBtn: "View Details",
+    dashHome: "Home",
+    dashTitle: "Dashboard",
+    dashSubtitle: "Live overview of IPO operations",
+    dashWelcome: (name: string) => `Welcome back, ${name}`,
+    dashTotalKYC: "Total KYC Records",
+    dashTotalSubs: "IPO Subscriptions",
+    dashMCDRClients: "MCDR Clients",
+    dashActiveUsers: "Active Users",
+    dashIPOBreakdown: "Subscription Status Breakdown",
+    dashKYCPipeline: "KYC Pipeline",
+    dashAMLInsights: "AML & Risk Insights",
+    dashMCDRCoverage: "MCDR Coverage",
+    dashFinancial: "Financial Summary",
+    dashRecentActivity: "Recent System Activity",
+    dashTotalDue: "Total Amount Due (EGP)",
+    dashTotalPaid: "Total Amount Paid (EGP)",
+    dashCoverageRatio: "Subscription Coverage",
+    dashEligibleShares: "Eligible Shares",
+    dashSubscribedShares: "Subscribed Shares",
+    dashFullSubs: "Full Subscription",
+    dashPartialSubs: "Partial Subscription",
+    dashHighRisk: "High Risk Clients",
+    dashMedRisk: "Medium Risk",
+    dashLowRisk: "Low Risk",
+    dashPEP: "PEP Flagged",
+    dashSanctions: "Sanctions Cleared",
+    dashViewAll: "View All",
+    dashDrillKYC: "KYC Records",
+    dashDrillSubs: "IPO Subscriptions",
+    dashDrillMCDR: "MCDR Data",
+    dashDrillUsers: "System Users",
+    dashClose: "Close",
+    dashOf: "of",
+    dashCollectionRate: "Collection Rate",
+    dashShortfall: "Payment Shortfall",
+    dashLastUpload: "Last MCDR Upload",
+    dashUploadInfo: "mcdr_may2026.xlsx — 240 records",
+    dashUploadsCount: "Files Uploaded",
   },
 } as const;
 
@@ -2055,9 +2133,587 @@ function SystemAdmin() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard
+// ─────────────────────────────────────────────────────────────────────────────
+type DrillType = "kyc_all" | "kyc_approved" | "kyc_pending" | "kyc_rejected" | "kyc_draft"
+  | "subs_all" | "subs_pending" | "subs_verified" | "subs_shortfall" | "subs_allocated" | "subs_refunded"
+  | "mcdr_all" | "users_all" | "aml_high" | "aml_pep" | null;
+
+function MiniBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className={`h-full rounded-full ${color} transition-all duration-700`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value, sub, drillable, active, onClick, accent }: {
+  icon: React.ElementType; label: string; value: string | number; sub?: string;
+  drillable?: boolean; active?: boolean; onClick?: () => void; accent?: string;
+}) {
+  const base = "relative rounded-2xl border p-5 flex flex-col gap-3 transition-all duration-200";
+  const interactive = drillable ? "cursor-pointer hover:shadow-md hover:border-primary/40 hover:-translate-y-0.5" : "";
+  const highlighted = active ? "border-primary/60 bg-primary/5 shadow-md" : "bg-card border-border";
+  return (
+    <div className={`${base} ${interactive} ${highlighted}`} onClick={drillable ? onClick : undefined}>
+      <div className="flex items-start justify-between gap-2">
+        <div className={`p-2.5 rounded-xl ${accent ?? "bg-primary/10"}`}>
+          <Icon className={`w-5 h-5 ${accent ? "text-white" : "text-primary"}`} />
+        </div>
+        {drillable && (
+          <div className={`flex items-center gap-1 text-[10px] font-bold transition-colors ${active ? "text-primary" : "text-muted-foreground"}`}>
+            {active ? <ChevronUp className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
+          </div>
+        )}
+      </div>
+      <div>
+        <p className="text-2xl font-black text-foreground leading-none">{value}</p>
+        <p className="text-xs font-semibold text-muted-foreground mt-1">{label}</p>
+        {sub && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+function StatusRow({ label, count, total, color, onClick, active }: {
+  label: string; count: number; total: number; color: string; onClick?: () => void; active?: boolean;
+}) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+  return (
+    <button type="button" onClick={onClick}
+      className={`w-full text-start p-3 rounded-xl transition-all duration-150 group ${active ? "bg-primary/8 ring-1 ring-primary/30" : "hover:bg-muted/60"}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">{label}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">{pct}%</span>
+          <span className="text-xs font-black text-foreground">{count}</span>
+        </div>
+      </div>
+      <MiniBar value={count} max={total} color={color} />
+    </button>
+  );
+}
+
+function DrillModal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-4xl bg-card rounded-2xl border border-border shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="font-black text-base text-foreground">{title}</h3>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="overflow-auto flex-1 p-2">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate }: {
+  subscriptions: Subscription[];
+  kycRecords: KYCRecord[];
+  users: SystemUser[];
+  loggedInUser: SystemUser;
+  onNavigate: (role: UserRole) => void;
+}) {
+  const { lang, t, isRTL } = useLang();
+  const [drillType, setDrillType] = useState<DrillType>(null);
+
+  const toggle = (type: DrillType) => setDrillType(prev => prev === type ? null : type);
+
+  // ── Subscription stats ──
+  const totalSubs = subscriptions.length;
+  const subPending = subscriptions.filter(s => s.status === "Pending Review").length;
+  const subVerified = subscriptions.filter(s => s.status === "Verified").length;
+  const subShortfall = subscriptions.filter(s => s.status === "Shortfall").length;
+  const subAllocated = subscriptions.filter(s => s.status === "Allocated").length;
+  const subRefunded = subscriptions.filter(s => s.status === "Refunded").length;
+  const totalDue = subscriptions.reduce((a, s) => a + s.amountDue, 0);
+  const totalPaid = subscriptions.reduce((a, s) => a + s.amountPaid, 0);
+  const shortfallAmt = totalDue - totalPaid;
+  const collectionPct = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0;
+
+  // ── KYC stats ──
+  const totalKYC = kycRecords.length;
+  const kycApproved = kycRecords.filter(r => r.status === "Approved").length;
+  const kycPending = kycRecords.filter(r => r.status === "Pending Review").length;
+  const kycRejected = kycRecords.filter(r => r.status === "Rejected").length;
+  const kycDraft = kycRecords.filter(r => r.status === "Draft").length;
+
+  // ── AML / Risk ──
+  const amlHigh = kycRecords.filter(r => r.riskLevel === "High").length;
+  const amlMed = kycRecords.filter(r => r.riskLevel === "Medium").length;
+  const amlLow = kycRecords.filter(r => r.riskLevel === "Low").length;
+  const pepCount = kycRecords.filter(r => r.pepStatus).length;
+  const sanctionsOk = kycRecords.filter(r => r.sanctionsCheck).length;
+
+  // ── MCDR ──
+  const mcdrTotal = INITIAL_MCDR.length;
+  const mcdrFull = INITIAL_MCDR.filter(m => m.status === "Full").length;
+  const mcdrPartial = INITIAL_MCDR.filter(m => m.status === "Partial").length;
+  const totalEligible = INITIAL_MCDR.reduce((a, m) => a + m.eligibleShares, 0);
+  const totalSubscribedMCDR = INITIAL_MCDR.reduce((a, m) => a + m.subscribedShares, 0);
+  const mcdrCoveragePct = totalEligible > 0 ? Math.round((totalSubscribedMCDR / totalEligible) * 100) : 0;
+
+  // ── Users ──
+  const activeUsers = users.filter(u => u.status === "Active").length;
+
+  // ── Drill data ──
+  const drillData = useMemo(() => {
+    switch (drillType) {
+      case "kyc_all": return { kind: "kyc" as const, items: kycRecords };
+      case "kyc_approved": return { kind: "kyc" as const, items: kycRecords.filter(r => r.status === "Approved") };
+      case "kyc_pending": return { kind: "kyc" as const, items: kycRecords.filter(r => r.status === "Pending Review") };
+      case "kyc_rejected": return { kind: "kyc" as const, items: kycRecords.filter(r => r.status === "Rejected") };
+      case "kyc_draft": return { kind: "kyc" as const, items: kycRecords.filter(r => r.status === "Draft") };
+      case "aml_high": return { kind: "kyc" as const, items: kycRecords.filter(r => r.riskLevel === "High") };
+      case "aml_pep": return { kind: "kyc" as const, items: kycRecords.filter(r => r.pepStatus) };
+      case "subs_all": return { kind: "subs" as const, items: subscriptions };
+      case "subs_pending": return { kind: "subs" as const, items: subscriptions.filter(s => s.status === "Pending Review") };
+      case "subs_verified": return { kind: "subs" as const, items: subscriptions.filter(s => s.status === "Verified") };
+      case "subs_shortfall": return { kind: "subs" as const, items: subscriptions.filter(s => s.status === "Shortfall") };
+      case "subs_allocated": return { kind: "subs" as const, items: subscriptions.filter(s => s.status === "Allocated") };
+      case "subs_refunded": return { kind: "subs" as const, items: subscriptions.filter(s => s.status === "Refunded") };
+      case "mcdr_all": return { kind: "mcdr" as const, items: INITIAL_MCDR };
+      case "users_all": return { kind: "users" as const, items: users };
+      default: return null;
+    }
+  }, [drillType, kycRecords, subscriptions, users]);
+
+  const fmtEGP = (n: number) => n.toLocaleString("en-EG") + " EGP";
+  const fmtNum = (n: number) => n.toLocaleString("en-EG");
+
+  const subStatusColor: Record<SubStatus, string> = {
+    "Pending Review": "bg-amber-500", "Approved": "bg-emerald-500", "Pending Payment": "bg-blue-500",
+    "Verified": "bg-teal-500", "Shortfall": "bg-red-500", "Allocated": "bg-indigo-500", "Refunded": "bg-purple-500",
+  };
+  const subStatusLabel = (s: SubStatus) => {
+    const m: Record<SubStatus, string> = {
+      "Pending Review": lang === "ar" ? "في انتظار الاعتماد" : "Pending Review",
+      "Approved": lang === "ar" ? "معتمد" : "Approved",
+      "Pending Payment": lang === "ar" ? "قيد الدفع" : "Pending Payment",
+      "Verified": lang === "ar" ? "موثق" : "Verified",
+      "Shortfall": lang === "ar" ? "عجز" : "Shortfall",
+      "Allocated": lang === "ar" ? "مخصص" : "Allocated",
+      "Refunded": lang === "ar" ? "مرتد فائض" : "Refunded",
+    };
+    return m[s];
+  };
+  const kycStatusBadgeClass = (s: KYCStatus) => {
+    if (s === "Approved") return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400";
+    if (s === "Pending Review") return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400";
+    if (s === "Rejected") return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    return "bg-muted text-muted-foreground";
+  };
+
+  const drillTitle = drillType
+    ? drillType.startsWith("kyc") || drillType.startsWith("aml")
+      ? t.dashDrillKYC
+      : drillType.startsWith("subs")
+        ? t.dashDrillSubs
+        : drillType === "mcdr_all"
+          ? t.dashDrillMCDR
+          : t.dashDrillUsers
+    : "";
+
+  return (
+    <div className="space-y-6 max-w-screen-xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-xl font-black text-foreground">{t.dashTitle}</h2>
+          <p className="text-sm text-muted-foreground">{t.dashWelcome(loggedInUser.name)} — {t.dashSubtitle}</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
+          <CalendarClock className="w-3.5 h-3.5" />
+          {new Date().toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+        </div>
+      </div>
+
+      {/* Row 1 — Summary KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={UserCheck2} label={t.dashTotalKYC} value={totalKYC}
+          sub={`${kycApproved} ${lang === "ar" ? "معتمد" : "approved"} · ${kycPending} ${lang === "ar" ? "قيد المراجعة" : "pending"}`}
+          drillable active={drillType === "kyc_all"} onClick={() => toggle("kyc_all")} />
+        <StatCard icon={FileSpreadsheet} label={t.dashTotalSubs} value={totalSubs}
+          sub={`${subPending} ${lang === "ar" ? "قيد الاعتماد" : "pending approval"}`}
+          drillable active={drillType === "subs_all"} onClick={() => toggle("subs_all")} />
+        <StatCard icon={Layers} label={t.dashMCDRClients} value={mcdrTotal}
+          sub={`${lang === "ar" ? "آخر رفع:" : "Last upload:"} mcdr_may2026.xlsx`}
+          drillable active={drillType === "mcdr_all"} onClick={() => toggle("mcdr_all")} />
+        <StatCard icon={Users} label={t.dashActiveUsers} value={activeUsers}
+          sub={`${lang === "ar" ? "من إجمالي" : "of"} ${users.length} ${lang === "ar" ? "مستخدم" : "users"}`}
+          drillable active={drillType === "users_all"} onClick={() => toggle("users_all")} />
+      </div>
+
+      {/* Row 2 — IPO Breakdown + KYC Pipeline */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* IPO Subscriptions Breakdown */}
+        <Card className="border-border">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                <CardTitle className="text-sm font-black">{t.dashIPOBreakdown}</CardTitle>
+              </div>
+              <button type="button" onClick={() => { onNavigate("Supervisor"); }} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">{t.dashViewAll}<ArrowUpRight className="w-3 h-3" /></button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{lang === "ar" ? `${totalSubs} طلب إجمالي` : `${totalSubs} total requests`}</p>
+          </CardHeader>
+          <CardContent className="px-3 pb-4 space-y-1">
+            <StatusRow label={lang === "ar" ? "في انتظار الاعتماد" : "Pending Review"} count={subPending} total={totalSubs} color="bg-amber-500" onClick={() => toggle("subs_pending")} active={drillType === "subs_pending"} />
+            <StatusRow label={lang === "ar" ? "موثق" : "Verified"} count={subVerified} total={totalSubs} color="bg-teal-500" onClick={() => toggle("subs_verified")} active={drillType === "subs_verified"} />
+            <StatusRow label={lang === "ar" ? "عجز في الدفع" : "Shortfall"} count={subShortfall} total={totalSubs} color="bg-red-500" onClick={() => toggle("subs_shortfall")} active={drillType === "subs_shortfall"} />
+            <StatusRow label={lang === "ar" ? "مخصص" : "Allocated"} count={subAllocated} total={totalSubs} color="bg-indigo-500" onClick={() => toggle("subs_allocated")} active={drillType === "subs_allocated"} />
+            <StatusRow label={lang === "ar" ? "مرتد فائض" : "Refunded"} count={subRefunded} total={totalSubs} color="bg-purple-500" onClick={() => toggle("subs_refunded")} active={drillType === "subs_refunded"} />
+          </CardContent>
+        </Card>
+
+        {/* KYC Pipeline */}
+        <Card className="border-border">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="w-4 h-4 text-primary" />
+                <CardTitle className="text-sm font-black">{t.dashKYCPipeline}</CardTitle>
+              </div>
+              <button type="button" onClick={() => { onNavigate("FrontOffice"); }} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">{t.dashViewAll}<ArrowUpRight className="w-3 h-3" /></button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{lang === "ar" ? `${totalKYC} سجل إجمالي` : `${totalKYC} total records`}</p>
+          </CardHeader>
+          <CardContent className="px-3 pb-4 space-y-1">
+            <StatusRow label={lang === "ar" ? "معتمد" : "Approved"} count={kycApproved} total={totalKYC} color="bg-emerald-500" onClick={() => toggle("kyc_approved")} active={drillType === "kyc_approved"} />
+            <StatusRow label={lang === "ar" ? "في انتظار الاعتماد" : "Pending Review"} count={kycPending} total={totalKYC} color="bg-amber-500" onClick={() => toggle("kyc_pending")} active={drillType === "kyc_pending"} />
+            <StatusRow label={lang === "ar" ? "مرفوض" : "Rejected"} count={kycRejected} total={totalKYC} color="bg-red-500" onClick={() => toggle("kyc_rejected")} active={drillType === "kyc_rejected"} />
+            <StatusRow label={lang === "ar" ? "مسودة" : "Draft"} count={kycDraft} total={totalKYC} color="bg-slate-400" onClick={() => toggle("kyc_draft")} active={drillType === "kyc_draft"} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 3 — AML + MCDR Coverage + Financial */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* AML & Risk */}
+        <Card className="border-border">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-red-500" />
+              <CardTitle className="text-sm font-black">{t.dashAMLInsights}</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-3">
+            <button type="button" onClick={() => toggle("aml_high")}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${drillType === "aml_high" ? "border-red-400 bg-red-50 dark:bg-red-900/20" : "border-border hover:bg-muted/50"}`}>
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                <span className="text-xs font-bold">{t.dashHighRisk}</span>
+              </div>
+              <span className="text-sm font-black text-red-600">{amlHigh}</span>
+            </button>
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-xs font-bold">{t.dashMedRisk}</span>
+              </div>
+              <span className="text-sm font-black text-amber-600">{amlMed}</span>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-xs font-bold">{t.dashLowRisk}</span>
+              </div>
+              <span className="text-sm font-black text-emerald-600">{amlLow}</span>
+            </div>
+            <div className="my-1 border-t border-border" />
+            <button type="button" onClick={() => toggle("aml_pep")}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${drillType === "aml_pep" ? "border-orange-400 bg-orange-50 dark:bg-orange-900/20" : "border-border hover:bg-muted/50"}`}>
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                <span className="text-xs font-bold">{t.dashPEP}</span>
+              </div>
+              <span className="text-sm font-black text-orange-600">{pepCount}</span>
+            </button>
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-teal-500" />
+                <span className="text-xs font-bold">{t.dashSanctions}</span>
+              </div>
+              <span className="text-sm font-black text-teal-600">{sanctionsOk}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* MCDR Coverage */}
+        <Card className="border-border">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-primary" />
+                <CardTitle className="text-sm font-black">{t.dashMCDRCoverage}</CardTitle>
+              </div>
+              <button type="button" onClick={() => toggle("mcdr_all")} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">{t.dashViewAll}<ArrowUpRight className="w-3 h-3" /></button>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-4">
+            <div className="text-center py-2">
+              <p className="text-4xl font-black text-primary">{mcdrCoveragePct}%</p>
+              <p className="text-xs text-muted-foreground mt-1">{t.dashCoverageRatio}</p>
+              <div className="w-full h-3 rounded-full bg-muted mt-3 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary to-teal-400 rounded-full transition-all duration-700" style={{ width: `${mcdrCoveragePct}%` }} />
+              </div>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">{t.dashEligibleShares}</span>
+                <span className="font-black">{fmtNum(totalEligible)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">{t.dashSubscribedShares}</span>
+                <span className="font-black text-primary">{fmtNum(totalSubscribedMCDR)}</span>
+              </div>
+              <div className="my-1 border-t border-border" />
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span>{t.dashFullSubs}</span></div>
+                <span className="font-black text-emerald-600">{mcdrFull}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500" /><span>{t.dashPartialSubs}</span></div>
+                <span className="font-black text-amber-600">{mcdrPartial}</span>
+              </div>
+              <div className="flex justify-between items-center text-muted-foreground">
+                <span>{t.dashLastUpload}</span>
+                <span className="font-bold text-[10px]">{lang === "ar" ? "13 مايو 2026" : "13 May 2026"}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Financial Summary */}
+        <Card className="border-border">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <div className="flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-primary" />
+              <CardTitle className="text-sm font-black">{t.dashFinancial}</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-4">
+            <div className="rounded-xl border border-border p-4 space-y-3 bg-muted/20">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{t.dashTotalDue}</p>
+                <p className="text-xl font-black text-foreground">{fmtEGP(totalDue)}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{t.dashTotalPaid}</p>
+                <p className="text-xl font-black text-primary">{fmtEGP(totalPaid)}</p>
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs mb-1.5">
+                <span className="font-bold text-muted-foreground">{t.dashCollectionRate}</span>
+                <span className="font-black text-foreground">{collectionPct}%</span>
+              </div>
+              <div className="w-full h-2.5 rounded-full bg-muted overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-teal-500 to-primary rounded-full transition-all duration-700" style={{ width: `${collectionPct}%` }} />
+              </div>
+            </div>
+            {shortfallAmt > 0 && (
+              <div className="flex items-center justify-between p-3 rounded-xl border border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                  <span className="text-xs font-bold text-red-600 dark:text-red-400">{t.dashShortfall}</span>
+                </div>
+                <span className="text-xs font-black text-red-600 dark:text-red-400">{fmtEGP(shortfallAmt)}</span>
+              </div>
+            )}
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40">
+                <span className="text-muted-foreground">{lang === "ar" ? "إجمالي الأسهم المطلوبة" : "Total Requested Shares"}</span>
+                <span className="font-black">{fmtNum(subscriptions.reduce((a, s) => a + s.requestedShares, 0))}</span>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40">
+                <span className="text-muted-foreground">{lang === "ar" ? "إجمالي الأسهم المخصصة" : "Total Allocated Shares"}</span>
+                <span className="font-black text-indigo-600">{fmtNum(subscriptions.reduce((a, s) => a + s.allocatedShares, 0))}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Row 4 — Recent System Activity */}
+      <Card className="border-border">
+        <CardHeader className="pb-3 pt-5 px-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-primary" />
+              <CardTitle className="text-sm font-black">{t.dashRecentActivity}</CardTitle>
+            </div>
+            <button type="button" onClick={() => onNavigate("SystemAdmin")} className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">{t.dashViewAll}<ArrowUpRight className="w-3 h-3" /></button>
+          </div>
+        </CardHeader>
+        <CardContent className="px-2 pb-3">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">{lang === "ar" ? "التوقيت" : "Timestamp"}</TableHead>
+                <TableHead className="text-xs">{lang === "ar" ? "المستخدم" : "User"}</TableHead>
+                <TableHead className="text-xs">{lang === "ar" ? "الإجراء" : "Action"}</TableHead>
+                <TableHead className="text-xs">{lang === "ar" ? "الكيان" : "Entity"}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {INITIAL_AUDIT.slice(0, 5).map(log => (
+                <TableRow key={log.id} className="hover:bg-muted/40">
+                  <TableCell className="text-xs text-muted-foreground font-mono">{log.timestamp}</TableCell>
+                  <TableCell className="text-xs font-bold">{log.user}</TableCell>
+                  <TableCell className="text-xs">
+                    <Badge variant="outline" className="text-[10px] font-bold px-1.5 py-0.5">{log.action}</Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{log.entity}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* Drill-down modal */}
+      {drillType && drillData && (
+        <DrillModal title={`${drillTitle} (${drillData.items.length})`} onClose={() => setDrillType(null)}>
+          {drillData.kind === "kyc" && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{t.colKYCID}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الاسم" : "Name"}</TableHead>
+                  <TableHead className="text-xs">{t.colClientType}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الحالة" : "Status"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "مستوى المخاطر" : "Risk"}</TableHead>
+                  <TableHead className="text-xs">PEP</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "تاريخ الإرسال" : "Submitted"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الفرع" : "Branch"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(drillData.items as KYCRecord[]).map(r => (
+                  <TableRow key={r.id} className="hover:bg-muted/40">
+                    <TableCell className="text-xs font-mono font-bold text-primary">{r.id}</TableCell>
+                    <TableCell className="text-xs font-bold">{r.clientType === "corporate" ? (lang === "ar" ? r.companyNameAr : r.companyNameEn) : (lang === "ar" ? r.nameAr : r.nameEn)}</TableCell>
+                    <TableCell className="text-xs">{r.clientType === "individual" ? t.kycIndividual : t.kycCorporate}</TableCell>
+                    <TableCell><span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${kycStatusBadgeClass(r.status)}`}>{r.status}</span></TableCell>
+                    <TableCell>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${r.riskLevel === "High" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" : r.riskLevel === "Medium" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"}`}>{r.riskLevel}</span>
+                    </TableCell>
+                    <TableCell className="text-xs">{r.pepStatus ? <span className="text-orange-600 font-black">✓</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.submittedAt}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.branch}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {drillData.kind === "subs" && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{lang === "ar" ? "رقم العملية" : "TX ID"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "المستثمر" : "Investor"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الأسهم المطلوبة" : "Shares"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "المستحق (ج.م)" : "Due (EGP)"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "المدفوع (ج.م)" : "Paid (EGP)"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الحالة" : "Status"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الفرع" : "Branch"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "التاريخ" : "Date"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(drillData.items as Subscription[]).map(s => (
+                  <TableRow key={s.id} className="hover:bg-muted/40">
+                    <TableCell className="text-xs font-mono font-bold text-primary">{s.id}</TableCell>
+                    <TableCell className="text-xs font-bold">{lang === "ar" ? s.nameAr : s.nameEn}</TableCell>
+                    <TableCell className="text-xs">{fmtNum(s.requestedShares)}</TableCell>
+                    <TableCell className="text-xs">{fmtNum(s.amountDue)}</TableCell>
+                    <TableCell className="text-xs">{fmtNum(s.amountPaid)}</TableCell>
+                    <TableCell><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black ${subStatusColor[s.status]} bg-opacity-15 text-foreground`} style={{ backgroundColor: undefined }}>
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${subStatusColor[s.status]}`} />
+                      {subStatusLabel(s.status)}
+                    </span></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{s.branch}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{s.submittedAt}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {drillData.kind === "mcdr" && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{t.colName}</TableHead>
+                  <TableHead className="text-xs">{t.colUnified}</TableHead>
+                  <TableHead className="text-xs">{t.colNatId}</TableHead>
+                  <TableHead className="text-xs">{t.colEligible}</TableHead>
+                  <TableHead className="text-xs">{t.colSubscribed}</TableHead>
+                  <TableHead className="text-xs">{t.colBalance}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الحالة" : "Status"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(drillData.items as typeof INITIAL_MCDR).map(m => (
+                  <TableRow key={m.id} className="hover:bg-muted/40">
+                    <TableCell className="text-xs font-bold">{lang === "ar" ? m.nameAr : m.nameEn}</TableCell>
+                    <TableCell className="text-xs font-mono">{m.unifiedCode}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{m.nationalId}</TableCell>
+                    <TableCell className="text-xs">{fmtNum(m.eligibleShares)}</TableCell>
+                    <TableCell className="text-xs font-bold text-primary">{fmtNum(m.subscribedShares)}</TableCell>
+                    <TableCell className="text-xs">{fmtNum(m.balanceEGP)}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${m.status === "Full" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
+                        {m.status === "Full" ? t.mcdrStatusFull : t.mcdrStatusPartial}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {drillData.kind === "users" && (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">{lang === "ar" ? "الاسم" : "Name"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "اسم المستخدم" : "Username"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الدور" : "Role"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الفرع" : "Branch"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "الحالة" : "Status"}</TableHead>
+                  <TableHead className="text-xs">{lang === "ar" ? "آخر دخول" : "Last Login"}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(drillData.items as SystemUser[]).map(u => (
+                  <TableRow key={u.id} className="hover:bg-muted/40">
+                    <TableCell className="text-xs font-bold">{u.name}</TableCell>
+                    <TableCell className="text-xs font-mono text-primary">{u.username}</TableCell>
+                    <TableCell><Badge variant="outline" className="text-[10px] font-bold">{u.role}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{u.branch}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${u.status === "Active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>{u.status}</span>
+                    </TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{u.lastLogin}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </DrillModal>
+      )}
+    </div>
+  );
+}
+
 function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
+  const [activeView, setActiveView] = useState<"dashboard" | UserRole>("dashboard");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
   const [kycRecords, setKycRecords] = useState<KYCRecord[]>(INITIAL_KYC_RECORDS);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -2091,7 +2747,7 @@ function IPOSystem() {
   const handlePrefsChange = (p: Partial<UserPrefs>) => setPrefs(prev => ({ ...prev, ...p }));
   const handleLogin = () => {
     if (loginForm.username === defaultUsername && loginForm.password === defaultPassword) {
-      setIsAuthed(true); setLoginError(false);
+      setIsAuthed(true); setLoginError(false); setActiveView("dashboard");
       setLoggedInUser(INITIAL_USERS.find(u => u.username === loginForm.username) ?? INITIAL_USERS[4]);
     } else setLoginError(true);
   };
@@ -2159,9 +2815,14 @@ function IPOSystem() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="bg-muted p-1 rounded-xl flex gap-1 shadow-inner flex-wrap">
+              <button onClick={() => setActiveView("dashboard")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "dashboard" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <LayoutDashboard className="w-3.5 h-3.5" />{t.dashHome}
+              </button>
+              <div className="w-px bg-border self-stretch mx-0.5" />
               {ROLES.map(({ key, label, icon: Icon }) => (
-                <button key={key} onClick={() => setUserRole(key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${userRole === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <button key={key} onClick={() => { setUserRole(key); setActiveView(key); }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                   <Icon className="w-3.5 h-3.5" />{label}
                 </button>
               ))}
@@ -2197,11 +2858,20 @@ function IPOSystem() {
         </header>
 
         <main className="px-6 py-8">
-          {userRole === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} />}
-          {userRole === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
-          {userRole === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} />}
-          {userRole === "Communications" && <CustomerComms />}
-          {userRole === "SystemAdmin" && <SystemAdmin />}
+          {activeView === "dashboard" && (
+            <Dashboard
+              subscriptions={subscriptions}
+              kycRecords={kycRecords}
+              users={INITIAL_USERS}
+              loggedInUser={loggedInUser}
+              onNavigate={(role) => { setUserRole(role); setActiveView(role); }}
+            />
+          )}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} />}
+          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} />}
+          {activeView === "Communications" && <CustomerComms />}
+          {activeView === "SystemAdmin" && <SystemAdmin />}
         </main>
 
         {showProfile && <ProfilePanel user={loggedInUser} prefs={prefs} onPrefsChange={handlePrefsChange} onClose={() => setShowProfile(false)} />}
