@@ -1611,23 +1611,27 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
 // ─────────────────────────────────────────────────────────────────────────────
 // Supervisor Checker (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch }: {
+function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch, ipoStocks }: {
   subscriptions: Subscription[]; onApprove: (ids: string[]) => void;
   kycRecords: KYCRecord[]; onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   brokerBatches: BrokerBatch[]; onApproveBatch: (id: string, action: "Approved" | "Rejected") => void;
+  ipoStocks: IPOStock[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [supTab, setSupTab] = useState<"subs" | "kyc" | "broker">("subs");
+  const [supIpoId, setSupIpoId] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
-  const pending = subscriptions.filter(s => s.status === "Pending Review");
-  const shown = subscriptions.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
+  const filteredSubs = supIpoId === "all" ? subscriptions : subscriptions.filter(s => s.ipoId === supIpoId);
+  const filteredBatches = supIpoId === "all" ? brokerBatches : brokerBatches.filter(b => b.ipoId === supIpoId);
+  const pending = filteredSubs.filter(s => s.status === "Pending Review");
+  const shown = filteredSubs.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
   const kycPending = kycRecords.filter(r => r.status === "Pending Review");
-  const batchPending = brokerBatches.filter(b => b.status === "Pending Review");
+  const batchPending = filteredBatches.filter(b => b.status === "Pending Review");
 
   return (
     <div className="space-y-5">
@@ -1647,6 +1651,19 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         </TabBtn>
       </div>
 
+      {/* IPO filter — subscriptions & broker tabs only */}
+      {supTab !== "kyc" && ipoStocks.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByStock}:</span>
+          {[{ id: "all", name: t.filterAll }, ...ipoStocks.map(s => ({ id: s.id, name: lang === "ar" ? s.securityNameAr : s.securityNameEn }))].map(opt => (
+            <button key={opt.id} onClick={() => { setSupIpoId(opt.id); setSelected(new Set()); }}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supIpoId === opt.id ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+              {opt.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* KYC review panel */}
       {supTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={() => {}} onApproveKYC={onApproveKYC} isChecker={true} />}
 
@@ -1654,11 +1671,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
       {supTab === "broker" && (
         <div className="space-y-6">
           <div><h2 className="text-2xl font-black tracking-tight">{t.brokerBatchesTitle}</h2><p className="text-muted-foreground text-sm">{t.fixMsgDesc}</p></div>
-          {brokerBatches.length === 0 ? (
+          {filteredBatches.length === 0 ? (
             <Card><CardContent className="py-16 text-center text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-3 opacity-30" /><p className="font-bold">{t.noRecords}</p></CardContent></Card>
           ) : (
             <div className="space-y-4">
-              {brokerBatches.map(batch => (
+              {filteredBatches.map(batch => (
                 <Card key={batch.id} className={`border-2 transition-colors ${batch.status === "Pending Review" ? "border-orange-200 dark:border-orange-800" : batch.status === "Approved" ? "border-emerald-200 dark:border-emerald-800" : "border-red-200 dark:border-red-800"}`}>
                   <CardContent className="pt-5 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1793,7 +1810,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const clearingSubs = boSubs.filter(s => s.status !== "Pending Review");
   const allocatedSubs = boSubs.filter(s => s.allocatedShares > 0);
   const refundedSubs = boSubs.filter(s => s.refundAmount > 0);
-  const approvedBoSubs = boSubs.filter(s => s.status !== "Pending Review");
+  const approvedBoSubs = boSubs.filter(s => (["Verified", "Pending Payment", "Shortfall", "Allocated", "Refunded"] as SubStatus[]).includes(s.status));
   const approvedBoBatches = brokerBatches.filter(b => b.ipoId === selectedBoIpoId && b.status === "Approved");
   const brokerClientCount = approvedBoBatches.reduce((a, b) => a + b.clients.length, 0);
 
@@ -3095,7 +3112,7 @@ function IPOSystem() {
             />
           )}
           {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
-          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} />}
+          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
           {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} brokerBatches={brokerBatches} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
