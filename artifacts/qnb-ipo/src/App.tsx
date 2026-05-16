@@ -1,5 +1,7 @@
-import { useState, useMemo, createContext, useContext, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { type IPOStock, INITIAL_IPO_STOCKS } from "./data/ipoStocks";
+import { type Lang, T, LangContext, useLang } from "./context/lang";
+import { IPOStockSetup } from "./components/IPOStockSetup";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -30,7 +32,6 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
-type Lang = "ar" | "en";
 type AuthMode = "login" | "forgot";
 type UserRole = "FrontOffice" | "BackOffice" | "Supervisor" | "SystemAdmin" | "Communications";
 type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded";
@@ -107,532 +108,6 @@ interface KYCRecord {
   hasPOA: boolean; poaHolderName: string; poaExpiry: string; poaScope: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Translations
-// ─────────────────────────────────────────────────────────────────────────────
-const T = {
-  ar: {
-    appTitle: "نظام إدارة الاكتتابات",
-    appSubtitle: "شركة تك-إنفست - زيادة رأس مال - إصدار حقوق",
-    roleFront: "الفرع", roleBack: "المقاصة", roleSysAdmin: "مدير النظام",
-    roleSupervisor: "المشرف", roleComms: "التواصل",
-    loginTitle: "تسجيل الدخول", loginDesc: "أدخل بيانات الاعتماد للدخول إلى النظام",
-    usernameLabelLogin: "اسم المستخدم", passwordLabelLogin: "كلمة المرور",
-    usernamePlaceholderLogin: "admin", passwordPlaceholderLogin: "••••••••",
-    loginBtn: "دخول", forgotPassword: "نسيت كلمة المرور؟",
-    forgotTitle: "استعادة كلمة المرور", forgotDesc: "أدخل اسم المستخدم لإعادة تعيين كلمة المرور",
-    showPassword: "عرض كلمة المرور الافتراضية", backToLogin: "العودة لتسجيل الدخول",
-    loginError: "اسم المستخدم أو كلمة المرور غير صحيحة",
-    welcomeBack: "مرحباً بعودتك",
-    step1: "التعريف بالعميل", step2: "تفاصيل الاكتتاب", step3: "المستندات", step4: "الإيصال النهائي",
-    kycTitle: "بحث العميل واختيار الحدث", kycDesc: "أدخل الكود الموحد للبحث في قاعدة بيانات MCDR",
-    unifiedCodeLabel: "الكود الموحد", unifiedCodePlaceholder: "أدخل الكود الموحد...",
-    unifiedCodeHint: "للتجربة: 8800318 أو 7700123 أو 7700456",
-    eventLabel: "حدث الاكتتاب", mcdrVerified: "مستثمر موثق — MCDR",
-    unifiedCode: "الكود الموحد", accountNo: "رقم الحساب", activeStatus: "نشط",
-    nextStep: "الخطوة التالية",
-    bankClientYes: "عميل البنك ✓", bankClientNo: "غير عميل البنك",
-    bankAccLabel: "رقم الحساب البنكي", cashBalanceLabel: "الرصيد النقدي المتاح",
-    eligibleIPOLabel: "أسهم مؤهلة للاكتتاب",
-    ektitabTitle: "تفاصيل الاكتتاب (Ektitab)", ektitabDesc: "أدخل عدد الأسهم وطريقة الدفع",
-    sharesLabel: "عدد الأسهم المطلوبة", paymentLabel: "طريقة الدفع",
-    payDirect: "خصم مباشر (تجميد حساب)", payCash: "إيداع نقدي", payCheck: "شيك معتمد",
-    orderSummary: "ملخص الأمر", stockPriceLabel: "سعر السهم في الاكتتاب",
-    parValue: "القيمة الاسمية", issueFees: "مصاريف الإصدار", totalDue: "إجمالي المستحق",
-    confirmDocs: "تأكيد ورفع المستندات",
-    docsTitle: "المستندات المطلوبة", docsDesc: "ارفع نسخ المستندات اللازمة لاستكمال الاكتتاب",
-    doc1: "نسخة البطاقة القومية", doc2: "نموذج الاكتتاب الموقع",
-    doc3: "إيصال التحويل البنكي", doc4: "توكيل رسمي (إن وجد)",
-    uploadBtn: "رفع", reviewReceipt: "مراجعة الملخص النهائي",
-    subPrepared: "تم تجهيز الاكتتاب", txPrefix: "رقم العملية",
-    clientLabel: "العميل", sharesCol: "الأسهم", totalAmtLabel: "إجمالي المبلغ",
-    statusLabel: "الحالة", awaitingVerif: "في انتظار الاعتماد",
-    printReceipt: "طباعة / تنزيل الإيصال", submitForReview: "إرسال للمراجعة",
-    checkerTitle: "مراجعة طلبات الاكتتاب",
-    checkerDesc: "مراجعة واعتماد طلبات الاكتتاب المقدمة من الفروع",
-    approveBtn: "اعتماد", rejectBtn: "رفض", approveAllBtn: "اعتماد الكل",
-    colSubmittedBy: "الفرع المقدِّم", colSubmittedAt: "تاريخ التقديم",
-    pendingReviewCount: (n: number) => `${n} طلب في انتظار الاعتماد`,
-    opsHubTitle: "مركز العمليات", opsHubDesc: "المقاصة المركزية والمطابقة",
-    exportData: "تصدير Excel", executeAlloc: "تنفيذ التخصيص", exportBankFile: "تصدير ملف التحويلات",
-    boTabMCDR: "رفع MCDR", boTabAlloc: "نتائج التخصيص", boTabRefunds: "إعادة الأموال", boTabRecon: "المطابقة",
-    mcdrUploadTitle: "رفع ملف بيانات MCDR", mcdrUploadDesc: "ارفع ملف Excel لعرض بيانات أهلية المستثمرين",
-    uploadMCDRBtn: "رفع ملف MCDR", mcdrTitle: "قائمة أهلية المستثمرين (MCDR)",
-    reconTitle: "قائمة المطابقة",
-    filterAll: "الكل", filterVerified: "موثق", filterShortfall: "عجز",
-    filterPending: "قيد الدفع", filterAllocated: "مخصص", filterRefunded: "مرتد فائض",
-    colInvestor: "المستثمر / الكود الموحد", colBranch: "الفرع",
-    colDue: "المستحق (ج.م)", colPaid: "المدفوع (ج.م)",
-    colAllocated: "المخصص", colRefund: "رد الفائض", colStatus: "الحالة", colAction: "إجراء",
-    noRecords: "لا توجد عمليات", manualMatch: "مطابقة يدوية", refundAction: "رد",
-    colName: "اسم المستثمر", colNatId: "الرقم القومي", colUnified: "الكود الموحد",
-    colEligible: "الأسهم المؤهلة", colSubscribed: "الأسهم المكتتبة",
-    colBalance: "الرصيد (ج.م)", mcdrStatusPartial: "جزئي", mcdrStatusFull: "كامل",
-    allocTitle: "نتائج التخصيص", allocBanner: "تم تنفيذ التخصيص بنجاح",
-    allocRatio: "نسبة التخصيص الإجمالية", proceedRefunds: "الانتقال لإعادة الأموال",
-    colRequested: "الأسهم المطلوبة", colAllocShares: "الأسهم المخصصة",
-    colRatioPct: "النسبة %", colTotalPaid: "المدفوع (ج.م)", colRefundable: "المسترد (ج.م)",
-    refundsTitle: "معالجة استرداد الأموال", colRefundAmt: "مبلغ الاسترداد (ج.م)",
-    colMethod: "طريقة الصرف", colIBAN: "IBAN",
-    refStatusTransferred: "تم التحويل", refStatusPendingPickup: "في انتظار الاستلام", refStatusPendingP: "قيد المعالجة",
-    stat0: "إجمالي الاكتتابات", stat1: "نسبة التغطية", stat2: "استثناءات", stat3: "إجمالي النقدية (ج.م)",
-    statusPendingReview: "في انتظار الاعتماد", statusApproved: "معتمد",
-    statusPending: "قيد الدفع", statusVerified: "موثق", statusShortfall: "عجز",
-    statusAllocated: "مخصص", statusRefunded: "مرتد فائض",
-    adminTitle: "إدارة النظام", adminDesc: "إدارة المستخدمين والصلاحيات (RBAC)",
-    adminTabUsers: "المستخدمون", adminTabCreate: "إنشاء مستخدم",
-    adminTabGroups: "مجموعات المستخدمين", adminTabAudit: "سجل التدقيق",
-    backToUsers: "العودة للمستخدمين", addNewUser: "إضافة مستخدم جديد",
-    usersTitle: "قائمة المستخدمين والصلاحيات",
-    searchPlaceholder: "بحث بالاسم أو اسم المستخدم...", allRoles: "كل الأدوار والحالات",
-    colUserDetails: "بيانات المستخدم", colRole: "الدور المحدد", colBranchUser: "الفرع",
-    colGroup: "المجموعة", editAction: "تعديل", suspendAction: "تعليق",
-    userStatusActive: "نشط", userStatusSuspended: "موقوف",
-    roleFA: "موظف الفرع", roleBO: "موظف المقاصة", roleSup: "مشرف", roleSA: "مدير النظام", roleCommU: "مسؤول التواصل",
-    createUserTitle: "إنشاء مستخدم جديد", createUserDesc: "أدخل بيانات المستخدم وحدد صلاحياته",
-    fullNameLabel: "الاسم الكامل", fullNamePlaceholder: "مثال: علي محمود",
-    usernameLabel: "اسم المستخدم", usernamePlaceholder: "مثال: ali.m",
-    emailLabel: "البريد الإلكتروني", emailPlaceholder: "مثال: ali@bank.com",
-    systemRoleLabel: "الدور في النظام", branchDeptLabel: "الفرع / القسم",
-    groupLabel: "المجموعة", branchCairoMain: "Cairo-Main", branchAlex: "Alex-Branch", branchHQ: "HQ Operations",
-    saveUser: "حفظ المستخدم", cancel: "إلغاء", requiredField: "هذا الحقل مطلوب",
-    groupsTitle: "مجموعات المستخدمين وصلاحيات الوصول", groupName: "اسم المجموعة",
-    groupMembers: "الأعضاء", groupPermissions: "الصلاحيات الممنوحة", addGroup: "إضافة مجموعة جديدة",
-    auditTitle: "سجل أحداث النظام", auditDesc: "تتبع كامل لأفعال المستخدمين والتغييرات في النظام",
-    colTimestamp: "التوقيت", colUser: "المستخدم", colUserRole: "الدور",
-    colActionAudit: "الإجراء", colEntity: "الكيان", colOldValue: "القيمة القديمة", colNewValue: "القيمة الجديدة", colIP: "عنوان IP",
-    profileTitle: "الملف الشخصي", profileDesc: "بيانات حسابك وإعدادات التفضيلات",
-    settingsTitle: "الإعدادات", darkModeLabel: "الوضع الداكن", darkModeDesc: "تبديل المظهر بين الفاتح والداكن",
-    notifLabel: "الإشعارات", notifDesc: "تفعيل أو إيقاف إشعارات النظام",
-    langLabel: "اللغة", myRoleLabel: "الدور الوظيفي", myBranchLabel: "الفرع", lastLoginLabel: "آخر دخول",
-    commTitle: "التواصل مع العملاء", commDesc: "إرسال رسائل وإشعارات وتحديثات حالة الاكتتاب للعملاء",
-    commTabCompose: "رسالة جديدة", commTabHistory: "سجل الرسائل",
-    channelEmail: "بريد إلكتروني", channelSMS: "رسالة SMS", channelNotif: "إشعار داخلي",
-    audienceAll: "جميع العملاء", audienceGroup: "مجموعة محددة", audienceIndividual: "عميل بعينه", audienceUpload: "رفع قائمة",
-    subjectLabel: "الموضوع / العنوان", subjectPlaceholder: "مثال: تحديث حالة اكتتابك",
-    messageLabel: "نص الرسالة", messagePlaceholder: "اكتب نص رسالتك هنا...",
-    groupSelectLabel: "اختر المجموعة",
-    groupIndividuals: "أفراد", groupCorporates: "شركات", groupAllClients: "كل العملاء",
-    clientCodeLabel: "كود العميل أو رقم الهاتف",
-    uploadListLabel: "رفع ملف Excel بأكواد العملاء أو أرقام الهواتف",
-    uploadListBtn: "رفع ملف Excel",
-    templateIPOStatus: "قالب: تحديث حالة الاكتتاب",
-    templateAlloc: "قالب: إشعار التخصيص",
-    templateRefund: "قالب: إشعار الاسترداد",
-    sendBtn: "إرسال الرسالة",
-    recipientsLabel: "المستلمون المتوقعون",
-    commHistTitle: "سجل الرسائل المرسلة",
-    colChannel: "القناة", colAudience: "الجمهور", colSubject: "الموضوع",
-    colRecipients: "المستلمون", colSentAt: "وقت الإرسال", colCommStatus: "الحالة",
-    commStatusSent: "تم الإرسال", commStatusPending: "قيد الإرسال", commStatusFailed: "فشل",
-    toastSentTitle: "تم الإرسال للمراجعة", toastSentDesc: (id: string) => `تم إرسال الاكتتاب ${id} للمشرف.`,
-    toastApprovedTitle: "تم الاعتماد", toastApprovedDesc: (n: number) => `تم اعتماد ${n} طلب بنجاح.`,
-    toastAllocTitle: "تم التخصيص", toastAllocDesc: "تم تخصيص الأسهم بنسبة 45%.",
-    toastRefundTitle: "رد الفائض", toastRefundDesc: "تم تنفيذ رد الفائض لجميع الحسابات المخصصة.",
-    toastUserCreated: "تم إنشاء المستخدم بنجاح.", toastUserCreatedDesc: (n: string) => `تمت إضافة ${n} إلى النظام.`,
-    toastExported: "تم التصدير", toastExportedDesc: "تم تصدير البيانات إلى ملف CSV.",
-    toastCommSent: "تم الإرسال", toastCommSentDesc: (n: number) => `تم إرسال الرسالة إلى ${n} مستلم.`,
-    sharesError: "يجب إدخال عدد أسهم صحيح",
-    eventSOO: "Sinawy Olive Oil IPO (SOO)", eventCAP: "زيادة رأس مال - بنك التكنولوجيا المتقدمة", eventRIGHTS: "أسهم أولوية - دلتا للتأمين",
-    egp: "ج.م", shares: "سهم",
-    logout: "تسجيل الخروج", profile: "الملف الشخصي", settings: "الإعدادات",
-    // KYC
-    foTabSubs: "الاكتتابات", foTabKYC: "تسجيل KYC",
-    kycModuleTitle: "تسجيل بيانات العميل (KYC)", kycModuleDesc: "تسجيل بيانات العملاء الأفراد والشركات مع اعتماد المشرف",
-    kycTabNew: "تسجيل جديد", kycTabList: "قائمة السجلات",
-    kycNewBtn: "+ تسجيل عميل جديد",
-    kycTypeLabel: "نوع العميل", kycTypeIndividual: "فرد", kycTypeCorporate: "شركة / جهة اعتبارية",
-    kycStep1: "البيانات الأساسية", kycStep2: "الهوية والعنوان", kycStep3: "الحساب البنكي", kycStep4: "تقييم المخاطر", kycStep5: "المستندات والتوكيل",
-    // Basic info — individual
-    nameArLabel: "الاسم بالعربية", nameEnLabel: "الاسم بالإنجليزية",
-    dobLabel: "تاريخ الميلاد", nationalityLabel: "الجنسية",
-    genderLabel: "الجنس", genderMale: "ذكر", genderFemale: "أنثى",
-    motherNameLabel: "اسم الأم", maritalStatusLabel: "الحالة الاجتماعية",
-    maritalSingle: "أعزب", maritalMarried: "متزوج", maritalDivorced: "مطلق", maritalWidowed: "أرمل",
-    // Basic info — corporate
-    companyNameArLabel: "اسم الشركة بالعربية", companyNameEnLabel: "اسم الشركة بالإنجليزية",
-    commRegNoLabel: "رقم السجل التجاري", taxIdLabel: "الرقم الضريبي",
-    industryLabel: "القطاع", legalFormLabel: "الشكل القانوني",
-    incDateLabel: "تاريخ التأسيس",
-    legalFormJSC: "شركة مساهمة", legalFormLLC: "شركة ذات مسؤولية محدودة", legalFormSP: "ملكية فردية", legalFormOther: "أخرى",
-    // Identity
-    natIdLabel: "رقم البطاقة القومية", passportLabel: "رقم جواز السفر",
-    idExpiryLabel: "تاريخ انتهاء الهوية",
-    // Address
-    addressLine1Label: "العنوان — السطر الأول", addressLine2Label: "العنوان — السطر الثاني (اختياري)",
-    cityLabel: "المدينة", governorateLabel: "المحافظة",
-    postalCodeLabel: "الرمز البريدي", countryLabel: "الدولة",
-    mailingAddressSameLabel: "عنوان المراسلة مطابق لعنوان الإقامة",
-    mailingAddressLabel: "عنوان المراسلة",
-    // Contact
-    mobileLabel: "رقم الجوال", phoneLabel: "رقم الهاتف (اختياري)",
-    // Bank
-    bankNameLabel: "اسم البنك", ibanLabel: "رقم IBAN",
-    currencyLabel: "عملة الحساب",
-    // Risk
-    riskLevelLabel: "مستوى المخاطرة", riskLow: "منخفض", riskMedium: "متوسط", riskHigh: "مرتفع",
-    sourceOfFundsLabel: "مصدر الأموال", occupationLabel: "المهنة",
-    pepStatusLabel: "شخص مكشوف سياسياً (PEP)", sanctionsLabel: "فحص قوائم العقوبات",
-    annualIncomeLabel: "الدخل السنوي التقديري", netWorthLabel: "صافي الثروة",
-    // Documents
-    docsSectionTitle: "المستندات المطلوبة",
-    kycDocNatId: "صورة البطاقة القومية (وجهين)", kycDocPassport: "صورة جواز السفر",
-    kycDocAddress: "إثبات العنوان (فاتورة / مستند حكومي)", kycDocBankStmt: "كشف حساب بنكي (3 أشهر)",
-    kycDocCommReg: "السجل التجاري", kycDocTaxCard: "البطاقة الضريبية",
-    kycDocBoardRes: "قرار مجلس الإدارة", kycDocSigAuth: "نماذج التوقيعات المعتمدة",
-    poaSectionTitle: "بيانات التوكيل الرسمي (POA)",
-    hasPOALabel: "يوجد توكيل رسمي", poaHolderLabel: "اسم صاحب التوكيل",
-    poaExpiryLabel: "تاريخ انتهاء التوكيل", poaScopeLabel: "نطاق التوكيل",
-    // KYC checker
-    kycCheckerTitle: "مراجعة طلبات KYC", kycCheckerDesc: "مراجعة واعتماد تسجيلات KYC المقدمة من الفروع",
-    kycPendingCount: (n: number) => `${n} طلب KYC في انتظار الاعتماد`,
-    kycApprovedToast: "تم اعتماد KYC", kycApprovedDesc: (n: number) => `تم اعتماد ${n} سجل بنجاح.`,
-    kycRejectedToast: "تم رفض KYC", kycRejectedDesc: "تم رفض الطلب المحدد.",
-    kycSubmittedToast: "تم الإرسال", kycSubmittedDesc: (id: string) => `تم إرسال ملف ${id} للمشرف.`,
-    colClientType: "نوع العميل", colKYCID: "رقم الطلب",
-    kycStatusDraft: "مسودة", kycStatusPending: "في الانتظار",
-    kycStatusApproved: "معتمد", kycStatusRejected: "مرفوض",
-    kycIndividual: "فرد", kycCorporate: "شركة",
-    supTabSubs: "الاكتتابات", supTabKYC: "مراجعة KYC",
-    viewDetailsBtn: "عرض التفاصيل",
-    dashHome: "الرئيسية",
-    dashTitle: "لوحة المعلومات",
-    dashSubtitle: "نظرة شاملة على أداء الاكتتاب",
-    dashWelcome: (name: string) => `مرحباً، ${name}`,
-    dashTotalKYC: "إجمالي سجلات KYC",
-    dashTotalSubs: "إجمالي الاكتتابات",
-    dashMCDRClients: "عملاء MCDR",
-    dashActiveUsers: "المستخدمون النشطون",
-    dashIPOBreakdown: "توزيع حالات الاكتتاب",
-    dashKYCPipeline: "مسار KYC",
-    dashAMLInsights: "مؤشرات AML والمخاطر",
-    dashMCDRCoverage: "تغطية MCDR",
-    dashFinancial: "الملخص المالي",
-    dashRecentActivity: "النشاط الأخير",
-    dashTotalDue: "إجمالي المستحق (ج.م)",
-    dashTotalPaid: "إجمالي المدفوع (ج.م)",
-    dashCoverageRatio: "نسبة تغطية الاكتتاب",
-    dashEligibleShares: "الأسهم المؤهلة",
-    dashSubscribedShares: "الأسهم المكتتبة",
-    dashFullSubs: "اكتتاب كامل",
-    dashPartialSubs: "اكتتاب جزئي",
-    dashHighRisk: "عملاء مخاطر عالية",
-    dashMedRisk: "مخاطر متوسطة",
-    dashLowRisk: "مخاطر منخفضة",
-    dashPEP: "أشخاص مكشوفون سياسياً (PEP)",
-    dashSanctions: "منتهون من قوائم العقوبات",
-    dashViewAll: "عرض الكل",
-    dashDrillKYC: "سجلات KYC",
-    dashDrillSubs: "طلبات الاكتتاب",
-    dashDrillMCDR: "بيانات MCDR",
-    dashDrillUsers: "المستخدمون",
-    dashClose: "إغلاق",
-    dashOf: "من",
-    dashCollectionRate: "معدل التحصيل",
-    dashShortfall: "عجز في المدفوعات",
-    dashLastUpload: "آخر رفع MCDR",
-    dashUploadInfo: "mcdr_may2026.xlsx — 240 سجل",
-    dashUploadsCount: "ملفات مرفوعة",
-    stepFIX: "رسالة FIX",
-    ipoStockTab: "الأوراق المالية",
-    ipoStockTitle: "إضافة ورقة مالية جديدة",
-    ipoStockDesc: "أدخل تفاصيل الورقة المالية ومواعيد مراحل الاكتتاب",
-    secNameArLabel: "اسم الورقة (عربي)",
-    secNameEnLabel: "اسم الورقة (إنجليزي)",
-    stockCodeLabel: "الكود",
-    stockSymbolLabel: "الرمز",
-    isinLabel: "ISIN",
-    coveredPhaseLabel: "مرحلة المغطى",
-    uncoveredPhaseLabel: "مرحلة الغير مغطى",
-    coveredStartLabel: "تاريخ بداية المغطى",
-    coveredEndLabel: "تاريخ نهاية المغطى",
-    uncoveredStartLabel: "تاريخ بداية الغير مغطى",
-    uncoveredEndLabel: "تاريخ نهاية الغير مغطى",
-    finalizeCoveredBtn: "إغلاق مرحلة المغطى",
-    coveredFinalizedLabel: "تم إغلاق مرحلة المغطى",
-    addStockBtn: "+ إضافة ورقة مالية",
-    saveStockBtn: "حفظ الورقة المالية",
-    stockPhaseLabel: "المرحلة الحالية",
-    coveredPhaseBadge: "المغطى",
-    uncoveredPhaseBadge: "الغير مغطى",
-    filterByStock: "الورقة المالية",
-    allStocks: "كل الأوراق",
-    individualRequest: "اكتتاب فردي",
-    brokerRequest: "اكتتاب وسيط (Broker)",
-    brokerUploadTitle: "رفع ملف طلبات الوسيط",
-    brokerUploadDesc: "ارفع ملف Excel يحتوي على طلبات الاكتتاب بالجملة للوسيط",
-    uploadBrokerBtn: "رفع ملف الوسيط",
-    brokerFileLoaded: (n: number) => `تم تحميل ${n} طلب بنجاح`,
-    txRefLabel: "مرجع العملية",
-    txRefPlaceholder: "أدخل رقم مرجع العملية...",
-    fixMcdrTitle: "رسالة تخصيص FIX-MCDR",
-    fixMcdrDesc: "مراجعة وإرسال رسالة FIX لتخصيص الكمية المطلوبة عبر MCDR",
-    sendFixBtn: "إرسال رسالة FIX",
-    fixSentLabel: "تم إرسال رسالة FIX بنجاح",
-    proceedToReceipt: "الانتقال للإيصال النهائي",
-    payTransfer: "تحويل بنكي",
-    payDebitNote: "جواب خصم",
-    requestTypeLabel: "نوع الطلب",
-  },
-  en: {
-    appTitle: "IPO Management System",
-    appSubtitle: "Tech-Invest Co. - Capital Increase-Rights Issue",
-    roleFront: "Branch", roleBack: "Clearing", roleSysAdmin: "SysAdmin",
-    roleSupervisor: "Supervisor", roleComms: "Comms",
-    loginTitle: "Sign In", loginDesc: "Enter your credentials to access the system",
-    usernameLabelLogin: "Username", passwordLabelLogin: "Password",
-    usernamePlaceholderLogin: "admin", passwordPlaceholderLogin: "••••••••",
-    loginBtn: "Login", forgotPassword: "Forgot password?",
-    forgotTitle: "Password Recovery", forgotDesc: "Enter your username to retrieve the default password",
-    showPassword: "Show Default Password", backToLogin: "Back to Login",
-    loginError: "Invalid username or password",
-    welcomeBack: "Welcome back",
-    step1: "Identification", step2: "Ektitab Entry", step3: "Documentation", step4: "Final Receipt",
-    kycTitle: "Client Lookup & Event Selection", kycDesc: "Enter the Unified Code to look up the client in the MCDR database",
-    unifiedCodeLabel: "Unified Code", unifiedCodePlaceholder: "Enter unified code...",
-    unifiedCodeHint: "Try: 8800318, 7700123 or 7700456",
-    eventLabel: "Subscription Event", mcdrVerified: "MCDR Verified Shareholder",
-    unifiedCode: "Unified Code", accountNo: "Account", activeStatus: "Active",
-    nextStep: "Next Step",
-    bankClientYes: "Bank Client ✓", bankClientNo: "Non-Bank Client",
-    bankAccLabel: "Bank Account No.", cashBalanceLabel: "Available Cash Balance",
-    eligibleIPOLabel: "IPO Eligible Shares",
-    ektitabTitle: "Subscription (Ektitab) Details", ektitabDesc: "Enter the number of shares and payment method",
-    sharesLabel: "Shares Requested", paymentLabel: "Payment Method",
-    payDirect: "Direct Debit (Account Block)", payCash: "Cash Deposit", payCheck: "Certified Check",
-    orderSummary: "Order Summary", stockPriceLabel: "IPO Stock Price",
-    parValue: "Par Value", issueFees: "Issue Fees", totalDue: "Total Due",
-    confirmDocs: "Confirm & Upload Docs",
-    docsTitle: "Required Documentation", docsDesc: "Upload copies of the required documents to complete the subscription",
-    doc1: "National ID Copy", doc2: "Signed Subscription Form",
-    doc3: "Bank Transfer Receipt", doc4: "POA (if applicable)",
-    uploadBtn: "Upload", reviewReceipt: "Review Final Summary",
-    subPrepared: "Subscription Prepared", txPrefix: "Transaction ID",
-    clientLabel: "Client", sharesCol: "Shares", totalAmtLabel: "Total Amount",
-    statusLabel: "Status", awaitingVerif: "Awaiting Approval",
-    printReceipt: "Print / Download Receipt", submitForReview: "Submit for Review",
-    checkerTitle: "Subscription Review Queue",
-    checkerDesc: "Review and approve IPO subscription requests submitted by branches",
-    approveBtn: "Approve", rejectBtn: "Reject", approveAllBtn: "Approve All",
-    colSubmittedBy: "Submitted By", colSubmittedAt: "Submitted At",
-    pendingReviewCount: (n: number) => `${n} subscription(s) awaiting approval`,
-    opsHubTitle: "Operations Hub", opsHubDesc: "Central Clearing & Reconciliation",
-    exportData: "Export Excel", executeAlloc: "Execute Allocation", exportBankFile: "Export Bank Transfer File",
-    boTabMCDR: "MCDR Upload", boTabAlloc: "Allocation Results", boTabRefunds: "Refunds Processing", boTabRecon: "Reconciliation",
-    mcdrUploadTitle: "Upload MCDR Data File", mcdrUploadDesc: "Upload the MCDR Excel file to load investor eligibility data",
-    uploadMCDRBtn: "Upload MCDR File", mcdrTitle: "MCDR Investor Eligibility List",
-    reconTitle: "Reconciliation Queue",
-    filterAll: "All", filterVerified: "Verified", filterShortfall: "Shortfall",
-    filterPending: "Pending Payment", filterAllocated: "Allocated", filterRefunded: "Refunded",
-    colInvestor: "Investor / Unified Code", colBranch: "Branch",
-    colDue: "Due (EGP)", colPaid: "Paid (EGP)",
-    colAllocated: "Allocated", colRefund: "Refund", colStatus: "Status", colAction: "Action",
-    noRecords: "No records found", manualMatch: "Manual Match", refundAction: "Refund",
-    colName: "Investor Name", colNatId: "National ID", colUnified: "Unified Code",
-    colEligible: "Eligible Shares", colSubscribed: "Subscribed Shares",
-    colBalance: "Balance (EGP)", mcdrStatusPartial: "Partial", mcdrStatusFull: "Full",
-    allocTitle: "Client Allocation Results", allocBanner: "Allocation Executed Successfully",
-    allocRatio: "Overall Allocation Ratio", proceedRefunds: "Proceed to Refunds →",
-    colRequested: "Requested Shares", colAllocShares: "Allocated Shares",
-    colRatioPct: "% Ratio", colTotalPaid: "Total Paid (EGP)", colRefundable: "Refundable (EGP)",
-    refundsTitle: "Post-Allocation Refunds Processing", colRefundAmt: "Refund Amount (EGP)",
-    colMethod: "Disbursement Method", colIBAN: "Bank Details (IBAN)",
-    refStatusTransferred: "Transferred", refStatusPendingPickup: "Pending Pickup", refStatusPendingP: "Pending Processing",
-    stat0: "Total Subscriptions", stat1: "Coverage Ratio", stat2: "Exceptions", stat3: "Total Cash (EGP)",
-    statusPendingReview: "Pending Review", statusApproved: "Approved",
-    statusPending: "Pending Payment", statusVerified: "Verified", statusShortfall: "Shortfall",
-    statusAllocated: "Allocated", statusRefunded: "Refunded",
-    adminTitle: "System Administration", adminDesc: "User Management & Role-Based Access Control (RBAC)",
-    adminTabUsers: "Users", adminTabCreate: "Create User",
-    adminTabGroups: "User Groups", adminTabAudit: "Audit Logs",
-    backToUsers: "← Back to Users", addNewUser: "+ Add New User",
-    usersTitle: "Access Control & Users List",
-    searchPlaceholder: "Search name or username...", allRoles: "All Roles & Status",
-    colUserDetails: "User Details", colRole: "Assigned Role", colBranchUser: "Branch",
-    colGroup: "Group", editAction: "Edit", suspendAction: "Suspend",
-    userStatusActive: "Active", userStatusSuspended: "Suspended",
-    roleFA: "Front Office Agent", roleBO: "Back Office Ops", roleSup: "Supervisor", roleSA: "System Admin", roleCommU: "Comms Officer",
-    createUserTitle: "Create New User Profile", createUserDesc: "Enter the new user's details and assign their system role",
-    fullNameLabel: "Full Name", fullNamePlaceholder: "e.g. Ali Mahmoud",
-    usernameLabel: "Username", usernamePlaceholder: "e.g. ali.m",
-    emailLabel: "Email", emailPlaceholder: "e.g. ali@bank.com",
-    systemRoleLabel: "System Role", branchDeptLabel: "Branch / Department",
-    groupLabel: "Group", branchCairoMain: "Cairo-Main", branchAlex: "Alex-Branch", branchHQ: "HQ Operations",
-    saveUser: "Save User", cancel: "Cancel", requiredField: "This field is required",
-    groupsTitle: "User Groups & Access Rights", groupName: "Group Name",
-    groupMembers: "Members", groupPermissions: "Granted Permissions", addGroup: "Add New Group",
-    auditTitle: "System Event Audit Log", auditDesc: "Full audit trail of user actions and system changes",
-    colTimestamp: "Timestamp", colUser: "User", colUserRole: "Role",
-    colActionAudit: "Action", colEntity: "Entity", colOldValue: "Old Value", colNewValue: "New Value", colIP: "IP Address",
-    profileTitle: "My Profile", profileDesc: "Your account details and preferences",
-    settingsTitle: "Settings", darkModeLabel: "Dark Mode", darkModeDesc: "Toggle between light and dark appearance",
-    notifLabel: "Notifications", notifDesc: "Enable or disable system notifications",
-    langLabel: "Language", myRoleLabel: "Role", myBranchLabel: "Branch", lastLoginLabel: "Last Login",
-    commTitle: "Customer Communications", commDesc: "Send notifications, SMS or email updates to clients about their IPO status",
-    commTabCompose: "Compose Message", commTabHistory: "Message History",
-    channelEmail: "Email", channelSMS: "SMS", channelNotif: "In-App Notification",
-    audienceAll: "All Clients", audienceGroup: "Client Group", audienceIndividual: "Specific Client", audienceUpload: "Upload List",
-    subjectLabel: "Subject / Title", subjectPlaceholder: "e.g. Your IPO Subscription Update",
-    messageLabel: "Message Body", messagePlaceholder: "Type your message here...",
-    groupSelectLabel: "Select Group",
-    groupIndividuals: "Individual Investors", groupCorporates: "Corporate Clients", groupAllClients: "All Clients",
-    clientCodeLabel: "Client Code or Mobile Number",
-    uploadListLabel: "Upload Excel file with client codes or mobile numbers",
-    uploadListBtn: "Upload Excel File",
-    templateIPOStatus: "Template: IPO Status Update",
-    templateAlloc: "Template: Allocation Notification",
-    templateRefund: "Template: Refund Notification",
-    sendBtn: "Send Message",
-    recipientsLabel: "Expected Recipients",
-    commHistTitle: "Sent Messages Log",
-    colChannel: "Channel", colAudience: "Audience", colSubject: "Subject",
-    colRecipients: "Recipients", colSentAt: "Sent At", colCommStatus: "Status",
-    commStatusSent: "Sent", commStatusPending: "Pending", commStatusFailed: "Failed",
-    toastSentTitle: "Submitted for Review", toastSentDesc: (id: string) => `Subscription ${id} sent to supervisor.`,
-    toastApprovedTitle: "Approved", toastApprovedDesc: (n: number) => `${n} subscription(s) approved successfully.`,
-    toastAllocTitle: "Allocation Complete", toastAllocDesc: "Shares allocated at 45% ratio.",
-    toastRefundTitle: "Refunds Processed", toastRefundDesc: "Excess refunds executed for all allocated accounts.",
-    toastUserCreated: "User created successfully.", toastUserCreatedDesc: (n: string) => `${n} has been added to the system.`,
-    toastExported: "Exported", toastExportedDesc: "Data exported to CSV file.",
-    toastCommSent: "Message Sent", toastCommSentDesc: (n: number) => `Message delivered to ${n} recipient(s).`,
-    sharesError: "Please enter a valid number of shares",
-    eventSOO: "Sinawy Olive Oil IPO (SOO)", eventCAP: "Capital Increase — Advanced Technology Bank", eventRIGHTS: "Rights Issue — Delta Insurance",
-    egp: "EGP", shares: "shares",
-    logout: "Logout", profile: "My Profile", settings: "Settings",
-    // KYC
-    foTabSubs: "Subscriptions", foTabKYC: "KYC Registration",
-    kycModuleTitle: "Client KYC Registration", kycModuleDesc: "Register individual and corporate client profiles — maker entry, checker approval",
-    kycTabNew: "New Registration", kycTabList: "Records List",
-    kycNewBtn: "+ Register New Client",
-    kycTypeLabel: "Client Type", kycTypeIndividual: "Individual", kycTypeCorporate: "Corporate / Entity",
-    kycStep1: "Basic Information", kycStep2: "Identity & Address", kycStep3: "Bank Account", kycStep4: "Risk Assessment", kycStep5: "Documents & POA",
-    nameArLabel: "Name (Arabic)", nameEnLabel: "Name (English)",
-    dobLabel: "Date of Birth", nationalityLabel: "Nationality",
-    genderLabel: "Gender", genderMale: "Male", genderFemale: "Female",
-    motherNameLabel: "Mother's Name", maritalStatusLabel: "Marital Status",
-    maritalSingle: "Single", maritalMarried: "Married", maritalDivorced: "Divorced", maritalWidowed: "Widowed",
-    companyNameArLabel: "Company Name (Arabic)", companyNameEnLabel: "Company Name (English)",
-    commRegNoLabel: "Commercial Registration No.", taxIdLabel: "Tax ID",
-    industryLabel: "Industry / Sector", legalFormLabel: "Legal Form",
-    incDateLabel: "Incorporation Date",
-    legalFormJSC: "Joint Stock Company", legalFormLLC: "Limited Liability Co.", legalFormSP: "Sole Proprietorship", legalFormOther: "Other",
-    natIdLabel: "National ID Number", passportLabel: "Passport Number",
-    idExpiryLabel: "ID Expiry Date",
-    addressLine1Label: "Address Line 1", addressLine2Label: "Address Line 2 (optional)",
-    cityLabel: "City", governorateLabel: "Governorate / State",
-    postalCodeLabel: "Postal Code", countryLabel: "Country",
-    mailingAddressSameLabel: "Mailing address same as residential",
-    mailingAddressLabel: "Mailing Address",
-    mobileLabel: "Mobile Number", phoneLabel: "Phone (optional)",
-    bankNameLabel: "Bank Name", ibanLabel: "IBAN",
-    currencyLabel: "Account Currency",
-    riskLevelLabel: "Risk Level", riskLow: "Low", riskMedium: "Medium", riskHigh: "High",
-    sourceOfFundsLabel: "Source of Funds", occupationLabel: "Occupation / Job Title",
-    pepStatusLabel: "Politically Exposed Person (PEP)", sanctionsLabel: "Sanctions & Watchlist Cleared",
-    annualIncomeLabel: "Estimated Annual Income", netWorthLabel: "Estimated Net Worth",
-    docsSectionTitle: "Required Documents",
-    kycDocNatId: "National ID (front & back)", kycDocPassport: "Passport Copy",
-    kycDocAddress: "Proof of Address (utility bill / gov. doc)", kycDocBankStmt: "Bank Statement (last 3 months)",
-    kycDocCommReg: "Commercial Registration Certificate", kycDocTaxCard: "Tax Card",
-    kycDocBoardRes: "Board Resolution / Authorization Letter", kycDocSigAuth: "Authorized Signature Specimens",
-    poaSectionTitle: "Power of Attorney (POA)",
-    hasPOALabel: "This client has a POA", poaHolderLabel: "POA Holder Name",
-    poaExpiryLabel: "POA Expiry Date", poaScopeLabel: "POA Scope / Limitations",
-    kycCheckerTitle: "KYC Review Queue", kycCheckerDesc: "Review and approve KYC registrations submitted by branch staff",
-    kycPendingCount: (n: number) => `${n} KYC record(s) awaiting approval`,
-    kycApprovedToast: "KYC Approved", kycApprovedDesc: (n: number) => `${n} KYC record(s) approved successfully.`,
-    kycRejectedToast: "KYC Rejected", kycRejectedDesc: "The selected record has been rejected.",
-    kycSubmittedToast: "Submitted", kycSubmittedDesc: (id: string) => `KYC file ${id} sent to supervisor.`,
-    colClientType: "Client Type", colKYCID: "KYC ID",
-    kycStatusDraft: "Draft", kycStatusPending: "Pending Review",
-    kycStatusApproved: "Approved", kycStatusRejected: "Rejected",
-    kycIndividual: "Individual", kycCorporate: "Corporate",
-    supTabSubs: "Subscriptions", supTabKYC: "KYC Review",
-    viewDetailsBtn: "View Details",
-    dashHome: "Home",
-    dashTitle: "Dashboard",
-    dashSubtitle: "Live overview of IPO operations",
-    dashWelcome: (name: string) => `Welcome back, ${name}`,
-    dashTotalKYC: "Total KYC Records",
-    dashTotalSubs: "IPO Subscriptions",
-    dashMCDRClients: "MCDR Clients",
-    dashActiveUsers: "Active Users",
-    dashIPOBreakdown: "Subscription Status Breakdown",
-    dashKYCPipeline: "KYC Pipeline",
-    dashAMLInsights: "AML & Risk Insights",
-    dashMCDRCoverage: "MCDR Coverage",
-    dashFinancial: "Financial Summary",
-    dashRecentActivity: "Recent System Activity",
-    dashTotalDue: "Total Amount Due (EGP)",
-    dashTotalPaid: "Total Amount Paid (EGP)",
-    dashCoverageRatio: "Subscription Coverage",
-    dashEligibleShares: "Eligible Shares",
-    dashSubscribedShares: "Subscribed Shares",
-    dashFullSubs: "Full Subscription",
-    dashPartialSubs: "Partial Subscription",
-    dashHighRisk: "High Risk Clients",
-    dashMedRisk: "Medium Risk",
-    dashLowRisk: "Low Risk",
-    dashPEP: "PEP Flagged",
-    dashSanctions: "Sanctions Cleared",
-    dashViewAll: "View All",
-    dashDrillKYC: "KYC Records",
-    dashDrillSubs: "IPO Subscriptions",
-    dashDrillMCDR: "MCDR Data",
-    dashDrillUsers: "System Users",
-    dashClose: "Close",
-    dashOf: "of",
-    dashCollectionRate: "Collection Rate",
-    dashShortfall: "Payment Shortfall",
-    dashLastUpload: "Last MCDR Upload",
-    dashUploadInfo: "mcdr_may2026.xlsx — 240 records",
-    dashUploadsCount: "Files Uploaded",
-    stepFIX: "FIX Allocation",
-    ipoStockTab: "IPO Stocks",
-    ipoStockTitle: "Configure New IPO Stock",
-    ipoStockDesc: "Enter security details and subscription phase dates",
-    secNameArLabel: "Security Name (Arabic)",
-    secNameEnLabel: "Security Name (English)",
-    stockCodeLabel: "Code",
-    stockSymbolLabel: "Symbol",
-    isinLabel: "ISIN",
-    coveredPhaseLabel: "Covered Phase",
-    uncoveredPhaseLabel: "Uncovered Phase",
-    coveredStartLabel: "Covered Start Date",
-    coveredEndLabel: "Covered End Date",
-    uncoveredStartLabel: "Uncovered Start Date",
-    uncoveredEndLabel: "Uncovered End Date",
-    finalizeCoveredBtn: "Finalize Covered Phase",
-    coveredFinalizedLabel: "Covered Phase Finalized",
-    addStockBtn: "+ Add Stock",
-    saveStockBtn: "Save Stock",
-    stockPhaseLabel: "Current Phase",
-    coveredPhaseBadge: "Covered",
-    uncoveredPhaseBadge: "Uncovered",
-    filterByStock: "IPO Stock",
-    allStocks: "All Stocks",
-    individualRequest: "Individual Subscription",
-    brokerRequest: "Broker Subscription",
-    brokerUploadTitle: "Upload Broker Subscription File",
-    brokerUploadDesc: "Upload an Excel file with bulk broker subscription requests",
-    uploadBrokerBtn: "Upload Broker File",
-    brokerFileLoaded: (n: number) => `${n} requests loaded successfully`,
-    txRefLabel: "Transaction Reference",
-    txRefPlaceholder: "Enter transaction reference number...",
-    fixMcdrTitle: "FIX-MCDR Allocation Message",
-    fixMcdrDesc: "Review and send the FIX message to allocate the requested quantity via MCDR",
-    sendFixBtn: "Send FIX Message",
-    fixSentLabel: "FIX Message Sent Successfully",
-    proceedToReceipt: "Proceed to Final Receipt →",
-    payTransfer: "Bank Transfer",
-    payDebitNote: "Debit Note",
-    requestTypeLabel: "Request Type",
-  },
-} as const;
-
-type Translations = typeof T[keyof typeof T];
-const LangContext = createContext<{ lang: Lang; t: Translations; isRTL: boolean }>({ lang: "en", t: T.en, isRTL: false });
-function useLang() { return useContext(LangContext); }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & Mock Data
@@ -1651,16 +1126,17 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   activeStock: IPOStock | null;
+  ipoStocks: IPOStock[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
+  const [foTab, setFoTab] = useState<"subs" | "kyc" | "stocks">("subs");
   const [step, setStep] = useState(1);
   const [requestType, setRequestType] = useState<"individual" | "broker">("individual");
   const [ucInput, setUcInput] = useState("");
@@ -1722,9 +1198,11 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
+        <TabBtn id="fo-stocks" active={foTab === "stocks"} onClick={() => setFoTab("stocks")} icon={BarChart3}>{t.foTabStocks}</TabBtn>
       </div>
 
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
+      {foTab === "stocks" && <IPOStockSetup ipoStocks={ipoStocks} readOnly />}
 
       {foTab === "subs" && (
         <div className="space-y-6">
@@ -2061,11 +1539,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC 
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund, activeStock }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void; activeStock: IPOStock | null }) {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks }: { subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void; activeStock: IPOStock | null; ipoStocks: IPOStock[] }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const isCovered = !activeStock || activeStock.phase === "covered";
-  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation">("MCDR");
+  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "IPOStocks">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrUploaded, setMcdrUploaded] = useState(false);
   const mcdrRef = useRef<HTMLInputElement>(null);
@@ -2108,6 +1586,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock }: { subs
         {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
         {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
         <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
+        <TabBtn id="bo-IPOStocks" active={boTab === "IPOStocks"} onClick={() => setBoTab("IPOStocks")} icon={BarChart3}>{t.boTabStocks}</TabBtn>
       </div>
       {isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
 
@@ -2202,6 +1681,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock }: { subs
         </Card>
       )}
 
+      {boTab === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} readOnly />}
+
       {boTab === "Reconciliation" && (
         <Card>
           <CardHeader>
@@ -2248,8 +1729,6 @@ function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onS
   const [userGroups] = useState(INITIAL_GROUPS);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
-  const [showAddStock, setShowAddStock] = useState(false);
-  const [newStock, setNewStock] = useState<Omit<IPOStock, "id" | "phase" | "coveredFinalized">>({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
   const ALL_PERMISSIONS = ["create_subscription", "view_clients", "print_receipt", "kyc_maker", "view_subscriptions", "reconcile", "allocate", "export_data", "approve_subscription", "reject_subscription", "kyc_checker", "view_branch_data", "manage_users", "manage_groups", "view_audit", "full_access"];
   const createSchema = z.object({ fullName: z.string().min(1, t.requiredField), username: z.string().min(1, t.requiredField), email: z.string().email(t.requiredField), role: z.enum(["Front Office Agent", "Back Office Ops", "Supervisor", "System Admin", "Communications"]), branch: z.string().min(1), groupId: z.string().min(1) });
   const form = useForm<z.infer<typeof createSchema>>({ resolver: zodResolver(createSchema), defaultValues: { fullName: "", username: "", email: "", role: "Front Office Agent", branch: "Cairo-Main", groupId: "GRP-001" } });
@@ -2370,94 +1849,7 @@ function SystemAdmin({ ipoStocks, onStocksChange }: { ipoStocks: IPOStock[]; onS
         </Card>
       )}
 
-      {adminTab === "IPOStocks" && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-black">{t.ipoStockTab}</h3>
-            <Button size="sm" onClick={() => setShowAddStock(v => !v)}><PlusCircle className="w-4 h-4 me-2" />{t.addStockBtn}</Button>
-          </div>
-
-          {showAddStock && (
-            <Card className="border-primary/30">
-              <CardHeader><CardTitle className="text-base">{t.ipoStockTitle}</CardTitle><CardDescription>{t.ipoStockDesc}</CardDescription></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.secNameArLabel}</label><Input value={newStock.securityNameAr} onChange={e => setNewStock(p => ({ ...p, securityNameAr: e.target.value }))} placeholder="شركة تك-إنفست" dir="rtl" /></div>
-                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.secNameEnLabel}</label><Input value={newStock.securityNameEn} onChange={e => setNewStock(p => ({ ...p, securityNameEn: e.target.value }))} placeholder="Tech-Invest Co." dir="ltr" /></div>
-                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.stockCodeLabel}</label><Input value={newStock.code} onChange={e => setNewStock(p => ({ ...p, code: e.target.value }))} placeholder="TECH" dir="ltr" /></div>
-                  <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.stockSymbolLabel}</label><Input value={newStock.symbol} onChange={e => setNewStock(p => ({ ...p, symbol: e.target.value }))} placeholder="TIC" dir="ltr" /></div>
-                  <div className="space-y-1 md:col-span-2"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.isinLabel}</label><Input value={newStock.isin} onChange={e => setNewStock(p => ({ ...p, isin: e.target.value }))} placeholder="EGS74081C015" dir="ltr" /></div>
-                </div>
-                <div className="border-t border-border pt-4">
-                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">{t.coveredPhaseLabel}</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.coveredStartLabel}</label><Input type="date" value={newStock.coveredStart} onChange={e => setNewStock(p => ({ ...p, coveredStart: e.target.value }))} dir="ltr" /></div>
-                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.coveredEndLabel}</label><Input type="date" value={newStock.coveredEnd} onChange={e => setNewStock(p => ({ ...p, coveredEnd: e.target.value }))} dir="ltr" /></div>
-                  </div>
-                </div>
-                <div className="border-t border-border pt-4">
-                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">{t.uncoveredPhaseLabel}</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.uncoveredStartLabel}</label><Input type="date" value={newStock.uncoveredStart} onChange={e => setNewStock(p => ({ ...p, uncoveredStart: e.target.value }))} dir="ltr" /></div>
-                    <div className="space-y-1"><label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.uncoveredEndLabel}</label><Input type="date" value={newStock.uncoveredEnd} onChange={e => setNewStock(p => ({ ...p, uncoveredEnd: e.target.value }))} dir="ltr" /></div>
-                  </div>
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <Button onClick={() => {
-                    if (!newStock.securityNameEn || !newStock.isin) return;
-                    const stock: IPOStock = { ...newStock, id: "IPO-" + Math.floor(100 + Math.random() * 900), phase: "covered", coveredFinalized: false };
-                    onStocksChange([...ipoStocks, stock]);
-                    toast({ title: lang === "ar" ? "تمت الإضافة" : "Stock added", description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn });
-                    setShowAddStock(false);
-                    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
-                  }}><CheckSquare className="w-4 h-4 me-2" />{t.saveStockBtn}</Button>
-                  <Button variant="outline" onClick={() => setShowAddStock(false)}>{t.cancel}</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {ipoStocks.map(stock => (
-              <Card key={stock.id} className="relative">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-black text-base">{lang === "ar" ? stock.securityNameAr : stock.securityNameEn}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{stock.isin}</p>
-                    </div>
-                    <Badge variant="outline" className={stock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30 font-black" : "bg-green-500/10 text-green-600 border-green-500/30 font-black"}>
-                      {stock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div><p className="text-muted-foreground">{t.stockCodeLabel}</p><p className="font-mono font-bold">{stock.code}</p></div>
-                    <div><p className="text-muted-foreground">{t.stockSymbolLabel}</p><p className="font-mono font-bold">{stock.symbol}</p></div>
-                  </div>
-                  <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-xs">
-                    <div className="flex justify-between"><span className="text-muted-foreground font-bold">{t.coveredPhaseLabel}</span><span className="font-mono">{stock.coveredStart} → {stock.coveredEnd}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground font-bold">{t.uncoveredPhaseLabel}</span><span className="font-mono">{stock.uncoveredStart} → {stock.uncoveredEnd}</span></div>
-                  </div>
-                  {stock.phase === "covered" && !stock.coveredFinalized && (
-                    <Button size="sm" variant="outline" className="w-full border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 font-bold"
-                      onClick={() => {
-                        onStocksChange(ipoStocks.map(s => s.id === stock.id ? { ...s, phase: "uncovered" as const, coveredFinalized: true } : s));
-                        toast({ title: t.coveredFinalizedLabel, description: lang === "ar" ? stock.securityNameAr : stock.securityNameEn });
-                      }}>
-                      <CheckCircle2 className="w-3.5 h-3.5 me-1.5" />{t.finalizeCoveredBtn}
-                    </Button>
-                  )}
-                  {stock.coveredFinalized && (
-                    <div className="flex items-center gap-2 text-xs text-green-600 font-bold"><CheckCircle2 className="w-3.5 h-3.5" />{t.coveredFinalizedLabel}</div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
+      {adminTab === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={onStocksChange} />}
     </div>
   );
 }
@@ -3264,9 +2656,9 @@ function IPOSystem() {
               onStockChange={setActiveStockId}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
         </main>
