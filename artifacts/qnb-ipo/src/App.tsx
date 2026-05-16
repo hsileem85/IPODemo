@@ -1758,14 +1758,18 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   <TableHeader>
                     <TableRow className="bg-orange-50/50 dark:bg-orange-900/10">
                       <TableHead className="w-10"></TableHead>
-                      {[t.colInvestor, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
+                      {[t.colInvestor, t.colIPOStock, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {shown.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => (
+                    {shown.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => {
+                      const ipoStock = ipoStocks.find(s => s.id === sub.ipoId);
+                      const ipoName = ipoStock ? (lang === "ar" ? ipoStock.securityNameAr : ipoStock.securityNameEn) : sub.ipoId;
+                      return (
                       <TableRow key={sub.id} className={`hover:bg-muted/30 transition-colors ${selected.has(sub.id) ? "bg-primary/5" : ""}`}>
                         <TableCell>{sub.status === "Pending Review" && <input type="checkbox" className="rounded" checked={selected.has(sub.id)} onChange={() => toggleSelect(sub.id)} />}</TableCell>
                         <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                        <TableCell><p className="font-bold text-sm text-primary whitespace-nowrap">{ipoName}</p><p className="text-[10px] font-mono text-muted-foreground">{ipoStock?.code ?? ""}</p></TableCell>
                         <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
                         <TableCell className="text-sm font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
                         <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>
@@ -1773,7 +1777,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         <TableCell><SubBadge status={sub.status} /></TableCell>
                         <TableCell>{sub.status === "Pending Review" && <div className="flex gap-2"><button onClick={() => handleApprove([sub.id])} className="text-green-600 font-black text-[10px] uppercase hover:underline">{t.approveBtn}</button><button className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button></div>}</TableCell>
                       </TableRow>
-                    ))}
+                    ); })}
                   </TableBody>
                 </Table>
               </div>
