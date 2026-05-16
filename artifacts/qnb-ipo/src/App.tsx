@@ -120,7 +120,6 @@ const TOTAL_PER_SHARE = PAR_VALUE + ISSUE_FEES;
 const MOCK_CLIENTS: Record<string, ClientRecord> = {
   "8800318": { nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", unifiedCode: "8800318", nationalId: "28512111234567", account: "100003456", isBankClient: true, bankAccountNo: "EG290011-10034-56", cashBalance: 150000, eligibleShares: 12000, email: "hussein.salim@email.com", mobile: "+201001234567", type: "individual" },
   "7700123": { nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", account: "100234567", isBankClient: true, bankAccountNo: "EG290011-23456-78", cashBalance: 85000, eligibleShares: 8000, email: "ahmed.ali@email.com", mobile: "+201112345678", type: "individual" },
-  "7700456": { nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan", unifiedCode: "7700456", nationalId: "29505051234568", account: "100234568", isBankClient: false, bankAccountNo: "", cashBalance: 20000, eligibleShares: 4000, email: "sara.hassan@corp.com", mobile: "+201223456789", type: "corporate" },
 };
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
@@ -133,7 +132,6 @@ const INITIAL_MCDR = [
   { id: 1, nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", unifiedCode: "8800318", nationalId: "28512111234567", eligibleShares: 12000, subscribedShares: 8000, balanceEGP: 150000, status: "Partial" as const },
   { id: 2, nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", unifiedCode: "7744312", nationalId: "28805051234568", eligibleShares: 5000, subscribedShares: 5000, balanceEGP: 80000, status: "Full" as const },
   { id: 3, nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", eligibleShares: 8000, subscribedShares: 8000, balanceEGP: 85000, status: "Full" as const },
-  { id: 4, nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan", unifiedCode: "7700456", nationalId: "29505051234568", eligibleShares: 4000, subscribedShares: 3600, balanceEGP: 20000, status: "Partial" as const },
 ];
 
 const INITIAL_USERS: SystemUser[] = [
@@ -183,24 +181,6 @@ const INITIAL_KYC_RECORDS: KYCRecord[] = [
     pepStatus: false, sanctionsCheck: true, annualIncome: "300,000 EGP", netWorth: "1,200,000 EGP",
     uploadedDocs: ["National ID", "Bank Statement"],
     hasPOA: false, poaHolderName: "", poaExpiry: "", poaScope: "",
-  },
-  {
-    id: "KYC-0012", clientType: "corporate", status: "Pending Review",
-    submittedAt: "2026-05-14 14:30", submittedBy: "ahmed.h", branch: "Cairo-Main",
-    nameAr: "سارة محمود حسن", nameEn: "Sara Mahmoud Hassan",
-    dob: "", nationality: "", gender: "", motherName: "", maritalStatus: "",
-    nationalId: "", passportNo: "", idExpiry: "",
-    companyNameAr: "شركة دلتا للاستثمار", companyNameEn: "Delta Investment Co.",
-    commercialRegNo: "12345/Cairo/2018", taxId: "200-456-789", industryType: "Financial Services", legalForm: "Joint Stock Company", incorporationDate: "2018-03-15",
-    unifiedCode: "7700456",
-    addressLine1: "45 Tahrir Sq, Downtown", addressLine2: "", city: "Cairo", governorate: "Cairo",
-    postalCode: "11511", country: "Egypt", mailingAddressSame: false, mailingAddress: "PO Box 456, Cairo",
-    email: "sara.hassan@corp.com", mobile: "+201223456789", phone: "+20222345678",
-    bankName: "CIB", accountNo: "100234568", iban: "EG290033-56789-01", accountCurrency: "EGP",
-    riskLevel: "Medium", sourceOfFunds: "Business Revenue", occupation: "CEO",
-    pepStatus: false, sanctionsCheck: true, annualIncome: "5,000,000 EGP", netWorth: "25,000,000 EGP",
-    uploadedDocs: ["Commercial Registration", "Tax Card"],
-    hasPOA: true, poaHolderName: "Mahmoud Kamal", poaExpiry: "2027-12-31", poaScope: "Trading and investment activities",
   },
 ];
 
