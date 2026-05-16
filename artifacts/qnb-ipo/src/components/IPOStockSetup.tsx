@@ -22,6 +22,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
     securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "",
     pricePerShare: 0,
     coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "",
+    eligibleSharesSnapshot: 0,
   });
 
   const handleSave = () => {
@@ -38,7 +39,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
       description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn,
     });
     setShowAddStock(false);
-    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "" });
+    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "", eligibleSharesSnapshot: 0 });
   };
 
   const handleFinalize = (stock: IPOStock) => {

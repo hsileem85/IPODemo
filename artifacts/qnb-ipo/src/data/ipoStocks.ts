@@ -17,6 +17,7 @@ export interface IPOStock {
   uncoveredEnd: string;
   phase: "covered" | "uncovered";
   coveredFinalized: boolean;
+  eligibleSharesSnapshot: number;
 }
 
 export const INITIAL_IPO_STOCKS: IPOStock[] = [
@@ -34,6 +35,7 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     uncoveredEnd: "2026-06-05",
     phase: "covered",
     coveredFinalized: false,
+    eligibleSharesSnapshot: 0,
   },
   {
     id: "IPO-EDITA",
@@ -49,5 +51,6 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     uncoveredEnd: "2026-06-10",
     phase: "covered",
     coveredFinalized: false,
+    eligibleSharesSnapshot: 0,
   },
 ];

@@ -1771,9 +1771,9 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, brokerBatches }: {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches }: {
   subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void;
-  activeStock: IPOStock | null; ipoStocks: IPOStock[]; brokerBatches: BrokerBatch[];
+  activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1815,7 +1815,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   // Eligible IPO Shares: covered phase = MCDR total; uncovered phase = gap (MCDR total − covered subscribed)
   const mcdrEligibleTotal = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
-  const eligibleIPOShares = isCovered ? mcdrEligibleTotal : Math.max(0, mcdrEligibleTotal - coveredSharesTotal);
+  const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
+  const eligibleIPOShares = isCovered ? mcdrEligibleTotal : Math.max(0, storedEligible - coveredSharesTotal);
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
 
@@ -1847,6 +1848,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     setMcdrRows(rows);
     setIsReconciled(false);
     setReconRows([]);
+    // Persist eligible total into the stock so gap survives role switching
+    if (isCovered && boActiveStock) {
+      const total = rows.reduce((a, r) => a + r.eligibleQty, 0);
+      onStocksChange(ipoStocks.map(s => s.id === boActiveStock.id ? { ...s, eligibleSharesSnapshot: total } : s));
+    }
   };
 
   const handleReconcile = () => {
@@ -3242,7 +3248,7 @@ function IPOSystem() {
           )}
           {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} brokerBatches={brokerBatches} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks} brokerBatches={brokerBatches} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
           {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
