@@ -2236,39 +2236,53 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               </CardContent>
             </Card>
           )}
-          {/* Broker batches table */}
+          {/* Broker batches — one card per batch with full client breakdown */}
           {coveredApprovedBatches.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">{lang === "ar" ? "دفعات الوسطاء" : "Broker Batches"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto rounded-xl border border-border/50">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/30">
-                        {[lang === "ar" ? "الوسيط" : "Broker", lang === "ar" ? "العملاء" : "Clients", t.sharesCol, t.colSubmittedAt, t.colStatus].map(col => (
-                          <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {coveredApprovedBatches.map(b => (
-                        <TableRow key={b.id} className="hover:bg-muted/30">
-                          <TableCell className="font-bold text-sm">{b.broker}</TableCell>
-                          <TableCell className="font-bold">{b.clients.length}</TableCell>
-                          <TableCell className="font-bold">{b.clients.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{b.submittedAt}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-black text-[10px]">{b.status}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-3">
+              <h3 className="text-sm font-black text-muted-foreground uppercase tracking-widest">{lang === "ar" ? "دفعات الوسطاء" : "Broker Batches"}</h3>
+              {coveredApprovedBatches.map(b => (
+                <Card key={b.id}>
+                  <CardHeader className="pb-2 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <p className="font-black text-base">{b.broker}</p>
+                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-black text-[10px]">{b.status}</Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="font-mono text-xs">{b.submittedAt}</span>
+                        <span>{lang === "ar" ? `${b.clients.length} عميل` : `${b.clients.length} client${b.clients.length !== 1 ? "s" : ""}`}</span>
+                        <span className="font-black text-primary">{b.clients.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)} {lang === "ar" ? "سهم" : "shares"}</span>
+                        <span className="font-black text-emerald-600">{b.clients.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)} {t.egp}</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="overflow-x-auto rounded-xl border border-border/50">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            {[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map(col => (
+                              <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {b.clients.map((c, i) => (
+                            <TableRow key={i} className="hover:bg-muted/30">
+                              <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                              <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                              <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
+                              <TableCell className="font-mono text-sm font-bold">{c.qty.toLocaleString(numLocale)}</TableCell>
+                              <TableCell className="font-mono text-sm font-black text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       )}
