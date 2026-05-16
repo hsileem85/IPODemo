@@ -995,14 +995,14 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                     value={kycSearch}
                     onChange={e => setKycSearch(e.target.value)}
                     placeholder={lang === "ar" ? "ابحث بالاسم أو الرقم القومي أو الكود الموحد..." : "Search by name, ID, or unified code..."}
-                    className="h-9 pr-16 text-sm"
+                    className="h-9 pr-20 text-sm"
                   />
                   <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">⌕</span>
                   {selectedKYCClient && (
                     <button
                       type="button"
                       onClick={clearKYCSearch}
-                      className="absolute end-8 top-1/2 -translate-y-1/2 text-[11px] font-black text-muted-foreground hover:text-foreground"
+                      className="absolute end-7 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full text-[11px] font-black text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center"
                     >
                       ×
                     </button>
