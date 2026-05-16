@@ -770,15 +770,6 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
       return name.includes(q) || rec.nationalId.includes(q) || rec.unifiedCode.includes(q) || rec.id.toLowerCase().includes(q);
     }).slice(0, 6);
   }, [kycSearch, records]);
-  const selectedKYCClient = useMemo(() => {
-    const q = kycSearch.trim().toLowerCase();
-    if (!q) return null;
-    return records.find(rec => {
-      const isCorp = rec.clientType === "corporate";
-      const name = (isCorp ? `${rec.companyNameAr} ${rec.companyNameEn}` : `${rec.nameAr} ${rec.nameEn}`).toLowerCase();
-      return name === q || rec.nationalId === q || rec.unifiedCode === q || rec.id.toLowerCase() === q;
-    }) ?? null;
-  }, [kycSearch, records]);
   const clearKYCSearch = () => setKycSearch("");
   const filteredRecords = (filterStatus === "All" ? records : records.filter(r => r.status === filterStatus)).filter(rec => {
     const q = kycSearch.trim().toLowerCase();
@@ -998,15 +989,14 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                     className="h-9 pr-20 text-sm"
                   />
                   <span className="absolute end-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted-foreground">⌕</span>
-                  {selectedKYCClient && (
-                    <button
-                      type="button"
-                      onClick={clearKYCSearch}
-                      className="absolute end-7 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full text-[11px] font-black text-muted-foreground hover:text-foreground hover:bg-muted flex items-center justify-center"
-                    >
-                      ×
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={clearKYCSearch}
+                    className={`absolute end-7 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full text-[11px] font-black flex items-center justify-center transition-opacity ${kycSearch ? "opacity-100 text-muted-foreground hover:text-foreground hover:bg-muted" : "opacity-0 pointer-events-none"}`}
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
                 </div>
                 <div className="flex bg-muted p-1 rounded-xl gap-1 shrink-0 flex-wrap">
                   {(["All", "Pending Review", "Approved", "Rejected", "Draft"] as const).map(s => (
@@ -1035,14 +1025,6 @@ function KYCModule({ records, onNewRecord, onApproveKYC, isChecker = false }: {
                       </div>
                     </button>
                   ))}
-                </div>
-              )}
-              {selectedKYCClient && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                    <span className="truncate max-w-[220px]">{selectedKYCClient.clientType === "corporate" ? (lang === "ar" ? selectedKYCClient.companyNameAr : selectedKYCClient.companyNameEn) : clientName(selectedKYCClient.nameAr, selectedKYCClient.nameEn, lang)}</span>
-                    <button type="button" onClick={clearKYCSearch} className="text-[11px] font-black opacity-70 hover:opacity-100">×</button>
-                  </span>
                 </div>
               )}
             </div>
