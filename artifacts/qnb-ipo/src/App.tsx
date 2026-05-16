@@ -1793,7 +1793,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const clearingSubs = boSubs.filter(s => s.status !== "Pending Review");
   const allocatedSubs = boSubs.filter(s => s.allocatedShares > 0);
   const refundedSubs = boSubs.filter(s => s.refundAmount > 0);
-  const approvedBoSubs = boSubs.filter(s => ["Verified", "Approved", "Allocated", "Refunded"].includes(s.status));
+  const approvedBoSubs = boSubs.filter(s => s.status !== "Pending Review");
   const approvedBoBatches = brokerBatches.filter(b => b.ipoId === selectedBoIpoId && b.status === "Approved");
   const brokerClientCount = approvedBoBatches.reduce((a, b) => a + b.clients.length, 0);
 
