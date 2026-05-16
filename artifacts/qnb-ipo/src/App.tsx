@@ -1781,6 +1781,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrRows, setMcdrRows] = useState<MCDRRow[]>([]);
   const [selectedBoIpoId, setSelectedBoIpoId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
+  const [isReconciled, setIsReconciled] = useState(false);
+  const [reconRows, setReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
 
@@ -1802,8 +1804,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
 
-  const RECON_FILTERS = [{ key: "All", label: t.filterAll }, { key: "Verified", label: t.filterVerified }, { key: "Shortfall", label: t.filterShortfall }, { key: "Pending Payment", label: t.filterPending }, { key: "Allocated", label: t.filterAllocated }, { key: "Refunded", label: t.filterRefunded }];
-  const filteredRecon = useMemo(() => reconFilter === "All" ? clearingSubs : clearingSubs.filter(s => s.status === reconFilter), [reconFilter, clearingSubs]);
+  const RECON_FILTERS = [
+    { key: "All", label: t.filterAll },
+    { key: "Partial", label: t.filterPartial },
+    { key: "NotSubscribed", label: t.filterNotSubscribed },
+  ];
+  const filteredReconRows = useMemo(() => {
+    if (reconFilter === "Partial") return reconRows.filter(r => r.subscribedShares > 0 && r.remainingShares > 0);
+    if (reconFilter === "NotSubscribed") return reconRows.filter(r => r.subscribedShares === 0);
+    return reconRows;
+  }, [reconFilter, reconRows]);
 
   const handleAllocate = () => { onAllocate(); toast({ title: t.toastAllocTitle, description: t.toastAllocDesc }); setBoTab("Allocation"); };
   const handleRefund = () => { onRefund(); toast({ title: t.toastRefundTitle, description: t.toastRefundDesc }); };
@@ -1816,73 +1826,95 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", eligibleQty: parseInt(p[3]?.trim() ?? "0", 10) || 0, subscribedQty: parseInt(p[4]?.trim() ?? "0", 10) || 0, settlementDate: p[5]?.trim() ?? "" };
     }).filter(r => r.clientName);
     setMcdrRows(rows);
+    setIsReconciled(false);
+    setReconRows([]);
+  };
+
+  const handleReconcile = () => {
+    const subByCode: Record<string, Subscription> = {};
+    approvedBoSubs.forEach(s => { subByCode[s.unifiedCode] = s; });
+    const brokerByCode: Record<string, { name: string; qty: number }> = {};
+    approvedBoBatches.forEach(b => b.clients.forEach(c => { brokerByCode[c.unifiedCode] = { name: c.clientName, qty: c.qty }; }));
+    const rows = mcdrRows.map(r => {
+      const sub = subByCode[r.unifiedCode];
+      const broker = brokerByCode[r.unifiedCode];
+      const subscribedShares = sub ? sub.requestedShares : broker ? broker.qty : 0;
+      const name = sub ? clientName(sub.nameAr, sub.nameEn, lang) : broker ? broker.name : r.clientName;
+      const branch = sub ? sub.branch : broker ? (lang === "ar" ? "وسيط" : "Broker") : "—";
+      const status = sub ? sub.status : broker ? (lang === "ar" ? "معتمد" : "Approved") : t.statusNotSubscribed;
+      return { name, branch, unifiedCode: r.unifiedCode, eligibleShares: r.eligibleQty, subscribedShares, remainingShares: Math.max(0, r.eligibleQty - subscribedShares), status, source: sub ? "Individual" : broker ? "Broker" : "MCDR Only" };
+    });
+    setReconRows(rows);
+    setIsReconciled(true);
+    setReconFilter("All");
+    toast({ title: lang === "ar" ? "تمت المطابقة" : "Reconciliation Complete", description: lang === "ar" ? `${rows.length} سجل تمت مطابقته` : `${rows.length} records reconciled` });
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div><h2 className="text-2xl font-black tracking-tight">{t.opsHubTitle}</h2><p className="text-muted-foreground text-sm">{t.opsHubDesc}</p></div>
-        <div className="flex gap-2 flex-wrap">
+    <div className="space-y-4">
+      {/* Compact header — title + IPO selector + action buttons in one row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-xl font-black tracking-tight leading-tight">{t.opsHubTitle}</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">{t.opsHubDesc}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-muted/40">
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wide whitespace-nowrap">{t.selectIpoLabel}</label>
+            <select value={selectedBoIpoId} onChange={e => setSelectedBoIpoId(e.target.value)} className="border-0 bg-transparent text-sm outline-none font-bold text-foreground">
+              {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
+            </select>
+            {boActiveStock && (
+              <>
+                <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">{boActiveStock.isin}</span>
+                <Badge variant="outline" className={`text-[10px] ${isCovered ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"} font-black`}>
+                  {isCovered ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                </Badge>
+              </>
+            )}
+          </div>
           <Button variant="outline" size="sm" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}</Button>
           {!isCovered && boTab !== "Allocation" && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
           {boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
         </div>
       </div>
 
-      {/* IPO Selector */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border border-border bg-muted/40">
-        <label className="text-xs font-black text-muted-foreground uppercase tracking-wide">{t.selectIpoLabel}</label>
-        <select value={selectedBoIpoId} onChange={e => setSelectedBoIpoId(e.target.value)} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-background focus:ring-2 focus:ring-ring outline-none font-bold">
-          {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
-        </select>
-        {boActiveStock && (
-          <>
-            <span className="font-mono text-muted-foreground text-xs">{boActiveStock.isin}</span>
-            <span className="font-mono text-xs font-bold text-primary">{boActiveStock.pricePerShare?.toFixed(2)} {t.egp}</span>
-            <Badge variant="outline" className={isCovered ? "bg-amber-500/10 text-amber-600 border-amber-500/30 font-black" : "bg-green-500/10 text-green-600 border-green-500/30 font-black"}>
-              {isCovered ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-            </Badge>
-          </>
-        )}
-      </div>
-
-      {/* Stats Grid — 5 cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      {/* Stats Grid — 5 compact cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
         <Card>
-          <CardContent className="pt-5 pb-5">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-1">{t.stat0}</p>
-            <p className="text-3xl font-black text-foreground">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{lang === "ar" ? `${boSubs.length} فردي · ${brokerClientCount} وسيط` : `${boSubs.length} individual · ${brokerClientCount} broker`}</p>
+          <CardContent className="pt-4 pb-4 px-4">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
+            <p className="text-2xl font-black text-foreground mt-0.5">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${boSubs.length} فردي · ${brokerClientCount} وسيط` : `${boSubs.length} indiv · ${brokerClientCount} broker`}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-5">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-1">{t.eligibleSharesCard}</p>
-            <p className={`text-3xl font-black ${mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{mcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}</p>
-            <p className="text-xs text-muted-foreground mt-1">{mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
+          <CardContent className="pt-4 pb-4 px-4">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
+            <p className={`text-2xl font-black mt-0.5 ${mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>{mcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-5">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-1">{t.totalSubscribedCard}</p>
-            <p className="text-3xl font-black text-primary">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
-            <p className="text-xs text-muted-foreground mt-1">{lang === "ar" ? "طلبات معتمدة" : "Approved requests"}</p>
+          <CardContent className="pt-4 pb-4 px-4">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalSubscribedCard}</p>
+            <p className="text-2xl font-black text-primary mt-0.5">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات معتمدة" : "Approved requests"}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-5">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-1">{t.totalCashCard}</p>
-            <p className="text-2xl font-black text-emerald-600">{totalSharesSubscribed > 0 ? totalCashDisplay : "—"}</p>
-            <p className="text-xs text-muted-foreground mt-1">{t.egp}</p>
+          <CardContent className="pt-4 pb-4 px-4">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalCashCard}</p>
+            <p className="text-2xl font-black text-emerald-600 mt-0.5">{totalSharesSubscribed > 0 ? totalCashDisplay : "—"}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{t.egp}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-5 pb-5">
-            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-wider mb-1">{t.coverageRatioCard}</p>
-            <p className={`text-3xl font-black ${coverageRatio >= 100 ? "text-red-500" : coverageRatio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>{mcdrRows.length > 0 ? `${coverageRatio}%` : "—"}</p>
+          <CardContent className="pt-4 pb-4 px-4">
+            <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.coverageRatioCard}</p>
+            <p className={`text-2xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-500" : coverageRatio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>{mcdrRows.length > 0 ? `${coverageRatio}%` : "—"}</p>
             {mcdrRows.length > 0 && (
-              <div className="w-full h-1.5 rounded-full bg-muted mt-2 overflow-hidden">
+              <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                 <div className={`h-full rounded-full transition-all duration-700 ${coverageRatio >= 100 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, coverageRatio)}%` }} />
               </div>
             )}
@@ -1891,7 +1923,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-border pb-3">
+      <div className="flex flex-wrap gap-1 border-b border-border pb-2">
         <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
         {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
         {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
@@ -2007,35 +2039,106 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       )}
 
       {boTab === "Reconciliation" && (
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-              <CardTitle>{t.reconTitle}</CardTitle>
-              <div className="flex bg-muted p-1 rounded-xl gap-1 flex-wrap">{RECON_FILTERS.map(({ key, label }) => <button key={key} onClick={() => setReconFilter(key)} className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${reconFilter === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>)}</div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto rounded-xl border border-border/50">
-              <Table>
-                <TableHeader><TableRow className="bg-muted/30">{[t.colInvestor, t.colBranch, t.colDue, t.colPaid, t.colAllocated, t.colRefund, t.colStatus, t.colAction].map((col, i) => <TableHead key={i} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>)}</TableRow></TableHeader>
-                <TableBody>
-                  {filteredRecon.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : filteredRecon.map(sub => (
-                    <TableRow key={sub.id} className="hover:bg-muted/30">
-                      <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
-                      <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
-                      <TableCell className="text-sm font-bold text-muted-foreground">{sub.amountDue.toLocaleString(numLocale)}</TableCell>
-                      <TableCell className="text-sm font-black text-primary">{sub.amountPaid.toLocaleString(numLocale)}</TableCell>
-                      <TableCell className="text-sm font-bold">{sub.allocatedShares > 0 ? sub.allocatedShares.toLocaleString(numLocale) : "—"}</TableCell>
-                      <TableCell className="text-sm font-bold text-green-600">{sub.refundAmount > 0 ? `${sub.refundAmount.toLocaleString(numLocale)} ${t.egp}` : "—"}</TableCell>
-                      <TableCell><SubBadge status={sub.status} /></TableCell>
-                      <TableCell><button className="text-primary font-black text-[10px] uppercase hover:underline">{t.manualMatch}</button></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-3">
+          {/* Reconcile action bar */}
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                <div>
+                  <p className="font-black text-sm">{t.reconTitle}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "مقارنة الاكتتابات المعتمدة (أفراد + وسطاء) مع بيانات MCDR" : "Compare approved subscriptions (individuals + brokers) against MCDR data"}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {isReconciled && (
+                    <div className="flex bg-muted p-1 rounded-xl gap-1">
+                      {RECON_FILTERS.map(({ key, label }) => (
+                        <button key={key} onClick={() => setReconFilter(key)} className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${reconFilter === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
+                      ))}
+                    </div>
+                  )}
+                  <Button size="sm" onClick={handleReconcile} disabled={mcdrRows.length === 0} className="shrink-0">
+                    <CheckCheck className="w-4 h-4 me-2" />{t.reconBtn}
+                  </Button>
+                </div>
+              </div>
+              {/* Gap summary — shown after reconcile */}
+              {isReconciled && eligibleIPOShares > 0 && (
+                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-muted/40 rounded-xl p-3 text-center">
+                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wide">{t.reconTotalEligible}</p>
+                    <p className="text-xl font-black text-foreground mt-0.5">{eligibleIPOShares.toLocaleString(numLocale)}</p>
+                  </div>
+                  <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
+                    <p className="text-[9px] font-black text-primary/70 uppercase tracking-wide">{t.reconTotalSubscribed}</p>
+                    <p className="text-xl font-black text-primary mt-0.5">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
+                  </div>
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-wide">{t.reconGapLabel}</p>
+                    <p className="text-xl font-black text-amber-600 mt-0.5">{Math.max(0, eligibleIPOShares - totalSharesSubscribed).toLocaleString(numLocale)}</p>
+                    <p className="text-[9px] text-amber-600/70 mt-0.5">{lang === "ar" ? "بداية مرحلة غير مغطى" : "→ Start of Uncovered Stage"}</p>
+                  </div>
+                  <div className={`rounded-xl p-3 text-center border ${coverageRatio >= 100 ? "bg-red-500/10 border-red-500/20" : "bg-teal-500/10 border-teal-500/20"}`}>
+                    <p className={`text-[9px] font-black uppercase tracking-wide ${coverageRatio >= 100 ? "text-red-600" : "text-teal-600"}`}>{t.reconCoverage}</p>
+                    <p className={`text-xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-600" : "text-teal-600"}`}>{coverageRatio}%</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Results table */}
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              {!isReconciled ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+                  <CheckCheck className="w-10 h-10 text-muted-foreground/40" />
+                  <p className="font-bold text-sm text-muted-foreground">{mcdrRows.length === 0 ? t.reconNeedsMCDR : t.reconRunFirst}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-border/50">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        {[t.colInvestor, t.colBranch, t.colEligibleShares, t.colSubscribedShares, t.colRemainingShares, t.colStatus].map((col, i) => (
+                          <TableHead key={i} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredReconRows.length === 0 ? (
+                        <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                      ) : filteredReconRows.map((row, i) => (
+                        <TableRow key={i} className={`hover:bg-muted/30 ${row.subscribedShares === 0 ? "bg-red-500/5" : row.remainingShares > 0 ? "bg-amber-500/5" : ""}`}>
+                          <TableCell>
+                            <p className="font-bold text-sm">{row.name}</p>
+                            <p className="text-[10px] font-mono text-muted-foreground">{row.unifiedCode}</p>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground font-bold">{row.branch}</TableCell>
+                          <TableCell className="text-sm font-bold text-amber-600">{row.eligibleShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-sm font-black text-primary">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell>
+                            {row.remainingShares > 0 ? (
+                              <span className="font-black text-sm text-red-500">{row.remainingShares.toLocaleString(numLocale)}</span>
+                            ) : (
+                              <span className="font-bold text-sm text-green-600">0 ✓</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={
+                              row.status === t.statusNotSubscribed ? "bg-red-500/10 text-red-600 border-red-500/20 font-black text-[10px]" :
+                              row.remainingShares > 0 ? "bg-amber-500/10 text-amber-600 border-amber-500/20 font-black text-[10px]" :
+                              "bg-green-500/10 text-green-600 border-green-500/20 font-black text-[10px]"
+                            }>{row.status}</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
