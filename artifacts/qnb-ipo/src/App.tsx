@@ -1861,6 +1861,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [isUncoveredReconciled, setIsUncoveredReconciled] = useState(false);
   const [uncoveredReconRows, setUncoveredReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const [uncoveredReconFilter, setUncoveredReconFilter] = useState("All");
+  const [storedAllocationRatio, setStoredAllocationRatio] = useState<number | null>(null);
+  const [refundDone, setRefundDone] = useState(false);
   const [drillCard, setDrillCard] = useState<"subscriptions" | "eligible" | "shares" | "cash" | null>(null);
   const [frozenSnapshot, setFrozenSnapshot] = useState<{
     totalSubscriptionsCount: number;
@@ -1939,11 +1941,13 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     const matchedCodes = new Set(uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
     // allocationRatio = totalOfferedShares / totalRequestedShares
     const allocationRatio = totalSharesSubscribed > 0 ? uncoveredEligible / totalSharesSubscribed : 0;
+    setStoredAllocationRatio(allocationRatio);
+    setRefundDone(false);
     onAllocate(allocationRatio, matchedCodes);
     toast({ title: t.toastAllocTitle, description: t.toastAllocDesc });
     setBoTab("Allocation");
   };
-  const handleRefund = () => { onRefund(); toast({ title: t.toastRefundTitle, description: t.toastRefundDesc }); };
+  const handleRefund = () => { onRefund(); setRefundDone(true); toast({ title: t.toastRefundTitle, description: t.toastRefundDesc }); };
   const handleExport = () => { exportCSV(clearingSubs, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); };
 
   const parseMCDR = (text: string) => {
@@ -2442,11 +2446,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card>
           <CardHeader className="pb-2">
             <div className="flex justify-end">
-              {allocatedSubs.length > 0 && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
+              {storedAllocationRatio !== null && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
             </div>
           </CardHeader>
           <CardContent>
-            {allocatedSubs.length === 0 ? (
+            {storedAllocationRatio === null ? (
               <div className="text-center py-12 text-muted-foreground">
                 <p className="font-bold">{t.noRecords}</p>
                 <p className="text-sm mt-1">
@@ -2456,37 +2460,34 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                 </p>
               </div>
             ) : (() => {
-              // Aggregate by investor (unifiedCode)
-              const byInvestor = new Map<string, { name: string; unifiedCode: string; requestedShares: number; allocatedShares: number; amountPaid: number }>();
-              for (const sub of allocatedSubs) {
-                const key = sub.unifiedCode;
-                const existing = byInvestor.get(key);
-                if (existing) {
-                  existing.requestedShares += sub.requestedShares;
-                  existing.allocatedShares += sub.allocatedShares;
-                  existing.amountPaid += sub.amountPaid;
-                } else {
-                  byInvestor.set(key, { name: clientName(sub.nameAr, sub.nameEn, lang), unifiedCode: sub.unifiedCode, requestedShares: sub.requestedShares, allocatedShares: sub.allocatedShares, amountPaid: sub.amountPaid });
-                }
+              // Drive allocation display from reconciliation rows — covers all clients (individual + broker)
+              const matchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
+              const ratioPct = `${(storedAllocationRatio * 100).toFixed(1)}%`;
+              // Look up amountPaid from subscriptions state; fallback to subscribedShares * TOTAL_PER_SHARE
+              const paidByCode = new Map<string, number>();
+              for (const s of pageSubs) {
+                paidByCode.set(s.unifiedCode, (paidByCode.get(s.unifiedCode) ?? 0) + s.amountPaid);
               }
-              const rows = Array.from(byInvestor.values());
-              const allocFactor = uncoveredRatio > 0 ? 1 / uncoveredRatio : 0;
-              const ratioPct = `${(allocFactor * 100).toFixed(1)}%`;
               return (
                 <div className="overflow-x-auto rounded-xl border border-border/50">
                   <Table>
                     <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
                     <TableBody>
-                      {rows.map(row => (
-                        <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
-                          <TableCell className="font-bold text-sm">{row.name}</TableCell>
-                          <TableCell className="text-sm font-bold text-muted-foreground">{row.requestedShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-sm font-black text-primary">{row.allocatedShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{ratioPct}</Badge></TableCell>
-                          <TableCell className="text-sm font-bold text-muted-foreground">{row.amountPaid.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-sm font-black text-red-500">{((row.requestedShares - row.allocatedShares) * PAR_VALUE).toLocaleString(numLocale)}</TableCell>
-                        </TableRow>
-                      ))}
+                      {matchedRows.map(row => {
+                        const allocated = Math.floor(row.subscribedShares * storedAllocationRatio);
+                        const refundable = (row.subscribedShares - allocated) * PAR_VALUE;
+                        const paid = paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE;
+                        return (
+                          <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
+                            <TableCell className="font-bold text-sm">{row.name}</TableCell>
+                            <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-primary">{allocated.toLocaleString(numLocale)}</TableCell>
+                            <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{ratioPct}</Badge></TableCell>
+                            <TableCell className="text-sm font-bold text-muted-foreground">{paid.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-red-500">{refundable.toLocaleString(numLocale)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -2497,89 +2498,56 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       )}
 
       {boTab === "Refunds" && (() => {
-        // Aggregate refund rows by investor (unifiedCode)
-        const buildRows = (subs: Subscription[]) => {
-          const map = new Map<string, { name: string; unifiedCode: string; requestedShares: number; allocatedShares: number; refundedShares: number; refundAmount: number; status: SubStatus }>();
-          for (const s of subs) {
-            const ex = map.get(s.unifiedCode);
-            const refundedShares = s.requestedShares - s.allocatedShares;
-            const refundAmt = s.status === "Refunded" ? s.refundAmount : refundedShares * PAR_VALUE;
-            if (ex) {
-              ex.requestedShares += s.requestedShares;
-              ex.allocatedShares += s.allocatedShares;
-              ex.refundedShares += refundedShares;
-              ex.refundAmount += refundAmt;
-            } else {
-              map.set(s.unifiedCode, { name: clientName(s.nameAr, s.nameEn, lang), unifiedCode: s.unifiedCode, requestedShares: s.requestedShares, allocatedShares: s.allocatedShares, refundedShares, refundAmount: refundAmt, status: s.status });
-            }
-          }
-          return Array.from(map.values());
-        };
-        const pendingRows = buildRows(pageSubs.filter(s => s.status === "Allocated"));
-        const processedRows = buildRows(pageSubs.filter(s => s.status === "Refunded"));
-        const hasPending = pendingRows.length > 0;
-        const hasProcessed = processedRows.length > 0;
+        if (storedAllocationRatio === null) {
+          return (
+            <Card>
+              <CardContent className="text-center py-12 text-muted-foreground">
+                <p className="font-bold">{t.noRecords}</p>
+                <p className="text-sm mt-1">{lang === "ar" ? "نفّذ التخصيص أولاً." : "Run Execute Allocation first."}</p>
+              </CardContent>
+            </Card>
+          );
+        }
+        // Drive refund display from reconciliation rows — same source as allocation
+        const matchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => {
+          const allocated = Math.floor(r.subscribedShares * storedAllocationRatio);
+          const refundedShares = r.subscribedShares - allocated;
+          return { name: r.name, unifiedCode: r.unifiedCode, subscribedShares: r.subscribedShares, allocated, refundedShares, refundAmount: refundedShares * PAR_VALUE };
+        });
         const cols = [t.colName, lang === "ar" ? "الأسهم المطلوبة" : "Requested Shares", t.colAllocShares, lang === "ar" ? "أسهم مردودة" : "Refunded Shares", t.colRefundAmt];
+        const borderColor = refundDone ? "border-emerald-200/60" : "border-amber-200/60";
+        const headerBg = refundDone ? "bg-emerald-50/50 dark:bg-emerald-900/10" : "bg-amber-50/60 dark:bg-amber-900/10";
+        const headerText = refundDone ? "text-emerald-600" : "text-amber-700";
         return (
           <Card>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle>{t.refundsTitle}</CardTitle>
                 <div className="flex gap-2">
-                  {hasPending && <Button size="sm" onClick={handleRefund}><ArrowLeftRight className="w-4 h-4 me-2" />{lang === "ar" ? "معالجة المردودات" : "Process Refunds"}</Button>}
-                  {hasProcessed && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportBankFile}</Button>}
+                  {!refundDone && <Button size="sm" onClick={handleRefund}><ArrowLeftRight className="w-4 h-4 me-2" />{lang === "ar" ? "معالجة المردودات" : "Process Refunds"}</Button>}
+                  {refundDone && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportBankFile}</Button>}
                 </div>
               </div>
+              {refundDone && <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mt-1">{lang === "ar" ? "تم الاسترداد" : "Refunds Processed"}</p>}
+              {!refundDone && <p className="text-xs font-black text-amber-600 uppercase tracking-widest mt-1">{lang === "ar" ? "في انتظار المعالجة" : "Pending Processing"}</p>}
             </CardHeader>
             <CardContent>
-              {!hasPending && !hasProcessed ? (
-                <div className="text-center py-12 text-muted-foreground"><p className="font-bold">{t.noRecords}</p><p className="text-sm mt-1">{lang === "ar" ? "نفّذ التخصيص أولاً." : "Run Execute Allocation first."}</p></div>
-              ) : (
-                <div className="space-y-4">
-                  {hasPending && (
-                    <div>
-                      <p className="text-xs font-black text-amber-600 uppercase tracking-widest mb-2">{lang === "ar" ? "في انتظار المعالجة" : "Pending Processing"}</p>
-                      <div className="overflow-x-auto rounded-xl border border-amber-200/60">
-                        <Table>
-                          <TableHeader><TableRow className="bg-amber-50/60 dark:bg-amber-900/10">{cols.map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-amber-700">{col}</TableHead>)}</TableRow></TableHeader>
-                          <TableBody>
-                            {pendingRows.map(row => (
-                              <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
-                                <TableCell className="font-bold text-sm">{row.name}</TableCell>
-                                <TableCell className="text-sm font-bold text-muted-foreground">{row.requestedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-black text-primary">{row.allocatedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-bold text-amber-600">{row.refundedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-black text-red-500">{row.refundAmount.toLocaleString(numLocale)} {t.egp}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-                  {hasProcessed && (
-                    <div>
-                      <p className="text-xs font-black text-emerald-600 uppercase tracking-widest mb-2">{lang === "ar" ? "تم الاسترداد" : "Refunded"}</p>
-                      <div className="overflow-x-auto rounded-xl border border-emerald-200/60">
-                        <Table>
-                          <TableHeader><TableRow className="bg-emerald-50/50 dark:bg-emerald-900/10">{cols.map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-emerald-600">{col}</TableHead>)}</TableRow></TableHeader>
-                          <TableBody>
-                            {processedRows.map(row => (
-                              <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
-                                <TableCell className="font-bold text-sm">{row.name}</TableCell>
-                                <TableCell className="text-sm font-bold text-muted-foreground">{row.requestedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-black text-primary">{row.allocatedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-bold text-emerald-600">{row.refundedShares.toLocaleString(numLocale)}</TableCell>
-                                <TableCell className="text-sm font-black text-emerald-600">{row.refundAmount.toLocaleString(numLocale)} {t.egp}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className={`overflow-x-auto rounded-xl border ${borderColor}`}>
+                <Table>
+                  <TableHeader><TableRow className={headerBg}>{cols.map(col => <TableHead key={col} className={`font-black text-[10px] uppercase tracking-widest ${headerText}`}>{col}</TableHead>)}</TableRow></TableHeader>
+                  <TableBody>
+                    {matchedRows.map(row => (
+                      <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
+                        <TableCell className="font-bold text-sm">{row.name}</TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className={`text-sm font-bold ${refundDone ? "text-emerald-600" : "text-amber-600"}`}>{row.refundedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className={`text-sm font-black ${refundDone ? "text-emerald-600" : "text-red-500"}`}>{row.refundAmount.toLocaleString(numLocale)} {t.egp}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         );
