@@ -3813,8 +3813,8 @@ function IPOSystem() {
 
   return (
     <LangContext.Provider value={{ lang, t, isRTL }}>
-      <div dir={isRTL ? "rtl" : "ltr"} className="min-h-[100dvh] bg-background font-sans">
-        <header className="bg-card border-b px-6 py-3 sticky top-0 z-30 flex items-center justify-between shadow-sm gap-3 flex-wrap">
+      <div dir={isRTL ? "rtl" : "ltr"} className="h-[100dvh] flex flex-col overflow-hidden bg-background font-sans">
+        <header className="bg-card border-b px-6 py-3 z-30 flex items-center justify-between shadow-sm gap-3 flex-wrap shrink-0">
           <div className="flex items-center gap-3">
             <div className="bg-primary text-primary-foreground p-2 rounded-xl shadow-sm"><Landmark className="w-5 h-5" /></div>
             <div><h1 className="text-base font-black tracking-tight text-foreground leading-tight">{t.appTitle}</h1><p className="text-xs text-muted-foreground hidden sm:block">{t.appSubtitle}</p></div>
@@ -3892,7 +3892,7 @@ function IPOSystem() {
           </div>
         </header>
 
-        <main className="px-6 py-8">
+        <main className="flex-1 overflow-y-auto px-6 py-6">
           {activeView === "dashboard" && (
             <Dashboard
               subscriptions={subscriptions}
