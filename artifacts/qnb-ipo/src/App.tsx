@@ -1156,6 +1156,8 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 interface BrokerClient { clientName: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; }
 interface MCDRRow { clientName: string; ipoName: string; unifiedCode: string; eligibleQty: number; subscribedQty: number; settlementDate: string; }
+interface ReconRow { name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string; }
+interface FrozenSnapshot { totalSubscriptionsCount: number; eligibleIPOShares: number; hasMcdr: boolean; totalSharesSubscribed: number; totalCashDisplay: string; coverageRatio: number; uncoveredGap: number; }
 interface BrokerBatch {
   id: string; broker: string; ipoId: string; ipoName: string;
   clients: BrokerClient[]; paymentMethod: string; txRef: string;
@@ -1878,36 +1880,32 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches, page, onSwitchToUncovered }: {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches, page, onSwitchToUncovered,
+  mcdrRows, setMcdrRows, reconRows, setReconRows, isReconciled, setIsReconciled, frozenSnapshot, setFrozenSnapshot,
+  uncoveredMcdrRows, setUncoveredMcdrRows, uncoveredReconRows, setUncoveredReconRows, isUncoveredReconciled, setIsUncoveredReconciled,
+  storedAllocationRatio, setStoredAllocationRatio, refundDone, setRefundDone,
+}: {
   subscriptions: Subscription[]; onAllocate: (allocationRatio: number, matchedCodes: Set<string>) => void; onRefund: () => void;
   activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
   page: "covered" | "uncovered";
   onSwitchToUncovered: () => void;
+  mcdrRows: MCDRRow[]; setMcdrRows: (v: MCDRRow[]) => void;
+  reconRows: ReconRow[]; setReconRows: (v: ReconRow[]) => void;
+  isReconciled: boolean; setIsReconciled: (v: boolean) => void;
+  frozenSnapshot: FrozenSnapshot | null; setFrozenSnapshot: (v: FrozenSnapshot | null) => void;
+  uncoveredMcdrRows: MCDRRow[]; setUncoveredMcdrRows: (v: MCDRRow[]) => void;
+  uncoveredReconRows: ReconRow[]; setUncoveredReconRows: (v: ReconRow[]) => void;
+  isUncoveredReconciled: boolean; setIsUncoveredReconciled: (v: boolean) => void;
+  storedAllocationRatio: number | null; setStoredAllocationRatio: (v: number | null) => void;
+  refundDone: boolean; setRefundDone: (v: boolean) => void;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "CoveredHistory">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
-  const [mcdrRows, setMcdrRows] = useState<MCDRRow[]>([]);
   const [selectedBoIpoId, setSelectedBoIpoId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
-  const [isReconciled, setIsReconciled] = useState(false);
-  const [reconRows, setReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
-  const [uncoveredMcdrRows, setUncoveredMcdrRows] = useState<MCDRRow[]>([]);
-  const [isUncoveredReconciled, setIsUncoveredReconciled] = useState(false);
-  const [uncoveredReconRows, setUncoveredReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const [uncoveredReconFilter, setUncoveredReconFilter] = useState("All");
-  const [storedAllocationRatio, setStoredAllocationRatio] = useState<number | null>(null);
-  const [refundDone, setRefundDone] = useState(false);
   const [drillCard, setDrillCard] = useState<"subscriptions" | "eligible" | "shares" | "cash" | null>(null);
-  const [frozenSnapshot, setFrozenSnapshot] = useState<{
-    totalSubscriptionsCount: number;
-    eligibleIPOShares: number;
-    hasMcdr: boolean;
-    totalSharesSubscribed: number;
-    totalCashDisplay: string;
-    coverageRatio: number;
-    uncoveredGap: number;
-  } | null>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -3700,6 +3698,16 @@ function IPOSystem() {
   const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks">("dashboard");
   const [backOfficePage, setBackOfficePage] = useState<"covered" | "uncovered">("covered");
   const [showClearingMenu, setShowClearingMenu] = useState(false);
+  // Lifted BackOffice state — persists across navigation
+  const [boMcdrRows, setBoMcdrRows] = useState<MCDRRow[]>([]);
+  const [boReconRows, setBoReconRows] = useState<ReconRow[]>([]);
+  const [boIsReconciled, setBoIsReconciled] = useState(false);
+  const [boFrozenSnapshot, setBoFrozenSnapshot] = useState<FrozenSnapshot | null>(null);
+  const [boUncoveredMcdrRows, setBoUncoveredMcdrRows] = useState<MCDRRow[]>([]);
+  const [boUncoveredReconRows, setBoUncoveredReconRows] = useState<ReconRow[]>([]);
+  const [boIsUncoveredReconciled, setBoIsUncoveredReconciled] = useState(false);
+  const [boStoredAllocationRatio, setBoStoredAllocationRatio] = useState<number | null>(null);
+  const [boRefundDone, setBoRefundDone] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
   const [kycRecords, setKycRecords] = useState<KYCRecord[]>(INITIAL_KYC_RECORDS);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -3900,7 +3908,20 @@ function IPOSystem() {
           )}
           {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks} brokerBatches={brokerBatches} page={backOfficePage} onSwitchToUncovered={() => setBackOfficePage("uncovered")} />}
+          {activeView === "BackOffice" && <BackOffice
+            subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
+            activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks}
+            brokerBatches={brokerBatches} page={backOfficePage} onSwitchToUncovered={() => setBackOfficePage("uncovered")}
+            mcdrRows={boMcdrRows} setMcdrRows={setBoMcdrRows}
+            reconRows={boReconRows} setReconRows={setBoReconRows}
+            isReconciled={boIsReconciled} setIsReconciled={setBoIsReconciled}
+            frozenSnapshot={boFrozenSnapshot} setFrozenSnapshot={setBoFrozenSnapshot}
+            uncoveredMcdrRows={boUncoveredMcdrRows} setUncoveredMcdrRows={setBoUncoveredMcdrRows}
+            uncoveredReconRows={boUncoveredReconRows} setUncoveredReconRows={setBoUncoveredReconRows}
+            isUncoveredReconciled={boIsUncoveredReconciled} setIsUncoveredReconciled={setBoIsUncoveredReconciled}
+            storedAllocationRatio={boStoredAllocationRatio} setStoredAllocationRatio={setBoStoredAllocationRatio}
+            refundDone={boRefundDone} setRefundDone={setBoRefundDone}
+          />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
           {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
