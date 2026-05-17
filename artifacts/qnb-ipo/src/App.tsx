@@ -2896,19 +2896,30 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   // ── Subscription stats (filtered by active stock) ──
   const filteredSubs = activeStockId ? subscriptions.filter(s => s.ipoId === activeStockId) : subscriptions;
   const filteredBatches = activeStockId ? brokerBatches.filter(b => b.ipoId === activeStockId) : brokerBatches;
+
+  // Pipeline view — all non-rejected (includes Pending Review for broker batches)
   const approvedBatches = filteredBatches.filter(b => b.status !== "Rejected");
   const brokerClientCount = approvedBatches.reduce((a, b) => a + b.clients.length, 0);
-  const brokerTotalCost = approvedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
-  const brokerTotalShares = approvedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
+
+  // Supervisor-approved only — used for financial totals and MCDR coverage
+  const svApprovedSubs = filteredSubs.filter(s => s.status !== "Pending Review");
+  const svApprovedBatches = filteredBatches.filter(b => b.status === "Approved");
+  const svBrokerCost = svApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
+  const svBrokerShares = svApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
+  const svBrokerClients = svApprovedBatches.reduce((a, b) => a + b.clients.length, 0);
+
+  const brokerTotalShares = svBrokerShares;
   const totalSubs = filteredSubs.length + brokerClientCount;
   const subPending = filteredSubs.filter(s => s.status === "Pending Review").length + filteredBatches.filter(b => b.status === "Pending Review").reduce((a, b) => a + b.clients.length, 0);
   const subVerified = filteredSubs.filter(s => s.status === "Verified").length;
   const subShortfall = filteredSubs.filter(s => s.status === "Shortfall").length;
   const subAllocated = filteredSubs.filter(s => s.status === "Allocated").length;
   const subRefunded = filteredSubs.filter(s => s.status === "Refunded").length;
-  const totalDue = filteredSubs.reduce((a, s) => a + s.amountDue, 0) + brokerTotalCost;
-  const totalPaid = filteredSubs.reduce((a, s) => a + s.amountPaid, 0) + brokerTotalCost;
-  const shortfallAmt = filteredSubs.reduce((a, s) => a + (s.amountDue - s.amountPaid), 0);
+
+  // Financial totals: supervisor-approved only
+  const totalDue = svApprovedSubs.reduce((a, s) => a + s.amountDue, 0) + svBrokerCost;
+  const totalPaid = svApprovedSubs.reduce((a, s) => a + s.amountPaid, 0) + svBrokerCost;
+  const shortfallAmt = svApprovedSubs.reduce((a, s) => a + Math.max(0, s.amountDue - s.amountPaid), 0);
   const collectionPct = totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0;
 
   // ── KYC stats ──
@@ -2925,13 +2936,12 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   const pepCount = kycRecords.filter(r => r.pepStatus).length;
   const sanctionsOk = kycRecords.filter(r => r.sanctionsCheck).length;
 
-  // ── MCDR ──
-  const mcdrTotal = INITIAL_MCDR.length;
-  const mcdrFull = INITIAL_MCDR.filter(m => m.status === "Full").length;
-  const mcdrPartial = INITIAL_MCDR.filter(m => m.status === "Partial").length;
-  const totalEligible = INITIAL_MCDR.reduce((a, m) => a + m.eligibleShares, 0);
-  const totalSubscribedMCDR = INITIAL_MCDR.reduce((a, m) => a + m.subscribedShares, 0);
-  const mcdrCoveragePct = totalEligible > 0 ? Math.round((totalSubscribedMCDR / totalEligible) * 100) : 0;
+  // ── MCDR Coverage (derived from supervisor-approved transactions) ──
+  const totalEligible = activeStock?.eligibleSharesSnapshot ?? 0;
+  const totalSubscribedMCDR = svApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + svBrokerShares;
+  const mcdrCoveragePct = totalEligible > 0 ? Math.min(100, Math.round((totalSubscribedMCDR / totalEligible) * 100)) : 0;
+  const mcdrIndivClients = svApprovedSubs.length;
+  const mcdrTotal = mcdrIndivClients + svBrokerClients;
 
   // ── Users ──
   const activeUsers = users.filter(u => u.status === "Active").length;
@@ -3059,7 +3069,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
           sub={`${subPending} ${lang === "ar" ? "قيد الاعتماد" : "pending approval"}`}
           drillable active={drillType === "subs_all"} onClick={() => toggle("subs_all")} />
         <StatCard icon={Layers} label={t.dashMCDRClients} value={mcdrTotal}
-          sub={`${lang === "ar" ? "آخر رفع:" : "Last upload:"} mcdr_may2026.xlsx`}
+          sub={mcdrTotal > 0 ? `${mcdrIndivClients} ${lang === "ar" ? "فردي" : "indiv"} · ${svBrokerClients} ${lang === "ar" ? "وسيط" : "broker"}` : (lang === "ar" ? "لا توجد اشتراكات معتمدة" : "No approved subscriptions")}
           drillable active={drillType === "mcdr_all"} onClick={() => toggle("mcdr_all")} />
         <StatCard icon={Users} label={t.dashActiveUsers} value={activeUsers}
           sub={`${lang === "ar" ? "من إجمالي" : "of"} ${users.length} ${lang === "ar" ? "مستخدم" : "users"}`}
@@ -3175,7 +3185,9 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
           </CardHeader>
           <CardContent className="px-5 pb-5 space-y-4">
             <div className="text-center py-2">
-              <p className="text-4xl font-black text-primary">{mcdrCoveragePct}%</p>
+              <p className={`text-4xl font-black ${totalEligible > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                {totalEligible > 0 ? `${mcdrCoveragePct}%` : "—"}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">{t.dashCoverageRatio}</p>
               <div className="w-full h-3 rounded-full bg-muted mt-3 overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-primary to-teal-400 rounded-full transition-all duration-700" style={{ width: `${mcdrCoveragePct}%` }} />
@@ -3184,25 +3196,28 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
             <div className="space-y-2 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">{t.dashEligibleShares}</span>
-                <span className="font-black">{fmtNum(totalEligible)}</span>
+                <span className="font-black">{totalEligible > 0 ? fmtNum(totalEligible) : "—"}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">{t.dashSubscribedShares}</span>
-                <span className="font-black text-primary">{fmtNum(totalSubscribedMCDR)}</span>
+                <span className={`font-black ${totalSubscribedMCDR > 0 ? "text-primary" : "text-muted-foreground"}`}>
+                  {totalSubscribedMCDR > 0 ? fmtNum(totalSubscribedMCDR) : "—"}
+                </span>
               </div>
               <div className="my-1 border-t border-border" />
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-emerald-500" /><span>{t.dashFullSubs}</span></div>
-                <span className="font-black text-emerald-600">{mcdrFull}</span>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-teal-500" /><span>{lang === "ar" ? "اشتراكات فردية معتمدة" : "Approved Individual"}</span></div>
+                <span className="font-black text-teal-600">{mcdrIndivClients}</span>
               </div>
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500" /><span>{t.dashPartialSubs}</span></div>
-                <span className="font-black text-amber-600">{mcdrPartial}</span>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-indigo-500" /><span>{lang === "ar" ? "عملاء وسطاء معتمدون" : "Approved Broker Clients"}</span></div>
+                <span className="font-black text-indigo-600">{svBrokerClients}</span>
               </div>
-              <div className="flex justify-between items-center text-muted-foreground">
-                <span>{t.dashLastUpload}</span>
-                <span className="font-bold text-[10px]">{lang === "ar" ? "13 مايو 2026" : "13 May 2026"}</span>
-              </div>
+              {totalEligible === 0 && (
+                <p className="text-[10px] text-amber-600 text-center pt-1">
+                  {lang === "ar" ? "لم يتم رفع ملف MCDR بعد" : "MCDR file not yet uploaded by Back Office"}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
