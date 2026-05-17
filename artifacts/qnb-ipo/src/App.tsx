@@ -1771,9 +1771,10 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 // ─────────────────────────────────────────────────────────────────────────────
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
-function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches }: {
+function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches, page }: {
   subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void;
   activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
+  page: "covered" | "uncovered";
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1786,6 +1787,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [reconRows, setReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
+  // Reset active tab whenever the page (covered/uncovered) changes
+  useEffect(() => {
+    if (page === "covered") setBoTab("MCDR");
+    else setBoTab("Allocation");
+  }, [page]);
 
   const boActiveStock = ipoStocks.find(s => s.id === selectedBoIpoId) ?? activeStock;
   const isCovered = !boActiveStock || boActiveStock.phase === "covered";
@@ -1804,20 +1810,20 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const coveredApprovedBatches = approvedBoBatches.filter(b => !coveredCutoff || b.submittedAt.split(" ")[0] <= coveredCutoff);
   const uncoveredApprovedBatches = approvedBoBatches.filter(b => coveredCutoff ? b.submittedAt.split(" ")[0] > coveredCutoff : false);
 
-  // Stat cards reflect the current phase only
-  const statSubs = isCovered ? approvedBoSubs : uncoveredApprovedSubs;
-  const statBatches = isCovered ? approvedBoBatches : uncoveredApprovedBatches;
-  const brokerClientCount = statBatches.reduce((a, b) => a + b.clients.length, 0);
+  // Stat cards: covered page always uses covered-phase data; uncovered page uses uncovered-phase data
+  const pageSubs = page === "covered" ? coveredApprovedSubs : uncoveredApprovedSubs;
+  const pageBatches = page === "covered" ? coveredApprovedBatches : uncoveredApprovedBatches;
+  const brokerClientCount = pageBatches.reduce((a, b) => a + b.clients.length, 0);
 
-  const totalSubscriptionsCount = statSubs.length + brokerClientCount;
-  const totalSharesSubscribed = statSubs.reduce((a, s) => a + s.requestedShares, 0) + statBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
-  const totalCashAmount = statSubs.reduce((a, s) => a + s.amountPaid, 0) + statBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
+  const totalSubscriptionsCount = pageSubs.length + brokerClientCount;
+  const totalSharesSubscribed = pageSubs.reduce((a, s) => a + s.requestedShares, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
+  const totalCashAmount = pageSubs.reduce((a, s) => a + s.amountPaid, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
 
-  // Eligible IPO Shares: covered phase = MCDR total; uncovered phase = gap (MCDR total − covered subscribed)
+  // Eligible IPO Shares: covered page = MCDR total; uncovered page = gap (stored snapshot − covered subscribed)
   const mcdrEligibleTotal = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
-  const eligibleIPOShares = isCovered ? mcdrEligibleTotal : Math.max(0, storedEligible - coveredSharesTotal);
+  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : Math.max(0, storedEligible - coveredSharesTotal);
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
 
@@ -1869,9 +1875,9 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
   const handleReconcile = () => {
     const subByCode: Record<string, Subscription> = {};
-    approvedBoSubs.forEach(s => { subByCode[s.unifiedCode] = s; });
+    coveredApprovedSubs.forEach(s => { subByCode[s.unifiedCode] = s; });
     const brokerByCode: Record<string, { name: string; qty: number }> = {};
-    approvedBoBatches.forEach(b => b.clients.forEach(c => { brokerByCode[c.unifiedCode] = { name: c.clientName, qty: c.qty }; }));
+    coveredApprovedBatches.forEach(b => b.clients.forEach(c => { brokerByCode[c.unifiedCode] = { name: c.clientName, qty: c.qty }; }));
     const rows = mcdrRows.map(r => {
       const sub = subByCode[r.unifiedCode];
       const broker = brokerByCode[r.unifiedCode];
@@ -1911,8 +1917,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             )}
           </div>
           <Button variant="outline" size="sm" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}</Button>
-          {!isCovered && boTab !== "Allocation" && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
-          {boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
+          {page === "uncovered" && !isCovered && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
+          {page === "uncovered" && boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
         </div>
       </div>
 
@@ -1922,16 +1928,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
             <p className="text-2xl font-black text-foreground mt-0.5">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${statSubs.length} فردي · ${brokerClientCount} وسيط` : `${statSubs.length} indiv · ${brokerClientCount} broker`}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
-            <p className={`text-2xl font-black mt-0.5 ${!isCovered ? (eligibleIPOShares === 0 ? "text-green-600" : "text-amber-600") : mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-              {!isCovered ? eligibleIPOShares.toLocaleString(numLocale) : mcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}
+            <p className={`text-2xl font-black mt-0.5 ${page === "uncovered" ? (eligibleIPOShares === 0 ? "text-green-600" : "text-amber-600") : mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+              {page === "uncovered" ? eligibleIPOShares.toLocaleString(numLocale) : mcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{!isCovered ? t.coveredGapSubtext : mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{page === "uncovered" ? t.coveredGapSubtext : mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
           </CardContent>
         </Card>
         <Card>
@@ -1961,16 +1967,36 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </Card>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — split by page */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
-        <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-        {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
-        {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
-        <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
-        {boActiveStock?.coveredFinalized && <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>}
+        {page === "covered" && <>
+          <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
+          <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
+          {boActiveStock?.coveredFinalized && <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>}
+        </>}
+        {page === "uncovered" && !isCovered && <>
+          <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
+          <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
+        </>}
       </div>
-      {isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
-      {!boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
+      {page === "covered" && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
+      {page === "uncovered" && (boTab === "MCDR" || boTab === "Reconciliation" || boTab === "CoveredHistory") && (() => { setBoTab("Allocation"); return null; })()}
+      {page === "covered" && !boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
+
+      {/* Uncovered page — empty state when stock hasn't been finalized yet */}
+      {page === "uncovered" && isCovered && (
+        <Card>
+          <CardContent className="py-20 flex flex-col items-center justify-center text-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center">
+              <ClipboardList className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-black text-foreground">{lang === "ar" ? "لم تبدأ مرحلة غير المغطى بعد" : "Uncovered Stage Not Started Yet"}</p>
+              <p className="text-sm text-muted-foreground mt-1">{lang === "ar" ? "أنهِ مرحلة التغطية أولاً لفتح هذه المرحلة." : "Finalize the covered phase to unlock the uncovered stage."}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {boTab === "MCDR" && (
         <Card>
@@ -3109,6 +3135,8 @@ function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
   const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks">("dashboard");
+  const [backOfficePage, setBackOfficePage] = useState<"covered" | "uncovered">("covered");
+  const [showClearingMenu, setShowClearingMenu] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(INITIAL_SUBSCRIPTIONS);
   const [kycRecords, setKycRecords] = useState<KYCRecord[]>(INITIAL_KYC_RECORDS);
   const [isAuthed, setIsAuthed] = useState(false);
@@ -3219,7 +3247,31 @@ function IPOSystem() {
                 <LayoutDashboard className="w-3.5 h-3.5" />{t.dashHome}
               </button>
               <div className="w-px bg-border self-stretch mx-0.5" />
-              {ROLES.map(({ key, label, icon: Icon }) => (
+              {ROLES.map(({ key, label, icon: Icon }) => key === "BackOffice" ? (
+                <div key={key} className="relative" onMouseEnter={() => setShowClearingMenu(true)} onMouseLeave={() => setShowClearingMenu(false)}>
+                  <button onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    <Icon className="w-3.5 h-3.5" />{label}
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showClearingMenu ? "rotate-180" : ""}`} />
+                  </button>
+                  {showClearingMenu && (
+                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[9rem] py-1">
+                      <button
+                        onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); setBackOfficePage("covered"); setShowClearingMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "BackOffice" && backOfficePage === "covered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                        {t.coveredPhaseBadge}
+                      </button>
+                      <button
+                        onClick={() => { if (!ipoStocks.some(s => s.coveredFinalized)) return; setUserRole("BackOffice"); setActiveView("BackOffice"); setBackOfficePage("uncovered"); setShowClearingMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${!ipoStocks.some(s => s.coveredFinalized) ? "opacity-40 cursor-not-allowed" : activeView === "BackOffice" && backOfficePage === "uncovered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${ipoStocks.some(s => s.coveredFinalized) ? "bg-green-500" : "bg-muted-foreground"}`} />
+                        {t.uncoveredPhaseBadge}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <button key={key} onClick={() => { setUserRole(key); setActiveView(key); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                   <Icon className="w-3.5 h-3.5" />{label}
@@ -3277,7 +3329,7 @@ function IPOSystem() {
           )}
           {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
-          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks} brokerBatches={brokerBatches} />}
+          {activeView === "BackOffice" && <BackOffice subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund} activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks} brokerBatches={brokerBatches} page={backOfficePage} />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
           {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
