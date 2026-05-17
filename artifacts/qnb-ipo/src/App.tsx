@@ -1901,17 +1901,20 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const totalSharesSubscribed = pageSubs.reduce((a, s) => a + s.requestedShares, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const totalCashAmount = pageSubs.reduce((a, s) => a + s.amountPaid, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
 
-  // Eligible IPO Shares: covered page = covered MCDR total; uncovered page = uncovered MCDR total
+  // Eligible IPO Shares:
+  //   covered page  = covered MCDR upload total
+  //   uncovered page = fixed gap: covered MCDR snapshot − covered subscribed (NOT affected by uncovered MCDR upload)
   const mcdrEligibleTotal = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   const uncoveredMcdrEligibleTotal = uncoveredMcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
+  void uncoveredMcdrEligibleTotal; // used only for reconciliation, not for stat cards
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
-  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredMcdrEligibleTotal;
+  const uncoveredEligible = Math.max(0, storedEligible - coveredSharesTotal);
+  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredEligible;
   // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
   const activeMcdrRows = page === "covered" ? mcdrRows : uncoveredMcdrRows;
-  void storedEligible;
 
   const RECON_FILTERS = [
     { key: "All", label: t.filterAll },
@@ -2078,32 +2081,44 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "subscriptions" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "subscriptions" ? null : "subscriptions")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
-            <p className="text-2xl font-black text-foreground mt-0.5">
-              {(frozenSnapshot ?? { totalSubscriptionsCount }).totalSubscriptionsCount.toLocaleString(numLocale)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {frozenSnapshot
-                ? (lang === "ar" ? "لقطة مجمدة عند الإغلاق" : "Snapshot at finalize")
-                : (lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`)}
-            </p>
+            {(() => {
+              const snap = page === "covered" ? frozenSnapshot : null;
+              const count = snap ? snap.totalSubscriptionsCount : totalSubscriptionsCount;
+              return (
+                <>
+                  <p className="text-2xl font-black text-foreground mt-0.5">{count.toLocaleString(numLocale)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {snap
+                      ? (lang === "ar" ? "لقطة مجمدة عند الإغلاق" : "Snapshot at finalize")
+                      : (lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`)}
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "eligible" ? "ring-2 ring-amber-500 shadow-md" : "hover:border-amber-400/50"}`} onClick={() => setDrillCard(drillCard === "eligible" ? null : "eligible")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
             {(() => {
-              const snap = frozenSnapshot;
-              // After finalize: eligible = frozen gap (the uncovered pool size)
-              const hasMcdr = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
-              const eligible = snap ? snap.uncoveredGap : eligibleIPOShares;
+              const snap = page === "covered" ? frozenSnapshot : null;
+              // covered page: guard on MCDR upload; uncovered page: guard on covered snapshot existing
+              const hasValue = page === "covered"
+                ? (snap ? snap.hasMcdr : activeMcdrRows.length > 0)
+                : storedEligible > 0;
+              // covered page after finalize: show frozen gap; covered before finalize: show MCDR total; uncovered: always show fixed gap
+              const eligible = page === "covered"
+                ? (snap ? snap.uncoveredGap : eligibleIPOShares)
+                : uncoveredEligible;
+              const subtext = page === "covered"
+                ? (hasValue ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst)
+                : (lang === "ar" ? "ثابت — فجوة مرحلة المغطى" : "Fixed — covered phase gap");
               return (
                 <>
-                  <p className={`text-2xl font-black mt-0.5 ${hasMcdr ? "text-amber-600" : "text-muted-foreground"}`}>
-                    {hasMcdr ? eligible.toLocaleString(numLocale) : "—"}
+                  <p className={`text-2xl font-black mt-0.5 ${hasValue ? "text-amber-600" : "text-muted-foreground"}`}>
+                    {hasValue ? eligible.toLocaleString(numLocale) : "—"}
                   </p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {hasMcdr ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst}
-                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{subtext}</p>
                 </>
               );
             })()}
@@ -2112,38 +2127,51 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "shares" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "shares" ? null : "shares")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalSubscribedCard}</p>
-            <p className="text-2xl font-black text-primary mt-0.5">
-              {(frozenSnapshot ?? { totalSharesSubscribed }).totalSharesSubscribed.toLocaleString(numLocale)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              {frozenSnapshot ? (lang === "ar" ? "لقطة مجمدة" : "Snapshot") : (lang === "ar" ? "طلبات معتمدة" : "Approved requests")}
-            </p>
+            {(() => {
+              const snap = page === "covered" ? frozenSnapshot : null;
+              const shares = snap ? snap.totalSharesSubscribed : totalSharesSubscribed;
+              return (
+                <>
+                  <p className="text-2xl font-black text-primary mt-0.5">{shares.toLocaleString(numLocale)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {snap ? (lang === "ar" ? "لقطة مجمدة" : "Snapshot") : (lang === "ar" ? "طلبات معتمدة" : "Approved requests")}
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "cash" ? "ring-2 ring-emerald-500 shadow-md" : "hover:border-emerald-400/50"}`} onClick={() => setDrillCard(drillCard === "cash" ? null : "cash")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalCashCard}</p>
-            <p className="text-2xl font-black text-emerald-600 mt-0.5">
-              {frozenSnapshot
-                ? frozenSnapshot.totalCashDisplay
-                : (totalSharesSubscribed > 0 ? totalCashDisplay : "—")}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{t.egp}</p>
+            {(() => {
+              const snap = page === "covered" ? frozenSnapshot : null;
+              const cash = snap ? snap.totalCashDisplay : (totalSharesSubscribed > 0 ? totalCashDisplay : "—");
+              return (
+                <>
+                  <p className="text-2xl font-black text-emerald-600 mt-0.5">{cash}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{t.egp}</p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.coverageRatioCard}</p>
             {(() => {
-              const snap = frozenSnapshot;
+              const snap = page === "covered" ? frozenSnapshot : null;
               const ratio = snap ? snap.coverageRatio : coverageRatio;
-              const hasMcdr = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
+              // covered: guard on MCDR upload; uncovered: guard on fixed eligible gap existing
+              const hasValue = page === "covered"
+                ? (snap ? snap.hasMcdr : activeMcdrRows.length > 0)
+                : uncoveredEligible > 0;
               return (
                 <>
                   <p className={`text-2xl font-black mt-0.5 ${ratio >= 100 ? "text-red-500" : ratio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>
-                    {hasMcdr ? `${ratio}%` : "—"}
+                    {hasValue ? `${ratio}%` : "—"}
                   </p>
-                  {hasMcdr && (
+                  {hasValue && (
                     <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-700 ${ratio >= 100 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, ratio)}%` }} />
                     </div>
