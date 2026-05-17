@@ -272,6 +272,41 @@ function exportReconCSV(rows: { name: string; branch: string; unifiedCode: strin
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
+// Largest-remainder method: ensures sum of allocated shares === totalOffered exactly
+function applyLargestRemainder(requests: number[], allocationRatio: number, totalOffered: number): number[] {
+  const floors = requests.map(r => Math.floor(r * allocationRatio));
+  const totalFloored = floors.reduce((a, b) => a + b, 0);
+  const remaining = Math.max(0, totalOffered - totalFloored);
+  const fracs = requests.map((r, i) => ({ i, frac: r * allocationRatio - floors[i] }));
+  fracs.sort((a, b) => b.frac - a.frac);
+  const result = [...floors];
+  for (let k = 0; k < remaining && k < fracs.length; k++) result[fracs[k].i]++;
+  return result;
+}
+function exportAllocationCSV(rows: { name: string; unifiedCode: string; subscribedShares: number; allocated: number; paid: number; refundable: number }[], ratioPct: string, lang: Lang) {
+  const headers = lang === "ar"
+    ? ["الاسم", "الكود الموحد", "الأسهم المطلوبة", "الأسهم المخصصة", "نسبة التخصيص", "المبلغ المدفوع (EGP)", "المبلغ المسترد (EGP)"]
+    : ["Name", "Unified Code", "Requested Shares", "Allocated Shares", "Allocation %", "Amount Paid (EGP)", "Refundable (EGP)"];
+  const rowData = rows.map(r => [r.name, r.unifiedCode, r.subscribedShares, r.allocated, ratioPct, r.paid, r.refundable]);
+  const csv = "\uFEFF" + [headers, ...rowData].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "allocation-results.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+function exportRefundCSV(rows: { name: string; unifiedCode: string; subscribedShares: number; allocated: number; refundedShares: number; refundAmount: number }[], lang: Lang) {
+  const headers = lang === "ar"
+    ? ["الاسم", "الكود الموحد", "الأسهم المطلوبة", "الأسهم المخصصة", "أسهم مردودة", "مبلغ الاسترداد (EGP)"]
+    : ["Name", "Unified Code", "Requested Shares", "Allocated Shares", "Refunded Shares", "Refund Amount (EGP)"];
+  const rowData = rows.map(r => [r.name, r.unifiedCode, r.subscribedShares, r.allocated, r.refundedShares, r.refundAmount]);
+  const csv = "\uFEFF" + [headers, ...rowData].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "refund-processing.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
 function downloadReceipt(sub: Subscription, lang: Lang) {
   const isAr = lang === "ar";
   const name = clientName(sub.nameAr, sub.nameEn, lang);
@@ -2180,7 +2215,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               if (page === "uncovered") {
                 // Raw subscription multiplier: totalSharesSubscribed ÷ uncoveredEligible (e.g. 2.57×)
                 const hasValue = uncoveredEligible > 0;
-                const display = hasValue ? `${Math.floor(uncoveredRatio)}×` : "—";
+                const display = hasValue ? `${uncoveredRatio.toFixed(2)}×` : "—";
                 const color = !hasValue ? "text-muted-foreground" : uncoveredRatio >= 1 ? "text-red-500" : "text-teal-600";
                 return (
                   <>
@@ -2463,33 +2498,44 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               // Drive allocation display from reconciliation rows — covers all clients (individual + broker)
               const matchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
               const ratioPct = `${(storedAllocationRatio * 100).toFixed(1)}%`;
+              // Largest-remainder: total allocated shares === uncoveredEligible exactly
+              const allocatedAmounts = applyLargestRemainder(matchedRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
               // Look up amountPaid from subscriptions state; fallback to subscribedShares * TOTAL_PER_SHARE
               const paidByCode = new Map<string, number>();
               for (const s of pageSubs) {
                 paidByCode.set(s.unifiedCode, (paidByCode.get(s.unifiedCode) ?? 0) + s.amountPaid);
               }
+              const exportRows = matchedRows.map((row, idx) => ({
+                name: row.name, unifiedCode: row.unifiedCode,
+                subscribedShares: row.subscribedShares,
+                allocated: allocatedAmounts[idx],
+                paid: paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE,
+                refundable: (row.subscribedShares - allocatedAmounts[idx]) * PAR_VALUE,
+              }));
               return (
-                <div className="overflow-x-auto rounded-xl border border-border/50">
-                  <Table>
-                    <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
-                    <TableBody>
-                      {matchedRows.map(row => {
-                        const allocated = Math.floor(row.subscribedShares * storedAllocationRatio);
-                        const refundable = (row.subscribedShares - allocated) * PAR_VALUE;
-                        const paid = paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE;
-                        return (
+                <div className="space-y-3">
+                  <div className="flex justify-end">
+                    <Button variant="outline" size="sm" onClick={() => { exportAllocationCSV(exportRows, ratioPct, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
+                      <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto rounded-xl border border-border/50">
+                    <Table>
+                      <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
+                      <TableBody>
+                        {exportRows.map(row => (
                           <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
                             <TableCell className="font-bold text-sm">{row.name}</TableCell>
                             <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-black text-primary">{allocated.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
                             <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{ratioPct}</Badge></TableCell>
-                            <TableCell className="text-sm font-bold text-muted-foreground">{paid.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-black text-red-500">{refundable.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-bold text-muted-foreground">{row.paid.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-red-500">{row.refundable.toLocaleString(numLocale)}</TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               );
             })()}
@@ -2508,9 +2554,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </Card>
           );
         }
-        // Drive refund display from reconciliation rows — same source as allocation
-        const matchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => {
-          const allocated = Math.floor(r.subscribedShares * storedAllocationRatio);
+        // Drive refund display from reconciliation rows — largest-remainder for exact totals
+        const reconMatched = uncoveredReconRows.filter(r => r.subscribedShares > 0);
+        const allocatedAmounts = applyLargestRemainder(reconMatched.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
+        const matchedRows = reconMatched.map((r, idx) => {
+          const allocated = allocatedAmounts[idx];
           const refundedShares = r.subscribedShares - allocated;
           return { name: r.name, unifiedCode: r.unifiedCode, subscribedShares: r.subscribedShares, allocated, refundedShares, refundAmount: refundedShares * PAR_VALUE };
         });
@@ -2525,6 +2573,9 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                 <CardTitle>{t.refundsTitle}</CardTitle>
                 <div className="flex gap-2">
                   {!refundDone && <Button size="sm" onClick={handleRefund}><ArrowLeftRight className="w-4 h-4 me-2" />{lang === "ar" ? "معالجة المردودات" : "Process Refunds"}</Button>}
+                  <Button variant="outline" size="sm" onClick={() => { exportRefundCSV(matchedRows, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
+                    <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
+                  </Button>
                   {refundDone && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportBankFile}</Button>}
                 </div>
               </div>
