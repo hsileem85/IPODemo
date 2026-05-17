@@ -1844,7 +1844,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
 function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches, page, onSwitchToUncovered }: {
-  subscriptions: Subscription[]; onAllocate: () => void; onRefund: () => void;
+  subscriptions: Subscription[]; onAllocate: (ratio: number) => void; onRefund: () => void;
   activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
   page: "covered" | "uncovered";
   onSwitchToUncovered: () => void;
@@ -1934,7 +1934,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     return uncoveredReconRows;
   }, [uncoveredReconFilter, uncoveredReconRows]);
 
-  const handleAllocate = () => { onAllocate(); toast({ title: t.toastAllocTitle, description: t.toastAllocDesc }); setBoTab("Allocation"); };
+  const handleAllocate = () => { onAllocate(uncoveredRatio); toast({ title: t.toastAllocTitle, description: t.toastAllocDesc }); setBoTab("Allocation"); };
   const handleRefund = () => { onRefund(); toast({ title: t.toastRefundTitle, description: t.toastRefundDesc }); };
   const handleExport = () => { exportCSV(clearingSubs, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); };
 
@@ -2429,32 +2429,49 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
       {boTab === "Allocation" && (
         <Card>
-          <CardHeader>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 flex-1"><p className="text-primary font-black text-base">{t.allocBanner}</p><p className="text-foreground/70 text-sm mt-1">{t.allocRatio}: <span className="font-black text-xl text-foreground">45.0%</span></p></div>
+          <CardHeader className="pb-2">
+            <div className="flex justify-end">
               {allocatedSubs.length > 0 && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
             </div>
           </CardHeader>
           <CardContent>
-            {allocatedSubs.length === 0 ? <div className="text-center py-12 text-muted-foreground"><p className="font-bold">{t.noRecords}</p><p className="text-sm mt-1">{lang === "ar" ? "نفّذ التخصيص أولاً." : "Run Execute Allocation first."}</p></div> : (
-              <div className="overflow-x-auto rounded-xl border border-border/50">
-                <Table>
-                  <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
-                  <TableBody>
-                    {allocatedSubs.map(sub => (
-                      <TableRow key={sub.id} className="hover:bg-muted/30">
-                        <TableCell className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</TableCell>
-                        <TableCell className="text-sm font-bold text-muted-foreground">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
-                        <TableCell className="text-sm font-black text-primary">{sub.allocatedShares.toLocaleString(numLocale)}</TableCell>
-                        <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">45%</Badge></TableCell>
-                        <TableCell className="text-sm font-bold text-muted-foreground">{sub.amountPaid.toLocaleString(numLocale)}</TableCell>
-                        <TableCell className="text-sm font-black text-red-500">{((sub.requestedShares - sub.allocatedShares) * PAR_VALUE).toLocaleString(numLocale)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+            {allocatedSubs.length === 0 ? <div className="text-center py-12 text-muted-foreground"><p className="font-bold">{t.noRecords}</p><p className="text-sm mt-1">{lang === "ar" ? "نفّذ التخصيص أولاً." : "Run Execute Allocation first."}</p></div> : (() => {
+              // Aggregate by investor (unifiedCode)
+              const byInvestor = new Map<string, { name: string; unifiedCode: string; requestedShares: number; allocatedShares: number; amountPaid: number }>();
+              for (const sub of allocatedSubs) {
+                const key = sub.unifiedCode;
+                const existing = byInvestor.get(key);
+                if (existing) {
+                  existing.requestedShares += sub.requestedShares;
+                  existing.allocatedShares += sub.allocatedShares;
+                  existing.amountPaid += sub.amountPaid;
+                } else {
+                  byInvestor.set(key, { name: clientName(sub.nameAr, sub.nameEn, lang), unifiedCode: sub.unifiedCode, requestedShares: sub.requestedShares, allocatedShares: sub.allocatedShares, amountPaid: sub.amountPaid });
+                }
+              }
+              const rows = Array.from(byInvestor.values());
+              const allocFactor = uncoveredRatio > 0 ? 1 / uncoveredRatio : 0;
+              const ratioPct = `${(allocFactor * 100).toFixed(1)}%`;
+              return (
+                <div className="overflow-x-auto rounded-xl border border-border/50">
+                  <Table>
+                    <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
+                    <TableBody>
+                      {rows.map(row => (
+                        <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
+                          <TableCell className="font-bold text-sm">{row.name}</TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{row.requestedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-sm font-black text-primary">{row.allocatedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{ratioPct}</Badge></TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{row.amountPaid.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-sm font-black text-red-500">{((row.requestedShares - row.allocatedShares) * PAR_VALUE).toLocaleString(numLocale)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
@@ -3619,7 +3636,10 @@ function IPOSystem() {
     } else setLoginError(true);
   };
   const handleForgotPassword = () => setRecoveredPassword(forgotUsername === defaultUsername ? defaultPassword : "");
-  const handleAllocate = () => setSubscriptions(prev => prev.map(s => s.status !== "Verified" ? s : { ...s, allocatedShares: Math.floor(s.requestedShares * 0.45), status: "Allocated" as const }));
+  const handleAllocate = (ratio: number) => {
+    const allocationFactor = ratio > 0 ? 1 / ratio : 0;
+    setSubscriptions(prev => prev.map(s => s.status !== "Verified" ? s : { ...s, allocatedShares: Math.floor(s.requestedShares * allocationFactor), status: "Allocated" as const }));
+  };
   const handleRefund = () => setSubscriptions(prev => prev.map(s => s.status !== "Allocated" ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
   const handleApprove = (ids: string[]) => setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
   const handleNewSubscription = (s: Subscription) => setSubscriptions(prev => [s, ...prev]);
