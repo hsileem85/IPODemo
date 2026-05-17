@@ -1870,7 +1870,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   useEffect(() => { setBoTab("MCDR"); setDrillCard(null); }, [page]);
 
   const boActiveStock = ipoStocks.find(s => s.id === selectedBoIpoId) ?? activeStock;
-  const isCovered = !boActiveStock || boActiveStock.phase === "covered";
 
   const boSubs = subscriptions.filter(s => s.ipoId === selectedBoIpoId);
   const clearingSubs = boSubs.filter(s => s.status !== "Pending Review");
@@ -1879,12 +1878,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const approvedBoSubs = boSubs.filter(s => (["Verified", "Pending Payment", "Shortfall", "Allocated", "Refunded"] as SubStatus[]).includes(s.status));
   const approvedBoBatches = brokerBatches.filter(b => b.ipoId === selectedBoIpoId && b.status === "Approved");
 
-  // Separate covered vs uncovered transactions by coveredEnd date
-  const coveredCutoff = boActiveStock?.coveredEnd ?? "";
-  const coveredApprovedSubs = approvedBoSubs.filter(s => !coveredCutoff || s.date <= coveredCutoff);
-  const uncoveredApprovedSubs = approvedBoSubs.filter(s => coveredCutoff ? s.date > coveredCutoff : false);
-  const coveredApprovedBatches = approvedBoBatches.filter(b => !coveredCutoff || b.submittedAt.split(" ")[0] <= coveredCutoff);
-  const uncoveredApprovedBatches = approvedBoBatches.filter(b => coveredCutoff ? b.submittedAt.split(" ")[0] > coveredCutoff : false);
+  // Separate covered vs uncovered transactions using the explicit phase field
+  const coveredApprovedSubs = approvedBoSubs.filter(s => s.phase === "covered");
+  const uncoveredApprovedSubs = approvedBoSubs.filter(s => s.phase === "uncovered");
+  const coveredApprovedBatches = approvedBoBatches.filter(b => b.phase === "covered");
+  const uncoveredApprovedBatches = approvedBoBatches.filter(b => b.phase === "uncovered");
 
   // Stat cards: covered page always uses covered-phase data; uncovered page uses uncovered-phase data
   const pageSubs = page === "covered" ? coveredApprovedSubs : uncoveredApprovedSubs;
@@ -1936,7 +1934,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     setIsReconciled(false);
     setReconRows([]);
     // Persist eligible total into the stock so gap survives role switching
-    if (isCovered && boActiveStock) {
+    if (page === "covered" && boActiveStock) {
       const total = rows.reduce((a, r) => a + r.eligibleQty, 0);
       onStocksChange(ipoStocks.map(s => s.id === boActiveStock.id ? { ...s, eligibleSharesSnapshot: total } : s));
     }
@@ -1997,28 +1995,37 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   return (
     <div className="space-y-4">
       {/* Compact header — title + IPO selector + action buttons in one row */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className={`flex flex-wrap items-center gap-3 px-4 py-3 rounded-2xl border-2 ${page === "covered" ? "bg-amber-50/60 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" : "bg-green-50/60 dark:bg-green-900/10 border-green-200 dark:border-green-800"}`}>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${page === "covered" ? "bg-amber-500/20 text-amber-600" : "bg-green-500/20 text-green-600"}`}>
+          <Layers className="w-5 h-5" />
+        </div>
         <div className="flex-1 min-w-0">
-          <h2 className="text-xl font-black tracking-tight leading-tight">{t.opsHubTitle}</h2>
-          <p className="text-muted-foreground text-xs mt-0.5">{t.opsHubDesc}</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-black tracking-tight leading-tight">
+              {page === "covered"
+                ? (lang === "ar" ? "عمليات مرحلة التغطية" : "Covered Phase Operations")
+                : (lang === "ar" ? "عمليات مرحلة غير المغطى" : "Uncovered Phase Operations")}
+            </h2>
+            <Badge variant="outline" className={`text-[10px] font-black ${page === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+              {page === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+            </Badge>
+          </div>
+          <p className={`text-xs mt-0.5 font-bold ${page === "covered" ? "text-amber-700/70 dark:text-amber-400/70" : "text-green-700/70 dark:text-green-400/70"}`}>
+            {page === "covered"
+              ? (lang === "ar" ? "رفع MCDR والمطابقة والسجل التاريخي لمرحلة الاكتتاب المغطى" : "MCDR upload, reconciliation & history for the covered subscription stage")
+              : (lang === "ar" ? "رفع MCDR والتخصيص وإعادة الأموال والمطابقة لمرحلة غير المغطى" : "MCDR upload, allocation, refunds & reconciliation for the uncovered subscription stage")}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-muted/40">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-background/70">
             <label className="text-[10px] font-black text-muted-foreground uppercase tracking-wide whitespace-nowrap">{t.selectIpoLabel}</label>
             <select value={selectedBoIpoId} onChange={e => setSelectedBoIpoId(e.target.value)} className="border-0 bg-transparent text-sm outline-none font-bold text-foreground">
               {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
             </select>
-            {boActiveStock && (
-              <>
-                <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">{boActiveStock.isin}</span>
-                <Badge variant="outline" className={`text-[10px] ${isCovered ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"} font-black`}>
-                  {isCovered ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-                </Badge>
-              </>
-            )}
+            {boActiveStock && <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">{boActiveStock.isin}</span>}
           </div>
           <Button variant="outline" size="sm" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}</Button>
-          {page === "uncovered" && !isCovered && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
+          {page === "uncovered" && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
           {page === "uncovered" && boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
         </div>
       </div>
@@ -2206,14 +2213,13 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </>}
         {page === "uncovered" && <>
           <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-          {!isCovered && <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>}
-          {!isCovered && <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>}
+          <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
+          <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
           <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
         </>}
       </div>
       {page === "covered" && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
       {page === "covered" && !boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
-      {page === "uncovered" && isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && page === "covered" && (
         <Card>
