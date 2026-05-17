@@ -52,6 +52,7 @@ interface Subscription {
   amountPaid: number; allocatedShares: number; refundAmount: number;
   status: SubStatus; branch: string; submittedAt: string;
   ipoId: string; date: string;
+  phase: "covered" | "uncovered";
 }
 interface MCDRClient {
   id: number; nameAr: string; nameEn: string; unifiedCode: string; nationalId: string;
@@ -123,9 +124,9 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
 };
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
-  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13" },
-  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14" },
-  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14" },
+  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13", phase: "covered" },
+  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14", phase: "covered" },
+  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14", phase: "covered" },
 ];
 
 const INITIAL_MCDR = [
@@ -1125,6 +1126,7 @@ interface BrokerBatch {
   clients: BrokerClient[]; paymentMethod: string; txRef: string;
   fixMessage: string; submittedAt: string;
   status: "Pending Review" | "Approved" | "Rejected";
+  phase: "covered" | "uncovered";
 }
 
 function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, onSubmitBatch }: {
@@ -1185,6 +1187,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       allocatedShares: 0, refundAmount: 0, status: "Pending Review",
       branch: "Cairo-Main", submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
       ipoId: activeStock?.id ?? "", date: subDate,
+      phase: activeStock?.phase ?? "covered",
     };
     setPendingSub(sub); setStep(3);
   };
@@ -1215,6 +1218,32 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
 
       {foTab === "subs" && (
         <div className="space-y-6">
+          {/* Phase pool banner */}
+          {activeStock && (
+            <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border-2 ${activeStock.phase === "covered" ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" : "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800"}`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${activeStock.phase === "covered" ? "bg-amber-500/20 text-amber-600" : "bg-green-500/20 text-green-600"}`}>
+                <Layers className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-black uppercase tracking-widest ${activeStock.phase === "covered" ? "text-amber-600" : "text-green-600"}`}>
+                  {activeStock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge} — {lang === "ar" ? "المجمع النشط" : "Active Pool"}
+                </p>
+                <p className={`text-sm font-bold mt-0.5 ${activeStock.phase === "covered" ? "text-amber-700 dark:text-amber-400" : "text-green-700 dark:text-green-400"}`}>
+                  {lang === "ar"
+                    ? activeStock.phase === "covered"
+                      ? `جميع الاشتراكات ستُودَّع في مجمع مرحلة التغطية لـ ${activeStock.securityNameAr}`
+                      : `جميع الاشتراكات ستُودَّع في مجمع مرحلة غير المغطى لـ ${activeStock.securityNameAr}`
+                    : activeStock.phase === "covered"
+                      ? `All subscriptions will be posted to the Covered Phase pool for ${activeStock.securityNameEn}`
+                      : `All subscriptions will be posted to the Uncovered Phase pool for ${activeStock.securityNameEn}`}
+                </p>
+              </div>
+              <Badge variant="outline" className={`shrink-0 font-black text-xs ${activeStock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                {lang === "ar" ? activeStock.securityNameAr : activeStock.securityNameEn}
+              </Badge>
+            </div>
+          )}
+
           {/* Request type toggle */}
           <Card>
             <CardContent className="pt-5 pb-5">
@@ -1280,6 +1309,12 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                         <option value="">{t.selectIPO}</option>
                         {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
                       </select>
+                      {brokerIPO && (() => { const s = ipoStocks.find(x => x.id === brokerIPO); return s ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                          <Layers className="w-3 h-3" />
+                          {s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                        </span>
+                      ) : null; })()}
                     </div>
                   </div>
 
@@ -1398,6 +1433,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                                   txRef, fixMessage: brokerFIX,
                                   submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
                                   status: "Pending Review",
+                                  phase: stock?.phase ?? "covered",
                                 };
                                 onSubmitBatch(batch);
                                 toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
@@ -1612,11 +1648,16 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const { toast } = useToast();
   const [supTab, setSupTab] = useState<"subs" | "kyc" | "broker">("subs");
   const [supIpoId, setSupIpoId] = useState<string>("all");
+  const [supPhase, setSupPhase] = useState<"all" | "covered" | "uncovered">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
-  const filteredSubs = supIpoId === "all" ? subscriptions : subscriptions.filter(s => s.ipoId === supIpoId);
-  const filteredBatches = supIpoId === "all" ? brokerBatches : brokerBatches.filter(b => b.ipoId === supIpoId);
+  const filteredSubs = subscriptions
+    .filter(s => supIpoId === "all" || s.ipoId === supIpoId)
+    .filter(s => supPhase === "all" || s.phase === supPhase);
+  const filteredBatches = brokerBatches
+    .filter(b => supIpoId === "all" || b.ipoId === supIpoId)
+    .filter(b => supPhase === "all" || b.phase === supPhase);
   const pending = filteredSubs.filter(s => s.status === "Pending Review");
   const shown = filteredSubs.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -1642,16 +1683,34 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         </TabBtn>
       </div>
 
-      {/* IPO filter — subscriptions & broker tabs only */}
-      {supTab !== "kyc" && ipoStocks.length > 1 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByStock}:</span>
-          {[{ id: "all", name: t.filterAll }, ...ipoStocks.map(s => ({ id: s.id, name: lang === "ar" ? s.securityNameAr : s.securityNameEn }))].map(opt => (
-            <button key={opt.id} onClick={() => { setSupIpoId(opt.id); setSelected(new Set()); }}
-              className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supIpoId === opt.id ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-              {opt.name}
-            </button>
-          ))}
+      {/* IPO filter + Phase filter — subscriptions & broker tabs only */}
+      {supTab !== "kyc" && (
+        <div className="space-y-2">
+          {ipoStocks.length > 1 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByStock}:</span>
+              {[{ id: "all", name: t.filterAll }, ...ipoStocks.map(s => ({ id: s.id, name: lang === "ar" ? s.securityNameAr : s.securityNameEn }))].map(opt => (
+                <button key={opt.id} onClick={() => { setSupIpoId(opt.id); setSelected(new Set()); }}
+                  className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supIpoId === opt.id ? "bg-primary text-white border-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                  {opt.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByPhase}:</span>
+            {([
+              { id: "all", label: t.filterAll, cls: "" },
+              { id: "covered", label: t.coveredPhaseBadge, cls: "data-[active=true]:bg-amber-500 data-[active=true]:border-amber-500" },
+              { id: "uncovered", label: t.uncoveredPhaseBadge, cls: "data-[active=true]:bg-green-600 data-[active=true]:border-green-600" },
+            ] as const).map(opt => (
+              <button key={opt.id} data-active={supPhase === opt.id}
+                onClick={() => { setSupPhase(opt.id); setSelected(new Set()); }}
+                className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supPhase === opt.id ? (opt.id === "covered" ? "bg-amber-500 text-white border-amber-500" : opt.id === "uncovered" ? "bg-green-600 text-white border-green-600" : "bg-primary text-white border-primary") : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1671,9 +1730,10 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   <CardContent className="pt-5 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono text-xs text-muted-foreground">{batch.id}</span>
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black ${batch.status === "Pending Review" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" : batch.status === "Approved" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-red-100 text-red-700"}`}>{batch.status}</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${batch.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}><Layers className="w-3 h-3" />{batch.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}</span>
                         </div>
                         <p className="font-black text-lg">{batch.broker}</p>
                         <p className="text-sm text-muted-foreground font-bold">{batch.ipoName} · {t.batchClients(batch.clients.length)} · {batch.paymentMethod}</p>
@@ -1749,7 +1809,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   <TableHeader>
                     <TableRow className="bg-orange-50/50 dark:bg-orange-900/10">
                       <TableHead className="w-10"></TableHead>
-                      {[t.colInvestor, t.colIPOStock, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
+                      {[t.colInvestor, t.colIPOStock, t.phaseCol, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1761,6 +1821,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         <TableCell>{sub.status === "Pending Review" && <input type="checkbox" className="rounded" checked={selected.has(sub.id)} onChange={() => toggleSelect(sub.id)} />}</TableCell>
                         <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
                         <TableCell><p className="font-bold text-sm text-primary whitespace-nowrap">{ipoName}</p><p className="text-[10px] font-mono text-muted-foreground">{ipoStock?.code ?? ""}</p></TableCell>
+                        <TableCell><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${sub.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}><Layers className="w-3 h-3" />{sub.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}</span></TableCell>
                         <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
                         <TableCell className="text-sm font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
                         <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>

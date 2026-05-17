@@ -27,8 +27,11 @@ A full-featured IPO (Initial Public Offering) subscription management system for
 - **Language context extracted**: All AR/EN translation strings live in `context/lang.tsx` and are imported wherever needed — not duplicated inline in App.tsx.
 - **IPO stock data extracted**: `IPOStock` interface (including `pricePerShare: number`) and seed data live in `data/ipoStocks.ts`; state is lifted to the root `IPOSystem` component and passed down as props.
 - **IPOStockSetup component**: Shared component with a `readOnly` prop — SystemAdmin sees the full editable version, FrontOffice and BackOffice see a read-only view. Shows `pricePerShare` on each stock card.
-- **Subscription interface**: Includes `ipoId: string` and `date: string` for per-stock filtering on the dashboard.
-- **BrokerBatch interface**: Lives in App.tsx. Broker CSV submissions create a `BrokerBatch` object that flows: FrontOffice → IPOSystem (`brokerBatches` state) → SupervisorChecker (Broker Batches tab) → Dashboard (financial totals).
+- **Subscription interface**: Includes `ipoId: string`, `date: string`, and `phase: "covered" | "uncovered"` — always include all three when creating new subscriptions.
+- **BrokerBatch interface**: Lives in App.tsx. Includes `phase: "covered" | "uncovered"`. Broker CSV submissions create a `BrokerBatch` object that flows: FrontOffice → IPOSystem (`brokerBatches` state) → SupervisorChecker (Broker Batches tab) → Dashboard (financial totals).
+- **Phase pool tagging**: When FrontOffice creates a subscription or broker batch, `phase` is set from `activeStock.phase` (or selected IPO's phase for broker). The branch always submits into the currently active pool — Covered or Uncovered — matching the IPO stock's current phase.
+- **FrontOffice phase banner**: A prominent amber (covered) / green (uncovered) banner appears at the top of the subscriptions tab clearly showing which pool is active for the current IPO stock.
+- **Supervisor phase filter**: SupervisorChecker has a phase filter row (All / Covered / Uncovered) on both the Subscriptions and Broker Batches tabs. Each subscription row has a phase badge; each broker batch card also shows a phase badge.
 - **Broker CSV format**: columns — ClientName, IPOName, UnifiedCode, Qty, Cost, Date (6 columns).
 - **Broker FIX flow**: After CSV review → Generate FIX Message (FIX 4.2 per client, shown in pre block with copy button) → Submit for Review.
 - **Dashboard filtering**: Stats filtered by `activeStockId`. Subscriptions with `s.ipoId === activeStockId`; broker batches with `b.ipoId === activeStockId`. Financial totals include broker batch costs.
@@ -56,7 +59,8 @@ Five user roles accessible from the dashboard:
 - Do NOT use the `Search` lucide-react icon — it causes a runtime error
 - Do NOT nest `<button>` inside `<button>`
 - All translations must be added to BOTH `ar` and `en` objects in `context/lang.tsx`
-- `Subscription` interface requires `ipoId` and `date` — always include them when creating new subscriptions
+- `Subscription` interface requires `ipoId`, `date`, AND `phase` — always include all three when creating new subscriptions
+- `BrokerBatch` requires `phase: "covered" | "uncovered"` — set from `stock.phase` at submission time
 - `BrokerBatch.status` type is `"Pending Review" | "Approved" | "Rejected"` (not the SubStatus union)
 - Run `pnpm --filter @workspace/qnb-ipo run typecheck` to verify before shipping
 
