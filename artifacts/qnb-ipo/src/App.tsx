@@ -2477,71 +2477,67 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </Card>
       )}
 
-      {boTab === "Allocation" && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex justify-end">
-              {storedAllocationRatio !== null && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {storedAllocationRatio === null ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="font-bold">{t.noRecords}</p>
-                <p className="text-sm mt-1">
-                  {!isUncoveredReconciled
-                    ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
-                    : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
-                </p>
+      {boTab === "Allocation" && (() => {
+        // Compute allocation rows upfront so header buttons and table share the same data
+        const allocMatchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
+        const allocRatioPct = storedAllocationRatio !== null ? `${(storedAllocationRatio * 100).toFixed(1)}%` : "";
+        const allocAmounts = storedAllocationRatio !== null
+          ? applyLargestRemainder(allocMatchedRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible)
+          : [];
+        const paidByCode = new Map<string, number>();
+        for (const s of pageSubs) paidByCode.set(s.unifiedCode, (paidByCode.get(s.unifiedCode) ?? 0) + s.amountPaid);
+        const allocExportRows = allocMatchedRows.map((row, idx) => ({
+          name: row.name, unifiedCode: row.unifiedCode,
+          subscribedShares: row.subscribedShares,
+          allocated: allocAmounts[idx] ?? 0,
+          paid: paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE,
+          refundable: (row.subscribedShares - (allocAmounts[idx] ?? 0)) * PAR_VALUE,
+        }));
+        return (
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex justify-end gap-2">
+                {storedAllocationRatio !== null && (
+                  <Button variant="outline" size="sm" onClick={() => { exportAllocationCSV(allocExportRows, allocRatioPct, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
+                    <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
+                  </Button>
+                )}
+                {storedAllocationRatio !== null && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
               </div>
-            ) : (() => {
-              // Drive allocation display from reconciliation rows — covers all clients (individual + broker)
-              const matchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
-              const ratioPct = `${(storedAllocationRatio * 100).toFixed(1)}%`;
-              // Largest-remainder: total allocated shares === uncoveredEligible exactly
-              const allocatedAmounts = applyLargestRemainder(matchedRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
-              // Look up amountPaid from subscriptions state; fallback to subscribedShares * TOTAL_PER_SHARE
-              const paidByCode = new Map<string, number>();
-              for (const s of pageSubs) {
-                paidByCode.set(s.unifiedCode, (paidByCode.get(s.unifiedCode) ?? 0) + s.amountPaid);
-              }
-              const exportRows = matchedRows.map((row, idx) => ({
-                name: row.name, unifiedCode: row.unifiedCode,
-                subscribedShares: row.subscribedShares,
-                allocated: allocatedAmounts[idx],
-                paid: paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE,
-                refundable: (row.subscribedShares - allocatedAmounts[idx]) * PAR_VALUE,
-              }));
-              return (
-                <div className="space-y-3">
-                  <div className="flex justify-end">
-                    <Button variant="outline" size="sm" onClick={() => { exportAllocationCSV(exportRows, ratioPct, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
-                      <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
-                    </Button>
-                  </div>
-                  <div className="overflow-x-auto rounded-xl border border-border/50">
-                    <Table>
-                      <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
-                      <TableBody>
-                        {exportRows.map(row => (
-                          <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
-                            <TableCell className="font-bold text-sm">{row.name}</TableCell>
-                            <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
-                            <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{ratioPct}</Badge></TableCell>
-                            <TableCell className="text-sm font-bold text-muted-foreground">{row.paid.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-black text-red-500">{row.refundable.toLocaleString(numLocale)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+            </CardHeader>
+            <CardContent>
+              {storedAllocationRatio === null ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p className="font-bold">{t.noRecords}</p>
+                  <p className="text-sm mt-1">
+                    {!isUncoveredReconciled
+                      ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
+                      : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
+                  </p>
                 </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
-      )}
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-border/50">
+                  <Table>
+                    <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
+                    <TableBody>
+                      {allocExportRows.map(row => (
+                        <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
+                          <TableCell className="font-bold text-sm">{row.name}</TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
+                          <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{allocRatioPct}</Badge></TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{row.paid.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-sm font-black text-red-500">{row.refundable.toLocaleString(numLocale)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {boTab === "Refunds" && (() => {
         if (storedAllocationRatio === null) {
