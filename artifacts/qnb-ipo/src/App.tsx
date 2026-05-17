@@ -1869,6 +1869,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     totalSharesSubscribed: number;
     totalCashDisplay: string;
     coverageRatio: number;
+    uncoveredGap: number;
   } | null>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
@@ -2002,6 +2003,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
   const handleFinalizeCovered = () => {
     if (!boActiveStock || boActiveStock.coveredFinalized) return;
+    const gap = Math.max(0, eligibleIPOShares - totalSharesSubscribed);
     setFrozenSnapshot({
       totalSubscriptionsCount,
       eligibleIPOShares,
@@ -2009,6 +2011,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       totalSharesSubscribed,
       totalCashDisplay,
       coverageRatio,
+      uncoveredGap: gap,
     });
     onStocksChange(ipoStocks.map(s =>
       s.id === boActiveStock.id ? { ...s, phase: "uncovered" as const, coveredFinalized: true } : s
@@ -2071,7 +2074,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       </div>
 
       {/* Stats Grid — 5 compact cards (first 4 are drillable) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "subscriptions" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "subscriptions" ? null : "subscriptions")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
@@ -2090,15 +2093,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
             {(() => {
               const snap = frozenSnapshot;
+              // After finalize: eligible = frozen gap (the uncovered pool size)
               const hasMcdr = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
-              const eligible = snap ? snap.eligibleIPOShares : eligibleIPOShares;
+              const eligible = snap ? snap.uncoveredGap : eligibleIPOShares;
               return (
                 <>
                   <p className={`text-2xl font-black mt-0.5 ${hasMcdr ? "text-amber-600" : "text-muted-foreground"}`}>
                     {hasMcdr ? eligible.toLocaleString(numLocale) : "—"}
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {hasMcdr ? (snap ? (lang === "ar" ? "لقطة مجمدة" : "Snapshot") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst}
+                    {hasMcdr ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst}
                   </p>
                 </>
               );
@@ -2149,6 +2153,31 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             })()}
           </CardContent>
         </Card>
+        {/* Uncovered Gap — only on covered page */}
+        {page === "covered" && (
+          <Card className={`${frozenSnapshot ? "border-amber-400 bg-amber-50/40 dark:bg-amber-900/10" : ""}`}>
+            <CardContent className="pt-4 pb-4 px-4">
+              <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.reconGapLabel}</p>
+              {(() => {
+                const gap = frozenSnapshot
+                  ? frozenSnapshot.uncoveredGap
+                  : (activeMcdrRows.length > 0 ? Math.max(0, eligibleIPOShares - totalSharesSubscribed) : null);
+                return (
+                  <>
+                    <p className={`text-2xl font-black mt-0.5 ${gap === null ? "text-muted-foreground" : gap === 0 ? "text-green-600" : "text-amber-600"}`}>
+                      {gap === null ? "—" : gap.toLocaleString(numLocale)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {frozenSnapshot
+                        ? (lang === "ar" ? "→ بداية مرحلة غير المغطى" : "→ Start of Uncovered Stage")
+                        : (lang === "ar" ? "الأهلي − المكتتب" : "Eligible − Subscribed")}
+                    </p>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Drill-down panel */}
@@ -2428,28 +2457,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   </Button>
                 </div>
               </div>
-              {/* Gap summary — shown after reconcile */}
-              {isReconciled && eligibleIPOShares > 0 && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-muted/40 rounded-xl p-3 text-center">
-                    <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wide">{t.reconTotalEligible}</p>
-                    <p className="text-xl font-black text-foreground mt-0.5">{eligibleIPOShares.toLocaleString(numLocale)}</p>
-                  </div>
-                  <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 text-center">
-                    <p className="text-[9px] font-black text-primary/70 uppercase tracking-wide">{t.reconTotalSubscribed}</p>
-                    <p className="text-xl font-black text-primary mt-0.5">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
-                  </div>
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center">
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-wide">{t.reconGapLabel}</p>
-                    <p className="text-xl font-black text-amber-600 mt-0.5">{Math.max(0, eligibleIPOShares - totalSharesSubscribed).toLocaleString(numLocale)}</p>
-                    <p className="text-[9px] text-amber-600/70 mt-0.5">{lang === "ar" ? "بداية مرحلة غير مغطى" : "→ Start of Uncovered Stage"}</p>
-                  </div>
-                  <div className={`rounded-xl p-3 text-center border ${coverageRatio >= 100 ? "bg-red-500/10 border-red-500/20" : "bg-teal-500/10 border-teal-500/20"}`}>
-                    <p className={`text-[9px] font-black uppercase tracking-wide ${coverageRatio >= 100 ? "text-red-600" : "text-teal-600"}`}>{t.reconCoverage}</p>
-                    <p className={`text-xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-600" : "text-teal-600"}`}>{coverageRatio}%</p>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
