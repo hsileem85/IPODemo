@@ -1892,16 +1892,17 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const totalSharesSubscribed = pageSubs.reduce((a, s) => a + s.requestedShares, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const totalCashAmount = pageSubs.reduce((a, s) => a + s.amountPaid, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
 
-  // Eligible IPO Shares: covered page = MCDR total; uncovered page = gap (stored snapshot − covered subscribed)
+  // Eligible IPO Shares: covered page = covered MCDR total; uncovered page = uncovered MCDR total
   const mcdrEligibleTotal = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
+  const uncoveredMcdrEligibleTotal = uncoveredMcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
   const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
-  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : Math.max(0, storedEligible - coveredSharesTotal);
+  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredMcdrEligibleTotal;
+  // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
-
-  // Uncovered MCDR eligible total (from a separate uncovered-phase MCDR upload)
-  const uncoveredMcdrEligibleTotal = uncoveredMcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
+  const activeMcdrRows = page === "covered" ? mcdrRows : uncoveredMcdrRows;
+  void storedEligible;
 
   const RECON_FILTERS = [
     { key: "All", label: t.filterAll },
@@ -2041,10 +2042,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "eligible" ? "ring-2 ring-amber-500 shadow-md" : "hover:border-amber-400/50"}`} onClick={() => setDrillCard(drillCard === "eligible" ? null : "eligible")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
-            <p className={`text-2xl font-black mt-0.5 ${page === "uncovered" ? (eligibleIPOShares === 0 ? "text-green-600" : "text-amber-600") : mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-              {page === "uncovered" ? eligibleIPOShares.toLocaleString(numLocale) : mcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}
+            <p className={`text-2xl font-black mt-0.5 ${activeMcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+              {activeMcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}
             </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{page === "uncovered" ? t.coveredGapSubtext : mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{activeMcdrRows.length > 0 ? t.mcdrRecords(activeMcdrRows.length) : t.mcdrUploadFirst}</p>
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "shares" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "shares" ? null : "shares")}>
@@ -2064,8 +2065,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.coverageRatioCard}</p>
-            <p className={`text-2xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-500" : coverageRatio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>{mcdrRows.length > 0 ? `${coverageRatio}%` : "—"}</p>
-            {mcdrRows.length > 0 && (
+            <p className={`text-2xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-500" : coverageRatio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>{activeMcdrRows.length > 0 ? `${coverageRatio}%` : "—"}</p>
+            {activeMcdrRows.length > 0 && (
               <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
                 <div className={`h-full rounded-full transition-all duration-700 ${coverageRatio >= 100 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, coverageRatio)}%` }} />
               </div>
