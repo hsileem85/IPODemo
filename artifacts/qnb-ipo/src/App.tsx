@@ -2180,7 +2180,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               if (page === "uncovered") {
                 // Raw subscription multiplier: totalSharesSubscribed ÷ uncoveredEligible (e.g. 2.57×)
                 const hasValue = uncoveredEligible > 0;
-                const display = hasValue ? `${uncoveredRatio.toFixed(2)}×` : "—";
+                const display = hasValue ? `${Math.floor(uncoveredRatio)}×` : "—";
                 const color = !hasValue ? "text-muted-foreground" : uncoveredRatio >= 1 ? "text-red-500" : "text-teal-600";
                 return (
                   <>
