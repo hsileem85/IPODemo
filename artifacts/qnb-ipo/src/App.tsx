@@ -1683,11 +1683,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         </TabBtn>
       </div>
 
-      {/* IPO filter + Phase filter — subscriptions & broker tabs only */}
+      {/* IPO filter + Phase filter — same row */}
       {supTab !== "kyc" && (
-        <div className="space-y-2">
+        <div className="flex items-center gap-3 flex-wrap">
           {ipoStocks.length > 1 && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <>
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByStock}:</span>
               {[{ id: "all", name: t.filterAll }, ...ipoStocks.map(s => ({ id: s.id, name: lang === "ar" ? s.securityNameAr : s.securityNameEn }))].map(opt => (
                 <button key={opt.id} onClick={() => { setSupIpoId(opt.id); setSelected(new Set()); }}
@@ -1695,22 +1695,21 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   {opt.name}
                 </button>
               ))}
-            </div>
+              <span className="w-px h-5 bg-border shrink-0" />
+            </>
           )}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByPhase}:</span>
-            {([
-              { id: "all", label: t.filterAll, cls: "" },
-              { id: "covered", label: t.coveredPhaseBadge, cls: "data-[active=true]:bg-amber-500 data-[active=true]:border-amber-500" },
-              { id: "uncovered", label: t.uncoveredPhaseBadge, cls: "data-[active=true]:bg-green-600 data-[active=true]:border-green-600" },
-            ] as const).map(opt => (
-              <button key={opt.id} data-active={supPhase === opt.id}
-                onClick={() => { setSupPhase(opt.id); setSelected(new Set()); }}
-                className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supPhase === opt.id ? (opt.id === "covered" ? "bg-amber-500 text-white border-amber-500" : opt.id === "uncovered" ? "bg-green-600 text-white border-green-600" : "bg-primary text-white border-primary") : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{t.filterByPhase}:</span>
+          {([
+            { id: "all", label: t.filterAll },
+            { id: "covered", label: t.coveredPhaseBadge },
+            { id: "uncovered", label: t.uncoveredPhaseBadge },
+          ] as const).map(opt => (
+            <button key={opt.id}
+              onClick={() => { setSupPhase(opt.id); setSelected(new Set()); }}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${supPhase === opt.id ? (opt.id === "covered" ? "bg-amber-500 text-white border-amber-500" : opt.id === "uncovered" ? "bg-green-600 text-white border-green-600" : "bg-primary text-white border-primary") : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
 
