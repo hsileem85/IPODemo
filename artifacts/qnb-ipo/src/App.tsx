@@ -1862,6 +1862,14 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [uncoveredReconRows, setUncoveredReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const [uncoveredReconFilter, setUncoveredReconFilter] = useState("All");
   const [drillCard, setDrillCard] = useState<"subscriptions" | "eligible" | "shares" | "cash" | null>(null);
+  const [frozenSnapshot, setFrozenSnapshot] = useState<{
+    totalSubscriptionsCount: number;
+    eligibleIPOShares: number;
+    hasMcdr: boolean;
+    totalSharesSubscribed: number;
+    totalCashDisplay: string;
+    coverageRatio: number;
+  } | null>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -1992,6 +2000,27 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     toast({ title: lang === "ar" ? "تمت المطابقة" : "Reconciliation Complete", description: lang === "ar" ? `${rows.length} سجل تمت مطابقته` : `${rows.length} records reconciled` });
   };
 
+  const handleFinalizeCovered = () => {
+    if (!boActiveStock || boActiveStock.coveredFinalized) return;
+    setFrozenSnapshot({
+      totalSubscriptionsCount,
+      eligibleIPOShares,
+      hasMcdr: activeMcdrRows.length > 0,
+      totalSharesSubscribed,
+      totalCashDisplay,
+      coverageRatio,
+    });
+    onStocksChange(ipoStocks.map(s =>
+      s.id === boActiveStock.id ? { ...s, phase: "uncovered" as const, coveredFinalized: true } : s
+    ));
+    toast({
+      title: t.coveredFinalizedLabel,
+      description: lang === "ar"
+        ? `تم إغلاق مرحلة المغطى لـ ${boActiveStock.securityNameAr} — تم حفظ لقطة البيانات`
+        : `Covered phase closed for ${boActiveStock.securityNameEn} — data snapshot saved`,
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Compact header — title + IPO selector + action buttons in one row */}
@@ -2025,6 +2054,17 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             {boActiveStock && <span className="font-mono text-[10px] text-muted-foreground hidden sm:inline">{boActiveStock.isin}</span>}
           </div>
           <Button variant="outline" size="sm" onClick={handleExport}><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}</Button>
+          {page === "covered" && !boActiveStock?.coveredFinalized && (
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white border-0" onClick={handleFinalizeCovered}>
+              <CheckCircle2 className="w-4 h-4 me-2" />{t.finalizeCoveredBtn}
+            </Button>
+          )}
+          {page === "covered" && boActiveStock?.coveredFinalized && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span className="text-xs font-black">{t.coveredFinalizedLabel}</span>
+            </div>
+          )}
           {page === "uncovered" && boTab !== "Refunds" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
           {page === "uncovered" && boTab === "Refunds" && <Button size="sm" variant="outline" className="border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20" onClick={handleRefund}>{t.exportBankFile}</Button>}
         </div>
@@ -2035,42 +2075,78 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "subscriptions" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "subscriptions" ? null : "subscriptions")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
-            <p className="text-2xl font-black text-foreground mt-0.5">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`}</p>
+            <p className="text-2xl font-black text-foreground mt-0.5">
+              {(frozenSnapshot ?? { totalSubscriptionsCount }).totalSubscriptionsCount.toLocaleString(numLocale)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {frozenSnapshot
+                ? (lang === "ar" ? "لقطة مجمدة عند الإغلاق" : "Snapshot at finalize")
+                : (lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`)}
+            </p>
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "eligible" ? "ring-2 ring-amber-500 shadow-md" : "hover:border-amber-400/50"}`} onClick={() => setDrillCard(drillCard === "eligible" ? null : "eligible")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
-            <p className={`text-2xl font-black mt-0.5 ${activeMcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-              {activeMcdrRows.length > 0 ? eligibleIPOShares.toLocaleString(numLocale) : "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{activeMcdrRows.length > 0 ? t.mcdrRecords(activeMcdrRows.length) : t.mcdrUploadFirst}</p>
+            {(() => {
+              const snap = frozenSnapshot;
+              const hasMcdr = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
+              const eligible = snap ? snap.eligibleIPOShares : eligibleIPOShares;
+              return (
+                <>
+                  <p className={`text-2xl font-black mt-0.5 ${hasMcdr ? "text-amber-600" : "text-muted-foreground"}`}>
+                    {hasMcdr ? eligible.toLocaleString(numLocale) : "—"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {hasMcdr ? (snap ? (lang === "ar" ? "لقطة مجمدة" : "Snapshot") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst}
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "shares" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "shares" ? null : "shares")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalSubscribedCard}</p>
-            <p className="text-2xl font-black text-primary mt-0.5">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات معتمدة" : "Approved requests"}</p>
+            <p className="text-2xl font-black text-primary mt-0.5">
+              {(frozenSnapshot ?? { totalSharesSubscribed }).totalSharesSubscribed.toLocaleString(numLocale)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">
+              {frozenSnapshot ? (lang === "ar" ? "لقطة مجمدة" : "Snapshot") : (lang === "ar" ? "طلبات معتمدة" : "Approved requests")}
+            </p>
           </CardContent>
         </Card>
         <Card className={`cursor-pointer select-none transition-all ${drillCard === "cash" ? "ring-2 ring-emerald-500 shadow-md" : "hover:border-emerald-400/50"}`} onClick={() => setDrillCard(drillCard === "cash" ? null : "cash")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalCashCard}</p>
-            <p className="text-2xl font-black text-emerald-600 mt-0.5">{totalSharesSubscribed > 0 ? totalCashDisplay : "—"}</p>
+            <p className="text-2xl font-black text-emerald-600 mt-0.5">
+              {frozenSnapshot
+                ? frozenSnapshot.totalCashDisplay
+                : (totalSharesSubscribed > 0 ? totalCashDisplay : "—")}
+            </p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{t.egp}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.coverageRatioCard}</p>
-            <p className={`text-2xl font-black mt-0.5 ${coverageRatio >= 100 ? "text-red-500" : coverageRatio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>{activeMcdrRows.length > 0 ? `${coverageRatio}%` : "—"}</p>
-            {activeMcdrRows.length > 0 && (
-              <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${coverageRatio >= 100 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, coverageRatio)}%` }} />
-              </div>
-            )}
+            {(() => {
+              const snap = frozenSnapshot;
+              const ratio = snap ? snap.coverageRatio : coverageRatio;
+              const hasMcdr = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
+              return (
+                <>
+                  <p className={`text-2xl font-black mt-0.5 ${ratio >= 100 ? "text-red-500" : ratio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>
+                    {hasMcdr ? `${ratio}%` : "—"}
+                  </p>
+                  {hasMcdr && (
+                    <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${ratio >= 100 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, ratio)}%` }} />
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
