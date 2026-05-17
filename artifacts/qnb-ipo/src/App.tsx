@@ -1911,8 +1911,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
   const uncoveredEligible = Math.max(0, storedEligible - coveredSharesTotal);
   const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredEligible;
-  // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100
+  // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100 (covered page — percentage, capped 100)
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
+  // Uncovered page: raw subscription multiplier (e.g. 2.57×), NOT a percentage
+  const uncoveredRatio = uncoveredEligible > 0 ? (totalSharesSubscribed / uncoveredEligible) : 0;
   const totalCashDisplay = totalCashAmount >= 1_000_000 ? `${(totalCashAmount / 1_000_000).toFixed(2)}M` : totalCashAmount.toLocaleString(numLocale);
   const activeMcdrRows = page === "covered" ? mcdrRows : uncoveredMcdrRows;
 
@@ -2160,12 +2162,26 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.coverageRatioCard}</p>
             {(() => {
-              const snap = page === "covered" ? frozenSnapshot : null;
+              if (page === "uncovered") {
+                // Raw subscription multiplier: totalSharesSubscribed ÷ uncoveredEligible (e.g. 2.57×)
+                const hasValue = uncoveredEligible > 0;
+                const display = hasValue ? `${uncoveredRatio.toFixed(2)}×` : "—";
+                const color = !hasValue ? "text-muted-foreground" : uncoveredRatio >= 1 ? "text-red-500" : "text-teal-600";
+                return (
+                  <>
+                    <p className={`text-2xl font-black mt-0.5 ${color}`}>{display}</p>
+                    {hasValue && (
+                      <div className="w-full h-1 rounded-full bg-muted mt-1.5 overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-700 ${uncoveredRatio >= 1 ? "bg-red-500" : "bg-teal-500"}`} style={{ width: `${Math.min(100, uncoveredRatio * 100)}%` }} />
+                      </div>
+                    )}
+                  </>
+                );
+              }
+              // Covered page: percentage display (capped at 100%)
+              const snap = frozenSnapshot;
               const ratio = snap ? snap.coverageRatio : coverageRatio;
-              // covered: guard on MCDR upload; uncovered: guard on fixed eligible gap existing
-              const hasValue = page === "covered"
-                ? (snap ? snap.hasMcdr : activeMcdrRows.length > 0)
-                : uncoveredEligible > 0;
+              const hasValue = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
               return (
                 <>
                   <p className={`text-2xl font-black mt-0.5 ${ratio >= 100 ? "text-red-500" : ratio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>
