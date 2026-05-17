@@ -259,6 +259,18 @@ function exportCSV(data: Subscription[], lang: Lang) {
   a.href = url; a.download = "subscriptions.csv"; a.click();
   URL.revokeObjectURL(url);
 }
+function exportReconCSV(rows: { name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string }[], lang: Lang, filename = "reconciliation.csv") {
+  const headers = lang === "ar"
+    ? ["الاسم", "الفرع", "الكود الموحد", "الأسهم المؤهلة", "الأسهم المكتتبة", "الأسهم المتبقية", "الحالة"]
+    : ["Name", "Branch", "Unified Code", "Eligible Shares", "Subscribed Shares", "Remaining Shares", "Status"];
+  const rowData = rows.map(r => [r.name, r.branch, r.unifiedCode, r.eligibleShares, r.subscribedShares, r.remainingShares, r.status]);
+  const csv = "\uFEFF" + [headers, ...rowData].map(r => r.map(c => `"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 function downloadReceipt(sub: Subscription, lang: Lang) {
   const isAr = lang === "ar";
   const name = clientName(sub.nameAr, sub.nameEn, lang);
@@ -1779,7 +1791,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation">("MCDR");
+  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "CoveredHistory">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
   const [mcdrRows, setMcdrRows] = useState<MCDRRow[]>([]);
   const [selectedBoIpoId, setSelectedBoIpoId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
@@ -1789,11 +1801,12 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [isUncoveredReconciled, setIsUncoveredReconciled] = useState(false);
   const [uncoveredReconRows, setUncoveredReconRows] = useState<{ name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string }[]>([]);
   const [uncoveredReconFilter, setUncoveredReconFilter] = useState("All");
+  const [drillCard, setDrillCard] = useState<"subscriptions" | "eligible" | "shares" | "cash" | null>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   // Reset to MCDR tab whenever the page (covered/uncovered) changes
-  useEffect(() => { setBoTab("MCDR"); }, [page]);
+  useEffect(() => { setBoTab("MCDR"); setDrillCard(null); }, [page]);
 
   const boActiveStock = ipoStocks.find(s => s.id === selectedBoIpoId) ?? activeStock;
   const isCovered = !boActiveStock || boActiveStock.phase === "covered";
@@ -1949,16 +1962,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </div>
       </div>
 
-      {/* Stats Grid — 5 compact cards */}
+      {/* Stats Grid — 5 compact cards (first 4 are drillable) */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Card>
+        <Card className={`cursor-pointer select-none transition-all ${drillCard === "subscriptions" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "subscriptions" ? null : "subscriptions")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.stat0}</p>
             <p className="text-2xl font-black text-foreground mt-0.5">{totalSubscriptionsCount.toLocaleString(numLocale)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? `${pageSubs.length} فردي · ${brokerClientCount} وسيط` : `${pageSubs.length} indiv · ${brokerClientCount} broker`}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer select-none transition-all ${drillCard === "eligible" ? "ring-2 ring-amber-500 shadow-md" : "hover:border-amber-400/50"}`} onClick={() => setDrillCard(drillCard === "eligible" ? null : "eligible")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
             <p className={`text-2xl font-black mt-0.5 ${page === "uncovered" ? (eligibleIPOShares === 0 ? "text-green-600" : "text-amber-600") : mcdrRows.length > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
@@ -1967,14 +1980,14 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             <p className="text-[10px] text-muted-foreground mt-0.5">{page === "uncovered" ? t.coveredGapSubtext : mcdrRows.length > 0 ? t.mcdrRecords(mcdrRows.length) : t.mcdrUploadFirst}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer select-none transition-all ${drillCard === "shares" ? "ring-2 ring-primary shadow-md" : "hover:border-primary/50"}`} onClick={() => setDrillCard(drillCard === "shares" ? null : "shares")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalSubscribedCard}</p>
             <p className="text-2xl font-black text-primary mt-0.5">{totalSharesSubscribed.toLocaleString(numLocale)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات معتمدة" : "Approved requests"}</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className={`cursor-pointer select-none transition-all ${drillCard === "cash" ? "ring-2 ring-emerald-500 shadow-md" : "hover:border-emerald-400/50"}`} onClick={() => setDrillCard(drillCard === "cash" ? null : "cash")}>
           <CardContent className="pt-4 pb-4 px-4">
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.totalCashCard}</p>
             <p className="text-2xl font-black text-emerald-600 mt-0.5">{totalSharesSubscribed > 0 ? totalCashDisplay : "—"}</p>
@@ -1994,11 +2007,141 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </Card>
       </div>
 
+      {/* Drill-down panel */}
+      {drillCard !== null && (
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-2 pt-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-black">
+                {drillCard === "subscriptions" && (lang === "ar" ? "تفاصيل الاشتراكات" : "Subscription Breakdown")}
+                {drillCard === "eligible" && (lang === "ar" ? "تفاصيل الأهلية (MCDR)" : "MCDR Eligibility Detail")}
+                {drillCard === "shares" && (lang === "ar" ? "تفاصيل الأسهم المكتتبة" : "Subscribed Shares Detail")}
+                {drillCard === "cash" && (lang === "ar" ? "تفاصيل إجمالي المدفوع" : "Cash Amount Detail")}
+              </CardTitle>
+              <button onClick={() => setDrillCard(null)} className="text-muted-foreground hover:text-foreground text-xs font-black px-2 py-1 rounded-lg hover:bg-muted transition-colors">✕</button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 pb-4">
+            {drillCard === "subscriptions" && (
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30">
+                    {[t.colInvestor, t.colBranch, t.colIPOName, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
+                    ))}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {pageSubs.length === 0 && brokerClientCount === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                    ) : <>
+                      {pageSubs.map(sub => (
+                        <TableRow key={sub.id} className="hover:bg-muted/30">
+                          <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-[10px] font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{boActiveStock ? (lang === "ar" ? boActiveStock.securityNameAr : boActiveStock.securityNameEn) : "—"}</TableCell>
+                          <TableCell className="font-bold text-sm">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="font-black text-sm text-primary">{sub.amountPaid.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">{sub.submittedAt}</TableCell>
+                          <TableCell><SubBadge status={sub.status} /></TableCell>
+                        </TableRow>
+                      ))}
+                      {pageBatches.flatMap(b => b.clients.map((c, i) => (
+                        <TableRow key={`${b.id}-${i}`} className="hover:bg-muted/30 bg-blue-500/5">
+                          <TableCell><p className="font-bold text-sm">{c.clientName}</p><p className="text-[10px] font-mono text-muted-foreground">{c.unifiedCode}</p></TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">{lang === "ar" ? `وسيط: ${b.broker}` : `Broker: ${b.broker}`}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{boActiveStock ? (lang === "ar" ? boActiveStock.securityNameAr : boActiveStock.securityNameEn) : "—"}</TableCell>
+                          <TableCell className="font-bold text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="font-black text-sm text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground">{c.date}</TableCell>
+                          <TableCell><Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-black text-[10px]">{lang === "ar" ? "وسيط" : "Broker"}</Badge></TableCell>
+                        </TableRow>
+                      )))}
+                    </>}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {drillCard === "eligible" && (
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30">
+                    {[t.colName, t.colUnified, t.colEligible, t.colSubscribed, t.colSettlementDate].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
+                    ))}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {(page === "covered" ? mcdrRows : uncoveredMcdrRows).length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t.mcdrUploadFirst}</TableCell></TableRow>
+                    ) : (page === "covered" ? mcdrRows : uncoveredMcdrRows).map((r, i) => (
+                      <TableRow key={i} className="hover:bg-muted/30">
+                        <TableCell className="font-bold text-sm">{r.clientName}</TableCell>
+                        <TableCell className="font-mono text-sm">{r.unifiedCode}</TableCell>
+                        <TableCell className="font-bold text-amber-600">{r.eligibleQty.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className="font-bold text-primary">{r.subscribedQty.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground">{r.settlementDate}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {drillCard === "shares" && (
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30">
+                    {[t.colInvestor, t.colBranch, t.sharesCol, t.colStatus].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
+                    ))}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {pageSubs.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                    ) : [...pageSubs].sort((a, b) => b.requestedShares - a.requestedShares).map(sub => (
+                      <TableRow key={sub.id} className="hover:bg-muted/30">
+                        <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-[10px] font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                        <TableCell className="font-black text-primary">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell><SubBadge status={sub.status} /></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            {drillCard === "cash" && (
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader><TableRow className="bg-muted/30">
+                    {[t.colInvestor, t.colBranch, t.totalAmtLabel, t.sharesCol, t.colStatus].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
+                    ))}
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {pageSubs.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                    ) : [...pageSubs].sort((a, b) => b.amountPaid - a.amountPaid).map(sub => (
+                      <TableRow key={sub.id} className="hover:bg-muted/30">
+                        <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-[10px] font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                        <TableCell className="font-black text-emerald-600">{sub.amountPaid.toLocaleString(numLocale)} <span className="text-[10px] font-normal">{t.egp}</span></TableCell>
+                        <TableCell className="font-bold text-primary">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell><SubBadge status={sub.status} /></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs — split by page */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
         {page === "covered" && <>
           <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
           <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
+          {boActiveStock?.coveredFinalized && <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>}
         </>}
         {page === "uncovered" && <>
           <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
@@ -2008,6 +2151,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </>}
       </div>
       {page === "covered" && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
+      {page === "covered" && !boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
       {page === "uncovered" && isCovered && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && page === "covered" && (
@@ -2135,6 +2279,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       ))}
                     </div>
                   )}
+                  {isReconciled && <Button size="sm" variant="outline" onClick={() => { exportReconCSV(filteredReconRows, lang, "reconciliation-covered.csv"); toast({ title: t.toastExported, description: t.toastExportedDesc }); }} className="shrink-0"><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportReconBtn}</Button>}
                   <Button size="sm" onClick={handleReconcile} disabled={mcdrRows.length === 0} className="shrink-0">
                     <CheckCheck className="w-4 h-4 me-2" />{t.reconBtn}
                   </Button>
@@ -2220,6 +2365,99 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </div>
       )}
 
+      {/* ── Covered History ── */}
+      {boTab === "CoveredHistory" && page === "covered" && (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-base font-black tracking-tight">{t.boTabCoveredHistory}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{t.coveredHistoryDesc}</p>
+          </div>
+          {/* Individual subscriptions */}
+          {coveredApprovedSubs.length > 0 ? (
+            <Card>
+              <CardHeader className="pb-3 pt-4">
+                <CardTitle className="text-sm font-black">{lang === "ar" ? "الاشتراكات الفردية" : "Individual Subscriptions"}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="overflow-x-auto rounded-xl border border-border/50">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/30">
+                        {[t.colInvestor, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
+                          <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {coveredApprovedSubs.map(sub => (
+                        <TableRow key={sub.id} className="hover:bg-muted/30">
+                          <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
+                          <TableCell className="text-sm text-muted-foreground font-bold">{sub.branch}</TableCell>
+                          <TableCell className="font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="font-black text-primary">{sub.amountPaid.toLocaleString(numLocale)} {t.egp}</TableCell>
+                          <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
+                          <TableCell><SubBadge status={sub.status} /></TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card><CardContent className="py-12 text-center"><p className="text-muted-foreground font-bold text-sm">{lang === "ar" ? "لا توجد اشتراكات فردية في مرحلة التغطية." : "No individual covered-stage subscriptions."}</p></CardContent></Card>
+          )}
+          {/* Broker batches */}
+          {coveredApprovedBatches.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-black text-muted-foreground uppercase tracking-widest">{lang === "ar" ? "دفعات الوسطاء" : "Broker Batches"}</h3>
+              {coveredApprovedBatches.map(b => (
+                <Card key={b.id}>
+                  <CardHeader className="pb-2 pt-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <p className="font-black text-base">{b.broker}</p>
+                        <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-black text-[10px]">{b.status}</Badge>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="font-mono text-xs">{b.submittedAt}</span>
+                        <span>{lang === "ar" ? `${b.clients.length} عميل` : `${b.clients.length} client${b.clients.length !== 1 ? "s" : ""}`}</span>
+                        <span className="font-black text-primary">{b.clients.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)} {lang === "ar" ? "سهم" : "shares"}</span>
+                        <span className="font-black text-emerald-600">{b.clients.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)} {t.egp}</span>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="overflow-x-auto rounded-xl border border-border/50">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            {[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map(col => (
+                              <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {b.clients.map((c, i) => (
+                            <TableRow key={i} className="hover:bg-muted/30">
+                              <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                              <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                              <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
+                              <TableCell className="font-mono text-sm font-bold">{c.qty.toLocaleString(numLocale)}</TableCell>
+                              <TableCell className="font-mono text-sm font-black text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Uncovered MCDR Upload ── */}
       {boTab === "MCDR" && page === "uncovered" && (
         <Card>
@@ -2293,6 +2531,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       ))}
                     </div>
                   )}
+                  {isUncoveredReconciled && <Button size="sm" variant="outline" onClick={() => { exportReconCSV(filteredUncoveredReconRows, lang, "reconciliation-uncovered.csv"); toast({ title: t.toastExported, description: t.toastExportedDesc }); }} className="shrink-0"><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportReconBtn}</Button>}
                   <Button size="sm" onClick={handleUncoveredReconcile} disabled={uncoveredMcdrRows.length === 0} className="shrink-0">
                     <CheckCheck className="w-4 h-4 me-2" />{t.reconBtn}
                   </Button>
