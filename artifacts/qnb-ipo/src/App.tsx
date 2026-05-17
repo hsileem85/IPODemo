@@ -1844,7 +1844,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 // Back Office
 // ─────────────────────────────────────────────────────────────────────────────
 function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStocks, onStocksChange, brokerBatches, page, onSwitchToUncovered }: {
-  subscriptions: Subscription[]; onAllocate: (ratio: number) => void; onRefund: () => void;
+  subscriptions: Subscription[]; onAllocate: (allocationRatio: number, matchedCodes: Set<string>) => void; onRefund: () => void;
   activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
   page: "covered" | "uncovered";
   onSwitchToUncovered: () => void;
@@ -1935,9 +1935,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   }, [uncoveredReconFilter, uncoveredReconRows]);
 
   const handleAllocate = () => {
+    // Only allocate clients who are fully or partially matched in reconciliation (subscribedShares > 0)
+    const matchedCodes = new Set(uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
     // allocationRatio = totalOfferedShares / totalRequestedShares
     const allocationRatio = totalSharesSubscribed > 0 ? uncoveredEligible / totalSharesSubscribed : 0;
-    onAllocate(allocationRatio);
+    onAllocate(allocationRatio, matchedCodes);
     toast({ title: t.toastAllocTitle, description: t.toastAllocDesc });
     setBoTab("Allocation");
   };
@@ -2079,7 +2081,11 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               <span className="text-xs font-black">{t.coveredFinalizedLabel}</span>
             </div>
           )}
-          {page === "uncovered" && boTab === "Allocation" && <Button size="sm" onClick={handleAllocate}><ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}</Button>}
+          {page === "uncovered" && boTab === "Allocation" && (
+            <Button size="sm" onClick={handleAllocate} disabled={!isUncoveredReconciled || uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0} title={!isUncoveredReconciled ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً" : "Run Reconciliation first") : undefined}>
+              <ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -2440,7 +2446,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </div>
           </CardHeader>
           <CardContent>
-            {allocatedSubs.length === 0 ? <div className="text-center py-12 text-muted-foreground"><p className="font-bold">{t.noRecords}</p><p className="text-sm mt-1">{lang === "ar" ? "نفّذ التخصيص أولاً." : "Run Execute Allocation first."}</p></div> : (() => {
+            {allocatedSubs.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <p className="font-bold">{t.noRecords}</p>
+                <p className="text-sm mt-1">
+                  {!isUncoveredReconciled
+                    ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
+                    : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
+                </p>
+              </div>
+            ) : (() => {
               // Aggregate by investor (unifiedCode)
               const byInvestor = new Map<string, { name: string; unifiedCode: string; requestedShares: number; allocatedShares: number; amountPaid: number }>();
               for (const sub of allocatedSubs) {
@@ -3712,10 +3727,14 @@ function IPOSystem() {
     } else setLoginError(true);
   };
   const handleForgotPassword = () => setRecoveredPassword(forgotUsername === defaultUsername ? defaultPassword : "");
-  const handleAllocate = (allocationRatio: number) => {
+  const handleAllocate = (allocationRatio: number, matchedCodes: Set<string>) => {
+    // Only allocate subs matched (fully or partially) in reconciliation
     // allocatedShares = Math.floor(investorRequestedShares * allocationRatio)
-    // where allocationRatio = totalOfferedShares / totalRequestedShares
-    setSubscriptions(prev => prev.map(s => s.status !== "Verified" ? s : { ...s, allocatedShares: Math.floor(s.requestedShares * allocationRatio), status: "Allocated" as const }));
+    setSubscriptions(prev => prev.map(s => {
+      if (s.status !== "Verified") return s;
+      if (!matchedCodes.has(s.unifiedCode)) return s;
+      return { ...s, allocatedShares: Math.floor(s.requestedShares * allocationRatio), status: "Allocated" as const };
+    }));
   };
   const handleRefund = () => setSubscriptions(prev => prev.map(s => s.status !== "Allocated" ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
   const handleApprove = (ids: string[]) => setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
