@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { type IPOStock, INITIAL_IPO_STOCKS } from "./data/ipoStocks";
 import { type Lang, T, LangContext, useLang } from "./context/lang";
 import { IPOStockSetup } from "./components/IPOStockSetup";
+import { Reports } from "./components/Reports";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -3941,7 +3942,7 @@ function BasicDataScreen<T extends { id: string; name: string; code: string; ema
 function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
-  const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks" | "Brokers" | "Custodians">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks" | "Brokers" | "Custodians" | "Reports">("dashboard");
   const [backOfficePage, setBackOfficePage] = useState<"covered" | "uncovered">("covered");
   const [showClearingMenu, setShowClearingMenu] = useState(false);
   const [showBasicDataMenu, setShowBasicDataMenu] = useState(false);
@@ -4112,6 +4113,12 @@ function IPOSystem() {
                 </button>
               ))}
               <div className="w-px bg-border self-stretch mx-0.5" />
+              <button
+                onClick={() => setActiveView("Reports")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "Reports" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                <BarChart3 className="w-3.5 h-3.5" />{t.menuReports}
+              </button>
+              <div className="w-px bg-border self-stretch mx-0.5" />
               <div className="relative" onMouseEnter={() => setShowBasicDataMenu(true)} onMouseLeave={() => setShowBasicDataMenu(false)}>
                 <button
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${["IPOStocks","Brokers","Custodians"].includes(activeView) ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -4211,6 +4218,9 @@ function IPOSystem() {
               title={t.custodiansTitle} desc={t.custodiansDesc} addBtn={t.addCustodianBtn}
               records={custodians} onAdd={r => setCustodians(prev => [...prev, r])} icon={Lock}
             />
+          )}
+          {activeView === "Reports" && (
+            <Reports subscriptions={subscriptions} ipoStocks={ipoStocks} />
           )}
         </main>
 
