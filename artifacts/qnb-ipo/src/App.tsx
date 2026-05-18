@@ -1867,6 +1867,9 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [brokerFIX, setBrokerFIX] = useState("");
   const [fixCopied, setFixCopied] = useState(false);
   const [brokerTxRef, setBrokerTxRef] = useState("");
+  const [fixAllocMsg, setFixAllocMsg] = useState("");
+  const [fixAllocCopied, setFixAllocCopied] = useState(false);
+  const [fixAllocSent, setFixAllocSent] = useState(false);
   const brokerRef = useRef<HTMLInputElement>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
@@ -2454,49 +2457,121 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           paid: paidByCode.get(row.unifiedCode) ?? row.subscribedShares * TOTAL_PER_SHARE,
           refundable: (row.subscribedShares - (allocAmounts[idx] ?? 0)) * PAR_VALUE,
         }));
+        const handleGenerateFixAlloc = () => {
+          const stock = boActiveStock;
+          const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+          const price = stock?.pricePerShare ?? 0;
+          const symbol = stock?.symbol ?? "IPO";
+          const isin = stock?.isin ?? "—";
+          const lines: string[] = [
+            `=== FIX 4.4 ALLOCATION — ${symbol} | ${t.fixAllocMsgs} ===`,
+            `Ratio: ${allocRatioPct} | Records: ${allocExportRows.length} | Generated: ${new Date().toLocaleString()}`,
+            "",
+          ];
+          allocExportRows.forEach((row, i) => {
+            const seq = String(i + 1).padStart(3, "0");
+            lines.push(
+              `--- ${t.fixAllocRecord} ${seq}: ${row.name} (${row.unifiedCode}) ---`,
+              `8=FIX.4.4`, `9=212`, `35=J`, `49=QNB-CLEARING`, `56=MCDR`,
+              `34=${i + 1}`, `52=${ts}`,
+              `70=ALLOC-${ts}-${seq}`, `71=0`, `626=1`,
+              `55=${symbol}`, `48=${isin}`, `22=4`, `54=1`,
+              `38=${row.subscribedShares}`, `800=${row.allocated}`,
+              `44=${price.toFixed(2)}`, `74=1`,
+              `78=1`, `79=${row.name}`, `467=${row.unifiedCode}`,
+              `80=${row.allocated}`, `81=0`, `736=${(row.refundable).toFixed(2)}`,
+              `60=${ts}`, `10=000`, ``,
+            );
+          });
+          setFixAllocMsg(lines.join("\n"));
+          setFixAllocSent(false);
+        };
+
         return (
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex justify-end gap-2">
-                {storedAllocationRatio !== null && (
-                  <Button variant="outline" size="sm" onClick={() => { exportAllocationCSV(allocExportRows, allocRatioPct, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
-                    <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
-                  </Button>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2">
+                <div className="flex justify-end gap-2">
+                  {storedAllocationRatio !== null && (
+                    <Button variant="outline" size="sm" onClick={() => { exportAllocationCSV(allocExportRows, allocRatioPct, lang); toast({ title: t.toastExported, description: t.toastExportedDesc }); }}>
+                      <FileSpreadsheet className="w-4 h-4 me-2" />{t.exportData}
+                    </Button>
+                  )}
+                  {storedAllocationRatio !== null && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {storedAllocationRatio === null ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p className="font-bold">{t.noRecords}</p>
+                    <p className="text-sm mt-1">
+                      {!isUncoveredReconciled
+                        ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
+                        : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-border/50">
+                    <Table>
+                      <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
+                      <TableBody>
+                        {allocExportRows.map(row => (
+                          <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
+                            <TableCell className="font-bold text-sm">{row.name}</TableCell>
+                            <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
+                            <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{allocRatioPct}</Badge></TableCell>
+                            <TableCell className="text-sm font-bold text-muted-foreground">{row.paid.toLocaleString(numLocale)}</TableCell>
+                            <TableCell className="text-sm font-black text-red-500">{row.refundable.toLocaleString(numLocale)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
-                {storedAllocationRatio !== null && <Button size="sm" onClick={() => setBoTab("Refunds")}>{t.proceedRefunds}</Button>}
-              </div>
-            </CardHeader>
-            <CardContent>
-              {storedAllocationRatio === null ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <p className="font-bold">{t.noRecords}</p>
-                  <p className="text-sm mt-1">
-                    {!isUncoveredReconciled
-                      ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
-                      : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-border/50">
-                  <Table>
-                    <TableHeader><TableRow className="bg-primary/5">{[t.colName, t.colRequested, t.colAllocShares, t.colRatioPct, t.colTotalPaid, t.colRefundable].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>)}</TableRow></TableHeader>
-                    <TableBody>
-                      {allocExportRows.map(row => (
-                        <TableRow key={row.unifiedCode} className="hover:bg-muted/30">
-                          <TableCell className="font-bold text-sm">{row.name}</TableCell>
-                          <TableCell className="text-sm font-bold text-muted-foreground">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-sm font-black text-primary">{row.allocated.toLocaleString(numLocale)}</TableCell>
-                          <TableCell><Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{allocRatioPct}</Badge></TableCell>
-                          <TableCell className="text-sm font-bold text-muted-foreground">{row.paid.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-sm font-black text-red-500">{row.refundable.toLocaleString(numLocale)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* FIX 4.4 Allocation Message Generation */}
+            {storedAllocationRatio !== null && (
+              <Card className="border-primary/20">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-primary/70 mb-1">FIX 4.4</p>
+                      <CardTitle className="text-base">{t.fixAllocTitle}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-0.5">{t.fixAllocDesc}</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {!fixAllocMsg ? (
+                        <Button size="sm" onClick={handleGenerateFixAlloc}>
+                          <Zap className="w-4 h-4 me-2" />{t.fixAllocGenerateBtn}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(fixAllocMsg); setFixAllocCopied(true); setTimeout(() => setFixAllocCopied(false), 2000); }}>
+                            {fixAllocCopied ? t.fixAllocCopied : t.fixCopyBtn}
+                          </Button>
+                          {!fixAllocSent ? (
+                            <Button size="sm" onClick={() => { setFixAllocSent(true); toast({ title: t.fixAllocSent }); }}>
+                              <Zap className="w-4 h-4 me-2" />{t.fixAllocSubmit}
+                            </Button>
+                          ) : (
+                            <Badge className="bg-emerald-500 text-white px-3 py-1.5 text-xs font-black">{t.fixAllocSent}</Badge>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                {fixAllocMsg && (
+                  <CardContent className="pt-0">
+                    <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-64 leading-relaxed whitespace-pre-wrap">{fixAllocMsg}</pre>
+                  </CardContent>
+                )}
+              </Card>
+            )}
+          </div>
         );
       })()}
 
