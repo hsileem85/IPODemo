@@ -27,7 +27,7 @@ import {
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
   Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
-  ActivitySquare, Clock, TrendingDown,
+  ActivitySquare, Clock, TrendingDown, Database, Briefcase, Lock,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +35,9 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 type AuthMode = "login" | "forgot";
 type UserRole = "FrontOffice" | "BackOffice" | "Supervisor" | "SystemAdmin" | "Communications";
+
+interface Broker { id: string; name: string; code: string; email: string; }
+interface Custodian { id: string; name: string; code: string; email: string; }
 type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded" | "Pending Cash" | "Pending MCDR Allocation";
 type CommChannel = "email" | "sms" | "notification";
 type CommAudience = "all" | "group" | "individual" | "upload";
@@ -124,6 +127,17 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
   "7700123": { nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", account: "100234567", isBankClient: true, bankAccountNo: "EG290011-23456-78", cashBalance: 85000, eligibleShares: 8000, email: "ahmed.ali@email.com", mobile: "+201112345678", type: "individual" },
   "3400127": { nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", unifiedCode: "3400127", nationalId: "29203154321098", account: "100078923", isBankClient: true, bankAccountNo: "EG290011-07892-31", cashBalance: 200000, eligibleShares: 15000, email: "mona.kamal@email.com", mobile: "+201554321098", type: "individual" },
 };
+
+const INITIAL_BROKERS: Broker[] = [
+  { id: "BRK-001", name: "EFG Hermes Securities", code: "EFG", email: "info@efghermes.com" },
+  { id: "BRK-002", name: "Beltone Financial", code: "BLT", email: "info@beltone.com.eg" },
+  { id: "BRK-003", name: "CI Capital", code: "CIC", email: "brokerage@cicapital.com.eg" },
+];
+const INITIAL_CUSTODIANS: Custodian[] = [
+  { id: "CUS-001", name: "Misr for Central Clearing", code: "MCDR", email: "clearing@mcdr.com.eg" },
+  { id: "CUS-002", name: "QNB Custody Services", code: "QNBC", email: "custody@qnb.com.eg" },
+  { id: "CUS-003", name: "CIB Custodian", code: "CIBC", email: "custody@cib.com.eg" },
+];
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
   { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13", phase: "covered" },
@@ -3815,12 +3829,124 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Basic Data Screens — Brokers & Custodians
+// ─────────────────────────────────────────────────────────────────────────────
+function BasicDataScreen<T extends { id: string; name: string; code: string; email: string }>({
+  title, desc, addBtn, records, onAdd, icon: Icon,
+}: {
+  title: string; desc: string; addBtn: string;
+  records: T[]; onAdd: (r: T) => void; icon: React.ElementType;
+}) {
+  const { t, lang } = useLang();
+  const { toast } = useToast();
+  const [showForm, setShowForm] = useState(false);
+  const schema = z.object({
+    name: z.string().min(1, t.requiredField),
+    code: z.string().min(1, t.requiredField),
+    email: z.string().email(t.requiredField),
+  });
+  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { name: "", code: "", email: "" } });
+  const handleSave = (values: z.infer<typeof schema>) => {
+    const newRecord = { id: `${Date.now()}`, ...values } as T;
+    onAdd(newRecord);
+    toast({ title: t.bdSavedOk, description: values.name });
+    form.reset(); setShowForm(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-primary/10 text-primary p-2.5 rounded-xl"><Icon className="w-5 h-5" /></div>
+          <div><h2 className="text-2xl font-black tracking-tight">{title}</h2><p className="text-muted-foreground text-sm">{desc}</p></div>
+        </div>
+        <Button onClick={() => setShowForm(v => !v)}>
+          <PlusCircle className="w-4 h-4 me-2" />{addBtn}
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card className="border-primary/30">
+          <CardHeader><CardTitle className="text-base">{addBtn}</CardTitle></CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(handleSave)} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField control={form.control} name="name" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.bdName}</FormLabel>
+                    <FormControl><Input placeholder={t.bdName} {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="code" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.bdCode}</FormLabel>
+                    <FormControl><Input placeholder={t.bdCode} className="font-mono uppercase" {...field} onChange={e => field.onChange(e.target.value.toUpperCase())} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t.bdEmail}</FormLabel>
+                    <FormControl><Input type="email" placeholder={t.bdEmail} {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <div className="md:col-span-3 flex gap-2">
+                  <Button type="submit"><CheckCircle2 className="w-4 h-4 me-2" />{lang === "ar" ? "حفظ" : "Save"}</Button>
+                  <Button type="button" variant="outline" onClick={() => { setShowForm(false); form.reset(); }}>{lang === "ar" ? "إلغاء" : "Cancel"}</Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardContent className="pt-4">
+          <div className="overflow-x-auto rounded-xl border border-border/50">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{t.bdName}</TableHead>
+                  <TableHead className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{t.bdCode}</TableHead>
+                  <TableHead className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{t.bdEmail}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records.length === 0 ? (
+                  <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                ) : records.map(r => (
+                  <TableRow key={r.id} className="hover:bg-muted/30 transition-colors">
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-xs font-black">{r.code.slice(0, 2)}</div>
+                        <p className="font-bold text-sm">{r.name}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell><span className="font-mono font-black text-xs bg-muted px-2 py-1 rounded-lg">{r.code}</span></TableCell>
+                    <TableCell><a href={`mailto:${r.email}`} className="text-sm text-primary hover:underline">{r.email}</a></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function IPOSystem() {
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
-  const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks" | "Brokers" | "Custodians">("dashboard");
   const [backOfficePage, setBackOfficePage] = useState<"covered" | "uncovered">("covered");
   const [showClearingMenu, setShowClearingMenu] = useState(false);
+  const [showBasicDataMenu, setShowBasicDataMenu] = useState(false);
+  const [brokers, setBrokers] = useState<Broker[]>(INITIAL_BROKERS);
+  const [custodians, setCustodians] = useState<Custodian[]>(INITIAL_CUSTODIANS);
   // Lifted BackOffice state — persists across navigation
   const [boMcdrRows, setBoMcdrRows] = useState<MCDRRow[]>([]);
   const [boReconRows, setBoReconRows] = useState<ReconRow[]>([]);
@@ -3980,10 +4106,29 @@ function IPOSystem() {
                 </button>
               ))}
               <div className="w-px bg-border self-stretch mx-0.5" />
-              <button onClick={() => setActiveView("IPOStocks")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "IPOStocks" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-                <BarChart3 className="w-3.5 h-3.5" />{t.ipoStockTab}
-              </button>
+              <div className="relative" onMouseEnter={() => setShowBasicDataMenu(true)} onMouseLeave={() => setShowBasicDataMenu(false)}>
+                <button
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${["IPOStocks","Brokers","Custodians"].includes(activeView) ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                  <Database className="w-3.5 h-3.5" />{t.menuBasicData}
+                  <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showBasicDataMenu ? "rotate-180" : ""}`} />
+                </button>
+                {showBasicDataMenu && (
+                  <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[11rem] py-1">
+                    <button onClick={() => { setActiveView("IPOStocks"); setShowBasicDataMenu(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "IPOStocks" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                      <BarChart3 className="w-3.5 h-3.5" />{t.ipoStockTab}
+                    </button>
+                    <button onClick={() => { setActiveView("Brokers"); setShowBasicDataMenu(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Brokers" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                      <Briefcase className="w-3.5 h-3.5" />{t.menuBrokers}
+                    </button>
+                    <button onClick={() => { setActiveView("Custodians"); setShowBasicDataMenu(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Custodians" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                      <Lock className="w-3.5 h-3.5" />{t.menuCustodians}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
             <button className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
@@ -4049,6 +4194,18 @@ function IPOSystem() {
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
           {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
+          {activeView === "Brokers" && (
+            <BasicDataScreen<Broker>
+              title={t.brokersTitle} desc={t.brokersDesc} addBtn={t.addBrokerBtn}
+              records={brokers} onAdd={r => setBrokers(prev => [...prev, r])} icon={Briefcase}
+            />
+          )}
+          {activeView === "Custodians" && (
+            <BasicDataScreen<Custodian>
+              title={t.custodiansTitle} desc={t.custodiansDesc} addBtn={t.addCustodianBtn}
+              records={custodians} onAdd={r => setCustodians(prev => [...prev, r])} icon={Lock}
+            />
+          )}
         </main>
 
         {showProfile && <ProfilePanel user={loggedInUser} prefs={prefs} onPrefsChange={handlePrefsChange} onClose={() => setShowProfile(false)} />}

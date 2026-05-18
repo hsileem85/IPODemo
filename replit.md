@@ -37,6 +37,7 @@ A full-featured IPO (Initial Public Offering) subscription management system for
 - **Broker CSV format**: columns — ClientName, IPOName, UnifiedCode, Qty, Cost, Date (6 columns).
 - **Broker FIX flow**: After CSV review → Generate FIX Message (FIX 4.2 per client, shown in pre block with copy button) → Submit for Review.
 - **Dashboard filtering**: Stats filtered by `activeStockId`. Subscriptions with `s.ipoId === activeStockId`; broker batches with `b.ipoId === activeStockId`. Financial totals include broker batch costs.
+- **Basic Data menu**: A "Basic Data" dropdown in the top nav (hover to open) contains three sub-items: IPO Stocks, Brokers, Custodians. Shared `BasicDataScreen<T>` generic component handles both Brokers and Custodians with Name/Code/Email fields. Seed data: `INITIAL_BROKERS`, `INITIAL_CUSTODIANS` in App.tsx. State: `brokers`, `custodians` in IPOSystem. `activeView` type includes `"Brokers" | "Custodians"`.
 - **No `Search` lucide icon**: It causes a runtime error; use `SearchIcon` or omit search icons.
 - **No nested `<button>`**: Avoid nesting `<button>` inside `<button>` — causes React hydration warnings.
 
