@@ -122,18 +122,21 @@ const TOTAL_PER_SHARE = PAR_VALUE + ISSUE_FEES;
 const MOCK_CLIENTS: Record<string, ClientRecord> = {
   "8800318": { nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", unifiedCode: "8800318", nationalId: "28512111234567", account: "100003456", isBankClient: true, bankAccountNo: "EG290011-10034-56", cashBalance: 150000, eligibleShares: 12000, email: "hussein.salim@email.com", mobile: "+201001234567", type: "individual" },
   "7700123": { nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", account: "100234567", isBankClient: true, bankAccountNo: "EG290011-23456-78", cashBalance: 85000, eligibleShares: 8000, email: "ahmed.ali@email.com", mobile: "+201112345678", type: "individual" },
+  "3400127": { nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", unifiedCode: "3400127", nationalId: "29203154321098", account: "100078923", isBankClient: true, bankAccountNo: "EG290011-07892-31", cashBalance: 200000, eligibleShares: 15000, email: "mona.kamal@email.com", mobile: "+201554321098", type: "individual" },
 };
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
   { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13", phase: "covered" },
   { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14", phase: "covered" },
   { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14", phase: "covered" },
+  { id: "TX-9905", nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", nationalId: "29203154321098", account: "100078923", unifiedCode: "3400127", requestedShares: 12000, amountDue: 15000, amountPaid: 15000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Cairo-Main", submittedAt: "2026-05-15 10:20", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered" },
 ];
 
 const INITIAL_MCDR = [
   { id: 1, nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", unifiedCode: "8800318", nationalId: "28512111234567", eligibleShares: 12000, subscribedShares: 8000, balanceEGP: 150000, status: "Partial" as const },
   { id: 2, nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", unifiedCode: "7744312", nationalId: "28805051234568", eligibleShares: 5000, subscribedShares: 5000, balanceEGP: 80000, status: "Full" as const },
   { id: 3, nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", eligibleShares: 8000, subscribedShares: 8000, balanceEGP: 85000, status: "Full" as const },
+  { id: 4, nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", unifiedCode: "3400127", nationalId: "29203154321098", eligibleShares: 15000, subscribedShares: 12000, balanceEGP: 200000, status: "Partial" as const },
 ];
 
 const INITIAL_USERS: SystemUser[] = [
