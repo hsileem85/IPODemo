@@ -1172,48 +1172,32 @@ interface BrokerBatch {
   phase: "covered" | "uncovered";
 }
 
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, onSubmitBatch, subscriptions, onUpdateStatus }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, subscriptions }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
   onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   activeStock: IPOStock | null;
   ipoStocks: IPOStock[];
-  onSubmitBatch: (batch: BrokerBatch) => void;
   subscriptions: Subscription[];
-  onUpdateStatus: (id: string, status: SubStatus) => void;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [foTab, setFoTab] = useState<"subs" | "kyc" | "followup">("subs");
-  const [followUpSearch, setFollowUpSearch] = useState("");
-  const [followUpFilter, setFollowUpFilter] = useState("All");
+  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
   const [cashVerified, setCashVerified] = useState<boolean | null>(null);
   const [fixVerified, setFixVerified] = useState<boolean | null>(null);
-  const [followUpSelectedId, setFollowUpSelectedId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
-  const [requestType, setRequestType] = useState<"individual" | "broker">("individual");
   const [ucInput, setUcInput] = useState("");
   const [foundClient, setFoundClient] = useState<ClientRecord | null>(null);
   const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
   const [txRef, setTxRef] = useState("");
   const [fixSent, setFixSent] = useState(false);
-  const [brokerFile, setBrokerFile] = useState<File | null>(null);
-  const [brokerName, setBrokerName] = useState("");
-  const [brokerIPO, setBrokerIPO] = useState("");
-  const [brokerClients, setBrokerClients] = useState<BrokerClient[]>([]);
-  const [brokerPayMethod, setBrokerPayMethod] = useState("Bank Transfer");
-  const [brokerFIX, setBrokerFIX] = useState("");
-  const [fixCopied, setFixCopied] = useState(false);
   const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
-  const brokerRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const STEPS = [t.step1, t.step2, t.step3, t.stepFIX, t.step4];
   const DOCS = [t.doc1, t.doc2, t.doc3, t.doc4];
   const EVENTS = ipoStocks.map(s => ({ value: s.id, label: lang === "ar" ? s.securityNameAr : s.securityNameEn }));
-  const paymentOptions = requestType === "broker"
-    ? [{ v: "Bank Transfer", l: t.payTransfer }, { v: "Debit Note", l: t.payDebitNote }]
-    : [{ v: "Cash Deposit", l: t.payCash }, { v: "Transfer", l: t.payTransfer }];
+  const paymentOptions = [{ v: "Cash Deposit", l: t.payCash }, { v: "Transfer", l: t.payTransfer }];
   const sharesSchema = z.object({ requestedShares: z.coerce.number().min(1, t.sharesError), paymentMethod: z.string().min(1) });
   const form = useForm<z.infer<typeof sharesSchema>>({ resolver: zodResolver(sharesSchema), defaultValues: { requestedShares: 0, paymentMethod: paymentOptions[0].v } });
   const watchedShares = form.watch("requestedShares");
@@ -1283,188 +1267,11 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
     <div className="space-y-5">
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
-        <TabBtn id="fo-followup" active={foTab === "followup"} onClick={() => setFoTab("followup")} icon={ActivitySquare}>{t.foTabFollowUp}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
       </div>
 
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
 
-      {foTab === "followup" && (() => {
-        const filtered = subscriptions.filter(s => {
-          const q = followUpSearch.toLowerCase();
-          const matchQ = !q || clientName(s.nameAr, s.nameEn, lang).toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.unifiedCode.includes(q);
-          const matchF = followUpFilter === "All"
-            || (followUpFilter === "Pending Cash" && s.status === "Pending Cash")
-            || (followUpFilter === "Pending MCDR" && s.status === "Pending MCDR Allocation")
-            || (followUpFilter === "Others" && s.status !== "Pending Cash" && s.status !== "Pending MCDR Allocation");
-          return matchQ && matchF;
-        });
-        const pendingCashList = subscriptions.filter(s => s.status === "Pending Cash");
-        const pendingMCDRList = subscriptions.filter(s => s.status === "Pending MCDR Allocation");
-        const selectedId = followUpSelectedId;
-        const setSelectedId = setFollowUpSelectedId;
-        const selectedSub = subscriptions.find(s => s.id === selectedId) ?? null;
-        const selectedIPO = selectedSub ? ipoStocks.find(st => st.id === selectedSub.ipoId) : null;
-        const FILTER_PILLS = [
-          { key: "All", label: t.followUpFilterAll, count: subscriptions.length },
-          { key: "Pending Cash", label: t.followUpPendingCash, count: pendingCashList.length },
-          { key: "Pending MCDR", label: t.followUpPendingMCDR, count: pendingMCDRList.length },
-          { key: "Others", label: lang === "ar" ? "طلبات أخرى" : "Others", count: subscriptions.filter(s => s.status !== "Pending Cash" && s.status !== "Pending MCDR Allocation").length },
-        ];
-        return (
-          <div className="space-y-5">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-black text-foreground">{t.followUpTitle}</h2>
-                <p className="text-sm text-muted-foreground mt-0.5">{t.followUpDesc}</p>
-              </div>
-            </div>
-            {/* Action cards for the two key statuses */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className={`rounded-2xl border-2 p-4 flex items-center gap-4 ${pendingCashList.length > 0 ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" : "bg-muted/30 border-border"}`}>
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${pendingCashList.length > 0 ? "bg-red-100 dark:bg-red-800/30 text-red-600" : "bg-muted text-muted-foreground"}`}>
-                  <AlertCircle className="w-6 h-6" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-0.5">{t.followUpPendingCash}</p>
-                  <p className={`text-3xl font-black ${pendingCashList.length > 0 ? "text-red-600" : "text-muted-foreground"}`}>{pendingCashList.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات تحتاج تأكيد نقدية" : "requests awaiting cash confirmation"}</p>
-                </div>
-                {pendingCashList.length > 0 && (
-                  <button onClick={() => setFollowUpFilter("Pending Cash")} className="text-xs font-black text-red-600 hover:underline shrink-0">{lang === "ar" ? "عرض" : "View"}</button>
-                )}
-              </div>
-              <div className={`rounded-2xl border-2 p-4 flex items-center gap-4 ${pendingMCDRList.length > 0 ? "bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800" : "bg-muted/30 border-border"}`}>
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${pendingMCDRList.length > 0 ? "bg-purple-100 dark:bg-purple-800/30 text-purple-600" : "bg-muted text-muted-foreground"}`}>
-                  <Zap className="w-6 h-6" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-0.5">{t.followUpPendingMCDR}</p>
-                  <p className={`text-3xl font-black ${pendingMCDRList.length > 0 ? "text-purple-600" : "text-muted-foreground"}`}>{pendingMCDRList.length}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات تحتاج متابعة تخصيص MCDR" : "requests awaiting MCDR allocation"}</p>
-                </div>
-                {pendingMCDRList.length > 0 && (
-                  <button onClick={() => setFollowUpFilter("Pending MCDR")} className="text-xs font-black text-purple-600 hover:underline shrink-0">{lang === "ar" ? "عرض" : "View"}</button>
-                )}
-              </div>
-            </div>
-            {/* Search + filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <ActivitySquare className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <input value={followUpSearch} onChange={e => setFollowUpSearch(e.target.value)} placeholder={t.followUpSearch}
-                  className="w-full border border-input rounded-xl ps-9 pe-4 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" />
-              </div>
-              <div className="flex gap-1.5 flex-wrap">
-                {FILTER_PILLS.map(p => (
-                  <button key={p.key} onClick={() => setFollowUpFilter(p.key)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center gap-1.5 ${followUpFilter === p.key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"}`}>
-                    {p.label}
-                    <span className={`text-[10px] rounded-full px-1.5 py-0 font-black ${followUpFilter === p.key ? "bg-white/20" : "bg-muted"}`}>{p.count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Split view: list + detail panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 min-h-[380px]">
-              {/* List */}
-              <div className="overflow-x-auto rounded-xl border border-border/50">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-primary/5">
-                      {[t.followUpColId, t.followUpColClient, t.followUpColIPO, t.followUpColShares, t.followUpColDate, t.followUpColStatus].map(col => (
-                        <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground font-bold">{t.followUpEmpty}</TableCell></TableRow>
-                    ) : filtered.map(s => {
-                      const ipoName = ipoStocks.find(st => st.id === s.ipoId);
-                      const isSelected = selectedId === s.id;
-                      const isPendingCash = s.status === "Pending Cash";
-                      const isPendingMCDR = s.status === "Pending MCDR Allocation";
-                      return (
-                        <TableRow key={s.id} onClick={() => setSelectedId(isSelected ? null : s.id)}
-                          className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/8 border-s-2 border-primary" : "hover:bg-muted/30"} ${isPendingCash ? "bg-red-50/40 dark:bg-red-900/5" : isPendingMCDR ? "bg-purple-50/40 dark:bg-purple-900/5" : ""}`}>
-                          <TableCell className="font-mono text-xs font-bold text-primary">{s.id}</TableCell>
-                          <TableCell>
-                            <div className="font-bold text-sm text-foreground">{clientName(s.nameAr, s.nameEn, lang)}</div>
-                            <div className="text-[10px] text-muted-foreground font-mono">{s.unifiedCode}</div>
-                          </TableCell>
-                          <TableCell className="text-xs font-bold text-muted-foreground">{ipoName ? (lang === "ar" ? ipoName.securityNameAr : ipoName.securityNameEn) : s.ipoId}</TableCell>
-                          <TableCell className="text-sm font-bold">{s.requestedShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-xs text-muted-foreground">{s.date}</TableCell>
-                          <TableCell><SubBadge status={s.status} /></TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              {/* Detail panel */}
-              <div className="rounded-xl border border-border/50 bg-muted/20 flex flex-col">
-                {!selectedSub ? (
-                  <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
-                    <ClipboardList className="w-10 h-10 text-muted-foreground/30" />
-                    <p className="text-sm font-bold text-muted-foreground">{lang === "ar" ? "اختر طلباً لعرض التفاصيل" : "Select a request to view details"}</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-0 h-full">
-                    {/* Panel header */}
-                    <div className={`px-4 py-3 rounded-t-xl border-b border-border/50 ${selectedSub.status === "Pending Cash" ? "bg-red-50 dark:bg-red-900/10" : selectedSub.status === "Pending MCDR Allocation" ? "bg-purple-50 dark:bg-purple-900/10" : "bg-muted/40"}`}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono text-xs font-black text-primary">{selectedSub.id}</span>
-                        <SubBadge status={selectedSub.status} />
-                      </div>
-                      <p className="font-black text-sm text-foreground">{clientName(selectedSub.nameAr, selectedSub.nameEn, lang)}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{selectedSub.unifiedCode}</p>
-                    </div>
-                    {/* Panel body */}
-                    <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
-                      {[
-                        { label: lang === "ar" ? "الأوراق المالية" : "Security", value: selectedIPO ? (lang === "ar" ? selectedIPO.securityNameAr : selectedIPO.securityNameEn) : selectedSub.ipoId },
-                        { label: lang === "ar" ? "المرحلة" : "Phase", value: selectedSub.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge },
-                        { label: t.sharesCol, value: selectedSub.requestedShares.toLocaleString(numLocale) },
-                        { label: t.totalAmtLabel, value: `${selectedSub.amountPaid.toLocaleString(numLocale)} ${t.egp}` },
-                        { label: lang === "ar" ? "التاريخ" : "Date", value: selectedSub.date },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="flex justify-between items-start gap-2 text-sm">
-                          <span className="text-muted-foreground font-bold text-xs uppercase tracking-wide">{label}</span>
-                          <span className="font-bold text-end">{value}</span>
-                        </div>
-                      ))}
-                      {/* Action section */}
-                      {selectedSub.status === "Pending Cash" && (
-                        <div className="pt-3 border-t border-border/50 space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-red-600">{lang === "ar" ? "الإجراء المطلوب" : "Action Required"}</p>
-                          <p className="text-xs text-muted-foreground">{lang === "ar" ? "يجب تأكيد استلام النقدية من النظام الأساسي قبل المتابعة." : "Cash receipt must be confirmed in core banking before proceeding."}</p>
-                          <Button size="sm" className="w-full bg-red-600 hover:bg-red-700 text-white"
-                            onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); setSelectedId(null); toast({ title: t.followUpResolvedCash, description: selectedSub.id }); }}>
-                            <CheckCircle2 className="w-3.5 h-3.5 me-2" />{t.followUpResolveCash}
-                          </Button>
-                        </div>
-                      )}
-                      {selectedSub.status === "Pending MCDR Allocation" && (
-                        <div className="pt-3 border-t border-border/50 space-y-2">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">{lang === "ar" ? "الإجراء المطلوب" : "Action Required"}</p>
-                          <p className="text-xs text-muted-foreground">{lang === "ar" ? "يجب تأكيد التخصيص في MCDR من خلال المتابعة مع قسم المقاصة." : "MCDR allocation must be confirmed by following up with the clearing department."}</p>
-                          <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                            onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); setSelectedId(null); toast({ title: t.followUpResolvedMCDR, description: selectedSub.id }); }}>
-                            <CheckCircle2 className="w-3.5 h-3.5 me-2" />{t.followUpResolveMCDR}
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {foTab === "subs" && (
         <div className="space-y-6">
@@ -1494,216 +1301,6 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
             </div>
           )}
 
-          {/* Request type toggle */}
-          <Card>
-            <CardContent className="pt-5 pb-5">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div>
-                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">{t.requestTypeLabel}</p>
-                  <div className="flex gap-2">
-                    <button type="button"
-                      onClick={() => { setRequestType("individual"); resetFlow(); }}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${requestType === "individual" ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-transparent text-muted-foreground hover:border-primary/30"}`}>
-                      <User className="w-4 h-4" />{t.individualRequest}
-                    </button>
-                    <button type="button"
-                      onClick={() => { setRequestType("broker"); resetFlow(); }}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${requestType === "broker" ? "bg-primary border-primary text-primary-foreground" : "bg-muted border-transparent text-muted-foreground hover:border-primary/30"}`}>
-                      <Building2 className="w-4 h-4" />{t.brokerRequest}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ── BROKER FLOW ── */}
-          {requestType === "broker" && (() => {
-            const handleBrokerCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setBrokerFile(file);
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                const text = ev.target?.result as string;
-                const lines = text.split('\n').filter(l => l.trim());
-                const clients: BrokerClient[] = lines.slice(1).map(line => {
-                  const p = line.split(',');
-                  return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "" };
-                }).filter(c => c.clientName);
-                setBrokerClients(clients);
-              };
-              reader.readAsText(file);
-              e.target.value = "";
-            };
-            const totalQty = brokerClients.reduce((s, c) => s + c.qty, 0);
-            const totalCost = brokerClients.reduce((s, c) => s + c.cost, 0);
-            return (
-              <Card>
-                <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
-                <CardContent className="space-y-5">
-                  {/* Step 1: Broker + IPO selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.brokerLabel}</p>
-                      <select value={brokerName} onChange={e => setBrokerName(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                        <option value="">{t.selectBroker}</option>
-                        <option value="EFG">EFG Hermes</option>
-                        <option value="CI Capital">CI Capital</option>
-                        <option value="Beltone">Beltone Financial</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.eventLabel}</p>
-                      <select value={brokerIPO} onChange={e => setBrokerIPO(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                        <option value="">{t.selectIPO}</option>
-                        {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
-                      </select>
-                      {brokerIPO && (() => { const s = ipoStocks.find(x => x.id === brokerIPO); return s ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
-                          <Layers className="w-3 h-3" />
-                          {s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-                        </span>
-                      ) : null; })()}
-                    </div>
-                  </div>
-
-                  {/* Step 2+: Upload + grid (only when broker & IPO selected) */}
-                  {brokerName && brokerIPO && (
-                    <>
-                      {brokerClients.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-12 gap-4">
-                          <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-muted-foreground" /></div>
-                          <div className="text-center"><p className="font-bold">{t.brokerUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.brokerUploadDesc}</p></div>
-                          <input ref={brokerRef} type="file" accept=".csv" className="hidden" onChange={handleBrokerCSV} />
-                          <Button onClick={() => brokerRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {/* File loaded banner */}
-                          <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
-                            <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
-                              <CheckCircle2 className="w-5 h-5" />
-                              <div><p className="font-bold text-sm">{brokerFile?.name}</p><p className="text-xs">{t.brokerFileLoaded(brokerClients.length)}</p></div>
-                            </div>
-                            <Button variant="outline" size="sm" onClick={() => { setBrokerClients([]); setBrokerFile(null); }}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}</Button>
-                          </div>
-
-                          {/* Summary stats */}
-                          <div className="grid grid-cols-3 gap-3">
-                            {[
-                              { label: t.totalClients, value: brokerClients.length, cls: "text-primary" },
-                              { label: t.shares, value: totalQty.toLocaleString(numLocale), cls: "text-foreground" },
-                              { label: t.totalValue, value: totalCost.toLocaleString(numLocale), cls: "text-green-600" },
-                            ].map(({ label, value, cls }) => (
-                              <Card key={label}><CardContent className="pt-4 text-center">
-                                <p className={`text-xl font-black ${cls}`}>{value}</p>
-                                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-0.5">{label}</p>
-                              </CardContent></Card>
-                            ))}
-                          </div>
-
-                          {/* Client grid */}
-                          <div className="overflow-x-auto rounded-xl border border-border/50">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/30">
-                                  {["#", t.colClientName, t.colIPOName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map((h, i) => (
-                                    <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 5 ? "text-end" : ""}`}>{h}</TableHead>
-                                  ))}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {brokerClients.map((c, i) => (
-                                  <TableRow key={i} className="hover:bg-muted/30">
-                                    <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
-                                    <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
-                                    <TableCell className="text-sm">{c.ipoName}</TableCell>
-                                    <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
-                                    <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
-                                    <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
-                                    <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-
-                          {/* Payment + Ref */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
-                              <select value={brokerPayMethod} onChange={e => setBrokerPayMethod(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                                <option value="Bank Transfer">{t.payTransfer}</option>
-                                <option value="Debit Note">{t.payDebitNote}</option>
-                              </select>
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.txRefLabel}</p>
-                              <Input placeholder={t.txRefPlaceholder} dir="ltr" value={txRef} onChange={e => setTxRef(e.target.value)} />
-                            </div>
-                          </div>
-
-                          {/* FIX Generation Step */}
-                          {!brokerFIX ? (
-                            <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => {
-                              const stock = ipoStocks.find(s => s.id === brokerIPO);
-                              const symbol = stock?.symbol ?? brokerIPO;
-                              const price = stock?.pricePerShare ?? 0;
-                              const now = new Date();
-                              const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-                              const batchId = `BRK${Date.now().toString().slice(-6)}`;
-                              const lines = brokerClients.map((c, i) =>
-                                `8=FIX.4.2|35=D|49=QNB|56=${brokerName}|34=${i+1}|52=${ts}|11=${batchId}-${String(i+1).padStart(3,'0')}|55=${symbol}|54=1|38=${c.qty}|44=${price.toFixed(2)}|40=2|453=1|448=${c.unifiedCode}|447=P|452=1|10=000`
-                              );
-                              setBrokerFIX(`=== GROUP IPO SUBSCRIPTION — FIX 4.2 ===\nBroker: ${brokerName} | Symbol: ${symbol} | Records: ${brokerClients.length} | Batch: ${batchId}\n\n${lines.join('\n')}`);
-                            }}>
-                              <Zap className="w-4 h-4 me-2" />{t.fixGenerateBtn}
-                            </Button>
-                          ) : (
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.fixMsgTitle}</p>
-                                <button
-                                  onClick={() => { navigator.clipboard.writeText(brokerFIX); setFixCopied(true); setTimeout(() => setFixCopied(false), 2000); }}
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-all"
-                                >
-                                  {fixCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-                                  {fixCopied ? t.fixCopied : t.fixCopyBtn}
-                                </button>
-                              </div>
-                              <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{brokerFIX}</pre>
-                              <Button onClick={() => {
-                                const stock = ipoStocks.find(s => s.id === brokerIPO);
-                                const batch: BrokerBatch = {
-                                  id: `BRK-${Date.now()}`,
-                                  broker: brokerName, ipoId: brokerIPO,
-                                  ipoName: lang === "ar" ? (stock?.securityNameAr ?? brokerIPO) : (stock?.securityNameEn ?? brokerIPO),
-                                  clients: brokerClients, paymentMethod: brokerPayMethod,
-                                  txRef, fixMessage: brokerFIX,
-                                  submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
-                                  status: "Pending Review",
-                                  phase: stock?.phase ?? "covered",
-                                };
-                                onSubmitBatch(batch);
-                                toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
-                                setBrokerClients([]); setBrokerFile(null); setBrokerName(""); setBrokerIPO("");
-                                setTxRef(""); setBrokerFIX(""); setBrokerPayMethod("Bank Transfer");
-                              }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* ── INDIVIDUAL FLOW ── */}
-          {requestType === "individual" && (
-            <>
               {/* Step progress bar */}
               <Card>
                 <CardContent className="pt-6">
@@ -1921,8 +1518,6 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                   </CardContent>
                 </Card>
               )}
-            </>
-          )}
         </div>
       )}
     </div>
@@ -2141,10 +1736,13 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   mcdrRows, setMcdrRows, reconRows, setReconRows, isReconciled, setIsReconciled, frozenSnapshot, setFrozenSnapshot,
   uncoveredMcdrRows, setUncoveredMcdrRows, uncoveredReconRows, setUncoveredReconRows, isUncoveredReconciled, setIsUncoveredReconciled,
   storedAllocationRatio, setStoredAllocationRatio, refundDone, setRefundDone,
+  onSubmitBatch, onUpdateStatus,
 }: {
   subscriptions: Subscription[]; onAllocate: (allocationRatio: number, matchedCodes: Set<string>) => void; onRefund: () => void;
   activeStock: IPOStock | null; ipoStocks: IPOStock[]; onStocksChange: (s: IPOStock[]) => void; brokerBatches: BrokerBatch[];
   page: "covered" | "uncovered";
+  onSubmitBatch: (batch: BrokerBatch) => void;
+  onUpdateStatus: (id: string, status: SubStatus) => void;
   onSwitchToUncovered: () => void;
   mcdrRows: MCDRRow[]; setMcdrRows: (v: MCDRRow[]) => void;
   reconRows: ReconRow[]; setReconRows: (v: ReconRow[]) => void;
@@ -2158,11 +1756,25 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "CoveredHistory">("MCDR");
+  const [boTab, setBoTab] = useState<"MCDR" | "Allocation" | "Refunds" | "Reconciliation" | "CoveredHistory" | "FollowUp" | "Broker">("MCDR");
   const [reconFilter, setReconFilter] = useState("All");
   const [selectedBoIpoId, setSelectedBoIpoId] = useState<string>(activeStock?.id ?? (ipoStocks[0]?.id ?? ""));
   const [uncoveredReconFilter, setUncoveredReconFilter] = useState("All");
   const [drillCard, setDrillCard] = useState<"subscriptions" | "eligible" | "shares" | "cash" | null>(null);
+  // Follow Up state
+  const [followUpSearch, setFollowUpSearch] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState("All");
+  const [followUpSelectedId, setFollowUpSelectedId] = useState<string | null>(null);
+  // Broker state
+  const [brokerFile, setBrokerFile] = useState<File | null>(null);
+  const [brokerName, setBrokerName] = useState("");
+  const [brokerIPO, setBrokerIPO] = useState("");
+  const [brokerClients, setBrokerClients] = useState<BrokerClient[]>([]);
+  const [brokerPayMethod, setBrokerPayMethod] = useState("Bank Transfer");
+  const [brokerFIX, setBrokerFIX] = useState("");
+  const [fixCopied, setFixCopied] = useState(false);
+  const [brokerTxRef, setBrokerTxRef] = useState("");
+  const brokerRef = useRef<HTMLInputElement>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -2671,6 +2283,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
           <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
         </>}
+        <TabBtn id="bo-FollowUp" active={boTab === "FollowUp"} onClick={() => setBoTab("FollowUp")} icon={ActivitySquare}>{t.boTabFollowUp}</TabBtn>
+        <TabBtn id="bo-Broker" active={boTab === "Broker"} onClick={() => setBoTab("Broker")} icon={Building2}>{t.boTabBroker}</TabBtn>
       </div>
       {page === "covered" && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
       {page === "covered" && !boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
@@ -3149,6 +2763,345 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
           </Card>
         </div>
       )}
+
+      {/* ── FOLLOW UP TAB ── */}
+      {boTab === "FollowUp" && (() => {
+        const filtered = subscriptions.filter(s => {
+          const q = followUpSearch.toLowerCase();
+          const matchQ = !q || clientName(s.nameAr, s.nameEn, lang).toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.unifiedCode.includes(q);
+          const matchF = followUpFilter === "All"
+            || (followUpFilter === "Pending Cash" && s.status === "Pending Cash")
+            || (followUpFilter === "Pending MCDR" && s.status === "Pending MCDR Allocation")
+            || (followUpFilter === "Others" && s.status !== "Pending Cash" && s.status !== "Pending MCDR Allocation");
+          return matchQ && matchF;
+        });
+        const pendingCashList = subscriptions.filter(s => s.status === "Pending Cash");
+        const pendingMCDRList = subscriptions.filter(s => s.status === "Pending MCDR Allocation");
+        const selectedSub = subscriptions.find(s => s.id === followUpSelectedId) ?? null;
+        const selectedIPO = selectedSub ? ipoStocks.find(st => st.id === selectedSub.ipoId) : null;
+        const FILTER_PILLS = [
+          { key: "All", label: t.followUpFilterAll, count: subscriptions.length },
+          { key: "Pending Cash", label: t.followUpPendingCash, count: pendingCashList.length },
+          { key: "Pending MCDR", label: t.followUpPendingMCDR, count: pendingMCDRList.length },
+          { key: "Others", label: lang === "ar" ? "طلبات أخرى" : "Others", count: subscriptions.filter(s => s.status !== "Pending Cash" && s.status !== "Pending MCDR Allocation").length },
+        ];
+        return (
+          <div className="space-y-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-black text-foreground">{t.followUpTitle}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{t.followUpDesc}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={`rounded-2xl border-2 p-4 flex items-center gap-4 ${pendingCashList.length > 0 ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" : "bg-muted/30 border-border"}`}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${pendingCashList.length > 0 ? "bg-red-100 dark:bg-red-800/30 text-red-600" : "bg-muted text-muted-foreground"}`}>
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-0.5">{t.followUpPendingCash}</p>
+                  <p className={`text-3xl font-black ${pendingCashList.length > 0 ? "text-red-600" : "text-muted-foreground"}`}>{pendingCashList.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات تحتاج تأكيد نقدية" : "requests awaiting cash confirmation"}</p>
+                </div>
+                {pendingCashList.length > 0 && (
+                  <button onClick={() => setFollowUpFilter("Pending Cash")} className="text-xs font-black text-red-600 hover:underline shrink-0">{lang === "ar" ? "عرض" : "View"}</button>
+                )}
+              </div>
+              <div className={`rounded-2xl border-2 p-4 flex items-center gap-4 ${pendingMCDRList.length > 0 ? "bg-purple-50 dark:bg-purple-900/10 border-purple-200 dark:border-purple-800" : "bg-muted/30 border-border"}`}>
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${pendingMCDRList.length > 0 ? "bg-purple-100 dark:bg-purple-800/30 text-purple-600" : "bg-muted text-muted-foreground"}`}>
+                  <Zap className="w-6 h-6" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-0.5">{t.followUpPendingMCDR}</p>
+                  <p className={`text-3xl font-black ${pendingMCDRList.length > 0 ? "text-purple-600" : "text-muted-foreground"}`}>{pendingMCDRList.length}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "طلبات تحتاج متابعة تخصيص MCDR" : "requests awaiting MCDR allocation"}</p>
+                </div>
+                {pendingMCDRList.length > 0 && (
+                  <button onClick={() => setFollowUpFilter("Pending MCDR")} className="text-xs font-black text-purple-600 hover:underline shrink-0">{lang === "ar" ? "عرض" : "View"}</button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <ActivitySquare className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input value={followUpSearch} onChange={e => setFollowUpSearch(e.target.value)} placeholder={t.followUpSearch}
+                  className="w-full border border-input rounded-xl ps-9 pe-4 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" />
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {FILTER_PILLS.map(p => (
+                  <button key={p.key} onClick={() => setFollowUpFilter(p.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors flex items-center gap-1.5 ${followUpFilter === p.key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"}`}>
+                    {p.label}
+                    <span className={`text-[10px] rounded-full px-1.5 py-0 font-black ${followUpFilter === p.key ? "bg-white/20" : "bg-muted"}`}>{p.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 min-h-[380px]">
+              <div className="overflow-x-auto rounded-xl border border-border/50">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-primary/5">
+                      {[t.followUpColId, t.followUpColClient, t.followUpColIPO, t.followUpColShares, t.followUpColDate, t.followUpColStatus].map(col => (
+                        <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground font-bold">{t.followUpEmpty}</TableCell></TableRow>
+                    ) : filtered.map(s => {
+                      const ipoName = ipoStocks.find(st => st.id === s.ipoId);
+                      const isSelected = followUpSelectedId === s.id;
+                      const isPendingCash = s.status === "Pending Cash";
+                      const isPendingMCDR = s.status === "Pending MCDR Allocation";
+                      return (
+                        <TableRow key={s.id} onClick={() => setFollowUpSelectedId(isSelected ? null : s.id)}
+                          className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/8 border-s-2 border-primary" : "hover:bg-muted/30"} ${isPendingCash ? "bg-red-50/40 dark:bg-red-900/5" : isPendingMCDR ? "bg-purple-50/40 dark:bg-purple-900/5" : ""}`}>
+                          <TableCell className="font-mono text-xs font-bold text-primary">{s.id}</TableCell>
+                          <TableCell>
+                            <div className="font-bold text-sm text-foreground">{clientName(s.nameAr, s.nameEn, lang)}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{s.unifiedCode}</div>
+                          </TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground">{ipoName ? (lang === "ar" ? ipoName.securityNameAr : ipoName.securityNameEn) : s.ipoId}</TableCell>
+                          <TableCell className="text-sm font-bold">{s.requestedShares.toLocaleString(numLocale)}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{s.date}</TableCell>
+                          <TableCell><SubBadge status={s.status} /></TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="rounded-xl border border-border/50 bg-muted/20 flex flex-col">
+                {!selectedSub ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+                    <ClipboardList className="w-10 h-10 text-muted-foreground/30" />
+                    <p className="text-sm font-bold text-muted-foreground">{lang === "ar" ? "اختر طلباً لعرض التفاصيل" : "Select a request to view details"}</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-0 h-full">
+                    <div className={`px-4 py-3 rounded-t-xl border-b border-border/50 ${selectedSub.status === "Pending Cash" ? "bg-red-50 dark:bg-red-900/10" : selectedSub.status === "Pending MCDR Allocation" ? "bg-purple-50 dark:bg-purple-900/10" : "bg-muted/40"}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono text-xs font-black text-primary">{selectedSub.id}</span>
+                        <SubBadge status={selectedSub.status} />
+                      </div>
+                      <p className="font-black text-sm text-foreground">{clientName(selectedSub.nameAr, selectedSub.nameEn, lang)}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{selectedSub.unifiedCode}</p>
+                    </div>
+                    <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto">
+                      {[
+                        { label: lang === "ar" ? "الأوراق المالية" : "Security", value: selectedIPO ? (lang === "ar" ? selectedIPO.securityNameAr : selectedIPO.securityNameEn) : selectedSub.ipoId },
+                        { label: lang === "ar" ? "المرحلة" : "Phase", value: selectedSub.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge },
+                        { label: t.sharesCol, value: selectedSub.requestedShares.toLocaleString(numLocale) },
+                        { label: t.totalAmtLabel, value: `${selectedSub.amountPaid.toLocaleString(numLocale)} ${t.egp}` },
+                        { label: lang === "ar" ? "التاريخ" : "Date", value: selectedSub.date },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="flex justify-between items-start gap-2 text-sm">
+                          <span className="text-muted-foreground font-bold text-xs uppercase tracking-wide">{label}</span>
+                          <span className="font-bold text-end">{value}</span>
+                        </div>
+                      ))}
+                      {selectedSub.status === "Pending Cash" && (
+                        <div className="pt-3 border-t border-border/50 space-y-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-red-600">{lang === "ar" ? "الإجراء المطلوب" : "Action Required"}</p>
+                          <p className="text-xs text-muted-foreground">{lang === "ar" ? "يجب تأكيد استلام النقدية من النظام الأساسي قبل المتابعة." : "Cash receipt must be confirmed in core banking before proceeding."}</p>
+                          <Button size="sm" className="w-full bg-red-600 hover:bg-red-700 text-white"
+                            onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); setFollowUpSelectedId(null); toast({ title: t.followUpResolvedCash, description: selectedSub.id }); }}>
+                            <CheckCircle2 className="w-3.5 h-3.5 me-2" />{t.followUpResolveCash}
+                          </Button>
+                        </div>
+                      )}
+                      {selectedSub.status === "Pending MCDR Allocation" && (
+                        <div className="pt-3 border-t border-border/50 space-y-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">{lang === "ar" ? "الإجراء المطلوب" : "Action Required"}</p>
+                          <p className="text-xs text-muted-foreground">{lang === "ar" ? "يجب تأكيد التخصيص في MCDR من خلال المتابعة مع قسم المقاصة." : "MCDR allocation must be confirmed by following up with the clearing department."}</p>
+                          <Button size="sm" className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); setFollowUpSelectedId(null); toast({ title: t.followUpResolvedMCDR, description: selectedSub.id }); }}>
+                            <CheckCircle2 className="w-3.5 h-3.5 me-2" />{t.followUpResolveMCDR}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── BROKER SUBSCRIPTIONS TAB ── */}
+      {boTab === "Broker" && (() => {
+        const handleBrokerCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setBrokerFile(file);
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const text = ev.target?.result as string;
+            const lines = text.split('\n').filter(l => l.trim());
+            const clients: BrokerClient[] = lines.slice(1).map(line => {
+              const p = line.split(',');
+              return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "" };
+            }).filter(c => c.clientName);
+            setBrokerClients(clients);
+          };
+          reader.readAsText(file);
+          e.target.value = "";
+        };
+        const totalQty = brokerClients.reduce((s, c) => s + c.qty, 0);
+        const totalCost = brokerClients.reduce((s, c) => s + c.cost, 0);
+        return (
+          <Card>
+            <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.brokerLabel}</p>
+                  <select value={brokerName} onChange={e => setBrokerName(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                    <option value="">{t.selectBroker}</option>
+                    <option value="EFG">EFG Hermes</option>
+                    <option value="CI Capital">CI Capital</option>
+                    <option value="Beltone">Beltone Financial</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.eventLabel}</p>
+                  <select value={brokerIPO} onChange={e => setBrokerIPO(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                    <option value="">{t.selectIPO}</option>
+                    {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
+                  </select>
+                  {brokerIPO && (() => { const s = ipoStocks.find(x => x.id === brokerIPO); return s ? (
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                      <Layers className="w-3 h-3" />
+                      {s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                    </span>
+                  ) : null; })()}
+                </div>
+              </div>
+              {brokerName && brokerIPO && (
+                <>
+                  {brokerClients.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-12 gap-4">
+                      <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-muted-foreground" /></div>
+                      <div className="text-center"><p className="font-bold">{t.brokerUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.brokerUploadDesc}</p></div>
+                      <input ref={brokerRef} type="file" accept=".csv" className="hidden" onChange={handleBrokerCSV} />
+                      <Button onClick={() => brokerRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                        <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <div><p className="font-bold text-sm">{brokerFile?.name}</p><p className="text-xs">{t.brokerFileLoaded(brokerClients.length)}</p></div>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => { setBrokerClients([]); setBrokerFile(null); }}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}</Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {[
+                          { label: t.totalClients, value: brokerClients.length, cls: "text-primary" },
+                          { label: t.shares, value: totalQty.toLocaleString(numLocale), cls: "text-foreground" },
+                          { label: t.totalValue, value: totalCost.toLocaleString(numLocale), cls: "text-green-600" },
+                        ].map(({ label, value, cls }) => (
+                          <Card key={label}><CardContent className="pt-4 text-center">
+                            <p className={`text-xl font-black ${cls}`}>{value}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mt-0.5">{label}</p>
+                          </CardContent></Card>
+                        ))}
+                      </div>
+                      <div className="overflow-x-auto rounded-xl border border-border/50">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/30">
+                              {["#", t.colClientName, t.colIPOName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map((h, i) => (
+                                <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 5 ? "text-end" : ""}`}>{h}</TableHead>
+                              ))}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {brokerClients.map((c, i) => (
+                              <TableRow key={i} className="hover:bg-muted/30">
+                                <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
+                                <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                <TableCell className="text-sm">{c.ipoName}</TableCell>
+                                <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
+                                <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.paymentLabel}</p>
+                          <select value={brokerPayMethod} onChange={e => setBrokerPayMethod(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                            <option value="Bank Transfer">{t.payTransfer}</option>
+                            <option value="Debit Note">{t.payDebitNote}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.txRefLabel}</p>
+                          <Input placeholder={t.txRefPlaceholder} dir="ltr" value={brokerTxRef} onChange={e => setBrokerTxRef(e.target.value)} />
+                        </div>
+                      </div>
+                      {!brokerFIX ? (
+                        <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => {
+                          const stock = ipoStocks.find(s => s.id === brokerIPO);
+                          const symbol = stock?.symbol ?? brokerIPO;
+                          const price = stock?.pricePerShare ?? 0;
+                          const now = new Date();
+                          const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                          const batchId = `BRK${Date.now().toString().slice(-6)}`;
+                          const lines = brokerClients.map((c, i) =>
+                            `8=FIX.4.2|35=D|49=QNB|56=${brokerName}|34=${i+1}|52=${ts}|11=${batchId}-${String(i+1).padStart(3,'0')}|55=${symbol}|54=1|38=${c.qty}|44=${price.toFixed(2)}|40=2|453=1|448=${c.unifiedCode}|447=P|452=1|10=000`
+                          );
+                          setBrokerFIX(`=== GROUP IPO SUBSCRIPTION — FIX 4.2 ===\nBroker: ${brokerName} | Symbol: ${symbol} | Records: ${brokerClients.length} | Batch: ${batchId}\n\n${lines.join('\n')}`);
+                        }}>
+                          <Zap className="w-4 h-4 me-2" />{t.fixGenerateBtn}
+                        </Button>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.fixMsgTitle}</p>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(brokerFIX); setFixCopied(true); setTimeout(() => setFixCopied(false), 2000); }}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-all"
+                            >
+                              {fixCopied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                              {fixCopied ? t.fixCopied : t.fixCopyBtn}
+                            </button>
+                          </div>
+                          <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{brokerFIX}</pre>
+                          <Button onClick={() => {
+                            const stock = ipoStocks.find(s => s.id === brokerIPO);
+                            const batch: BrokerBatch = {
+                              id: `BRK-${Date.now()}`,
+                              broker: brokerName, ipoId: brokerIPO,
+                              ipoName: lang === "ar" ? (stock?.securityNameAr ?? brokerIPO) : (stock?.securityNameEn ?? brokerIPO),
+                              clients: brokerClients, paymentMethod: brokerPayMethod,
+                              txRef: brokerTxRef, fixMessage: brokerFIX,
+                              submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
+                              status: "Pending Review",
+                              phase: stock?.phase ?? "covered",
+                            };
+                            onSubmitBatch(batch);
+                            toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerClients.length) });
+                            setBrokerClients([]); setBrokerFile(null); setBrokerName(""); setBrokerIPO("");
+                            setBrokerTxRef(""); setBrokerFIX(""); setBrokerPayMethod("Bank Transfer");
+                          }}><Send className="w-4 h-4 me-2" />{t.submitForReview}</Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
     </div>
   );
@@ -4166,7 +4119,7 @@ function IPOSystem() {
               brokerBatches={brokerBatches}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} subscriptions={subscriptions} onUpdateStatus={(id, status) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s))} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
           {activeView === "BackOffice" && <BackOffice
             subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
@@ -4181,6 +4134,8 @@ function IPOSystem() {
             isUncoveredReconciled={boIsUncoveredReconciled} setIsUncoveredReconciled={setBoIsUncoveredReconciled}
             storedAllocationRatio={boStoredAllocationRatio} setStoredAllocationRatio={setBoStoredAllocationRatio}
             refundDone={boRefundDone} setRefundDone={setBoRefundDone}
+            onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])}
+            onUpdateStatus={(id, status) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s))}
           />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}

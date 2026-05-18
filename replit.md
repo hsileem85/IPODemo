@@ -28,9 +28,10 @@ A full-featured IPO (Initial Public Offering) subscription management system for
 - **IPO stock data extracted**: `IPOStock` interface (including `pricePerShare: number`) and seed data live in `data/ipoStocks.ts`; state is lifted to the root `IPOSystem` component and passed down as props.
 - **IPOStockSetup component**: Shared component with a `readOnly` prop — SystemAdmin sees the full editable version, FrontOffice and BackOffice see a read-only view. Shows `pricePerShare` on each stock card.
 - **Subscription interface**: Includes `ipoId: string`, `date: string`, and `phase: "covered" | "uncovered"` — always include all three when creating new subscriptions.
-- **BrokerBatch interface**: Lives in App.tsx. Includes `phase: "covered" | "uncovered"`. Broker CSV submissions create a `BrokerBatch` object that flows: FrontOffice → IPOSystem (`brokerBatches` state) → SupervisorChecker (Broker Batches tab) → Dashboard (financial totals).
-- **Phase pool tagging**: When FrontOffice creates a subscription or broker batch, `phase` is set from `activeStock.phase` (or selected IPO's phase for broker). The branch always submits into the currently active pool — Covered or Uncovered — matching the IPO stock's current phase.
+- **BrokerBatch interface**: Lives in App.tsx. Includes `phase: "covered" | "uncovered"`. Broker CSV submissions create a `BrokerBatch` object that flows: BackOffice (Broker tab) → IPOSystem (`brokerBatches` state) → SupervisorChecker (Broker Batches tab) → Dashboard (financial totals).
+- **Phase pool tagging**: When FrontOffice creates a subscription, `phase` is set from `activeStock.phase`. When BackOffice submits a broker batch, `phase` is set from the selected IPO stock's phase.
 - **FrontOffice phase banner**: A prominent amber (covered) / green (uncovered) banner appears at the top of the subscriptions tab clearly showing which pool is active for the current IPO stock.
+- **Follow Up + Broker Subscriptions live in BackOffice**: These two tabs (`boTab === "FollowUp"` and `boTab === "Broker"`) are in the BackOffice (Clearing) role. FrontOffice has only individual subscription entry and KYC. BackOffice receives `onSubmitBatch` and `onUpdateStatus` props from the root IPOSystem.
 - **Supervisor phase filter**: SupervisorChecker has a phase filter row (All / Covered / Uncovered) on both the Subscriptions and Broker Batches tabs. Each subscription row has a phase badge; each broker batch card also shows a phase badge.
 - **Broker CSV format**: columns — ClientName, IPOName, UnifiedCode, Qty, Cost, Date (6 columns).
 - **Broker FIX flow**: After CSV review → Generate FIX Message (FIX 4.2 per client, shown in pre block with copy button) → Submit for Review.
@@ -41,9 +42,9 @@ A full-featured IPO (Initial Public Offering) subscription management system for
 ## Product
 
 Five user roles accessible from the dashboard:
-- **Front Office (Branch)**: New subscriptions, KYC, IPO stock overview
+- **Front Office (Branch)**: New individual subscriptions (5-step flow), KYC, IPO stock overview
 - **Supervisor/Checker**: Approve/reject subscriptions and KYC records
-- **Back Office (Clearing)**: MCDR upload, allocation, refunds, reconciliation, IPO stock overview
+- **Back Office (Clearing)**: MCDR upload, allocation, refunds, reconciliation, IPO stock overview, Follow Up (resolve Pending Cash / Pending MCDR), Broker Subscriptions (CSV upload → FIX generation → submit batch)
 - **Communications**: Customer communication templates
 - **System Admin**: User management, groups, audit logs, IPO stock setup
 
