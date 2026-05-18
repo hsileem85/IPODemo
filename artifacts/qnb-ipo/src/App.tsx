@@ -4016,7 +4016,6 @@ function IPOSystem() {
 
   const ROLES: { key: UserRole; label: string; icon: React.ElementType }[] = [
     { key: "FrontOffice", label: t.roleFront, icon: Landmark },
-    { key: "Supervisor", label: t.roleSupervisor, icon: Eye },
     { key: "BackOffice", label: t.roleBack, icon: ClipboardList },
     { key: "Communications", label: t.roleComms, icon: MessageSquare },
     { key: "SystemAdmin", label: t.roleSysAdmin, icon: ShieldCheck },
@@ -4078,12 +4077,12 @@ function IPOSystem() {
               {ROLES.map(({ key, label, icon: Icon }) => key === "BackOffice" ? (
                 <div key={key} className="relative" onMouseEnter={() => setShowClearingMenu(true)} onMouseLeave={() => setShowClearingMenu(false)}>
                   <button onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" || activeView === "Supervisor" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                     <Icon className="w-3.5 h-3.5" />{label}
                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showClearingMenu ? "rotate-180" : ""}`} />
                   </button>
                   {showClearingMenu && (
-                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[9rem] py-1">
+                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[10rem] py-1">
                       <button
                         onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); setBackOfficePage("covered"); setShowClearingMenu(false); }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "BackOffice" && backOfficePage === "covered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
@@ -4095,6 +4094,13 @@ function IPOSystem() {
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${!ipoStocks.some(s => s.coveredFinalized) ? "opacity-40 cursor-not-allowed" : activeView === "BackOffice" && backOfficePage === "uncovered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
                         <span className={`w-2 h-2 rounded-full shrink-0 ${ipoStocks.some(s => s.coveredFinalized) ? "bg-green-500" : "bg-muted-foreground"}`} />
                         {t.uncoveredPhaseBadge}
+                      </button>
+                      <div className="my-1 h-px bg-border mx-2" />
+                      <button
+                        onClick={() => { setUserRole("Supervisor"); setActiveView("Supervisor"); setShowClearingMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Supervisor" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                        {t.roleSupervisor}
                       </button>
                     </div>
                   )}
@@ -4195,13 +4201,13 @@ function IPOSystem() {
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
           {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
           {activeView === "Brokers" && (
-            <BasicDataScreen<Broker>
+            <BasicDataScreen
               title={t.brokersTitle} desc={t.brokersDesc} addBtn={t.addBrokerBtn}
               records={brokers} onAdd={r => setBrokers(prev => [...prev, r])} icon={Briefcase}
             />
           )}
           {activeView === "Custodians" && (
-            <BasicDataScreen<Custodian>
+            <BasicDataScreen
               title={t.custodiansTitle} desc={t.custodiansDesc} addBtn={t.addCustodianBtn}
               records={custodians} onAdd={r => setCustodians(prev => [...prev, r])} icon={Lock}
             />
