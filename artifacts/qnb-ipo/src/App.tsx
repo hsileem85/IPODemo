@@ -27,6 +27,7 @@ import {
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
   Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
+  ActivitySquare, Clock, TrendingDown,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1166,7 +1167,7 @@ interface BrokerBatch {
   phase: "covered" | "uncovered";
 }
 
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, onSubmitBatch }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, onSubmitBatch, subscriptions }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
@@ -1174,10 +1175,13 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   activeStock: IPOStock | null;
   ipoStocks: IPOStock[];
   onSubmitBatch: (batch: BrokerBatch) => void;
+  subscriptions: Subscription[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
+  const [foTab, setFoTab] = useState<"subs" | "kyc" | "followup">("subs");
+  const [followUpSearch, setFollowUpSearch] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState("All");
   const [step, setStep] = useState(1);
   const [requestType, setRequestType] = useState<"individual" | "broker">("individual");
   const [ucInput, setUcInput] = useState("");
@@ -1248,10 +1252,116 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
     <div className="space-y-5">
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
+        <TabBtn id="fo-followup" active={foTab === "followup"} onClick={() => setFoTab("followup")} icon={ActivitySquare}>{t.foTabFollowUp}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
       </div>
 
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
+
+      {foTab === "followup" && (() => {
+        const filtered = subscriptions.filter(s => {
+          const q = followUpSearch.toLowerCase();
+          const matchQ = !q || clientName(s.nameAr, s.nameEn, lang).toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.unifiedCode.includes(q);
+          const matchF = followUpFilter === "All" || s.status === followUpFilter || (followUpFilter === "Pending" && s.status === "Pending Review");
+          return matchQ && matchF;
+        });
+        const total = subscriptions.length;
+        const pending = subscriptions.filter(s => s.status === "Pending Review" || s.status === "Pending Payment").length;
+        const verified = subscriptions.filter(s => s.status === "Verified").length;
+        const done = subscriptions.filter(s => s.status === "Allocated" || s.status === "Refunded").length;
+        const FILTER_PILLS = [
+          { key: "All", label: t.followUpFilterAll },
+          { key: "Pending", label: t.followUpFilterPending },
+          { key: "Verified", label: t.followUpFilterVerified },
+          { key: "Allocated", label: t.followUpFilterAllocated },
+          { key: "Refunded", label: t.followUpFilterRefunded },
+        ];
+        return (
+          <div className="space-y-5">
+            {/* Header */}
+            <div>
+              <h2 className="text-lg font-black text-foreground">{t.followUpTitle}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">{t.followUpDesc}</p>
+            </div>
+            {/* Stat cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: t.followUpTotal, value: total, icon: ClipboardList, color: "text-primary", bg: "bg-primary/5 border-primary/10" },
+                { label: t.followUpPending, value: pending, icon: Clock, color: "text-amber-600", bg: "bg-amber-50/60 dark:bg-amber-900/10 border-amber-200/60" },
+                { label: t.followUpVerified, value: verified, icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50/60 dark:bg-green-900/10 border-green-200/60" },
+                { label: t.followUpDone, value: done, icon: TrendingDown, color: "text-teal-600", bg: "bg-teal-50/60 dark:bg-teal-900/10 border-teal-200/60" },
+              ].map(({ label, value, icon: Icon, color, bg }) => (
+                <Card key={label} className={`border ${bg}`}>
+                  <CardContent className="pt-4 pb-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</span>
+                      <Icon className={`w-4 h-4 ${color}`} />
+                    </div>
+                    <p className={`text-2xl font-black ${color}`}>{value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {/* Search + filters */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="relative flex-1">
+                <ActivitySquare className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  value={followUpSearch} onChange={e => setFollowUpSearch(e.target.value)}
+                  placeholder={t.followUpSearch}
+                  className="w-full border border-input rounded-xl ps-9 pe-4 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none"
+                />
+              </div>
+              <div className="flex gap-1.5 flex-wrap">
+                {FILTER_PILLS.map(p => (
+                  <button key={p.key} onClick={() => setFollowUpFilter(p.key)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${followUpFilter === p.key ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground"}`}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Table */}
+            <div className="overflow-x-auto rounded-xl border border-border/50">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-primary/5">
+                    {[t.followUpColId, t.followUpColClient, t.followUpColIPO, t.followUpColPhase, t.followUpColShares, t.followUpColAmount, t.followUpColDate, t.followUpColStatus].map(col => (
+                      <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-primary/70">{col}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground font-bold">{t.followUpEmpty}</TableCell></TableRow>
+                  ) : filtered.map(s => {
+                    const ipoName = ipoStocks.find(st => st.id === s.ipoId);
+                    return (
+                      <TableRow key={s.id} className="hover:bg-muted/30">
+                        <TableCell className="font-mono text-xs font-bold text-primary">{s.id}</TableCell>
+                        <TableCell>
+                          <div className="font-bold text-sm text-foreground">{clientName(s.nameAr, s.nameEn, lang)}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{s.unifiedCode}</div>
+                        </TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{ipoName ? (lang === "ar" ? ipoName.securityNameAr : ipoName.securityNameEn) : s.ipoId}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-[10px] font-black ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                            {s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm font-bold">{s.requestedShares.toLocaleString(numLocale)}</TableCell>
+                        <TableCell className="text-sm font-bold text-muted-foreground">{s.amountPaid.toLocaleString(numLocale)} {t.egp}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{s.date}</TableCell>
+                        <TableCell><SubBadge status={s.status} /></TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        );
+      })()}
 
       {foTab === "subs" && (
         <div className="space-y-6">
@@ -3906,7 +4016,7 @@ function IPOSystem() {
               brokerBatches={brokerBatches}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} onSubmitBatch={(batch) => setBrokerBatches(prev => [...prev, batch])} subscriptions={subscriptions} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} />}
           {activeView === "BackOffice" && <BackOffice
             subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
