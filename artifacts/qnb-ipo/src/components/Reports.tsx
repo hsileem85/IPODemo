@@ -11,12 +11,17 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+interface Broker { id: string; name: string; code: string; email: string; }
+interface Custodian { id: string; name: string; code: string; email: string; }
+
 interface Subscription {
   id: string; nameAr: string; nameEn: string; nationalId: string;
   unifiedCode: string; requestedShares: number; amountDue: number;
   amountPaid: number; allocatedShares: number; refundAmount: number;
   status: string; branch: string; ipoId: string; date: string;
   phase: "covered" | "uncovered";
+  custodian?: string; custodianCode?: string;
+  broker?: string; brokerCode?: string;
 }
 
 type ReportType = "clients" | "allocation" | "refund";
@@ -24,6 +29,8 @@ type ReportType = "clients" | "allocation" | "refund";
 interface ReportsProps {
   subscriptions: Subscription[];
   ipoStocks: IPOStock[];
+  brokers: Broker[];
+  custodians: Custodian[];
 }
 
 const fmtNum = (n: number) =>
@@ -57,13 +64,15 @@ function PhaseBadge({ phase, coveredLabel, uncoveredLabel }: { phase: string; co
   );
 }
 
-export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
+export function Reports({ subscriptions, ipoStocks, brokers, custodians }: ReportsProps) {
   const { t, lang } = useLang();
   const [activeReport, setActiveReport] = useState<ReportType>("clients");
   const [filterIpo, setFilterIpo] = useState("all");
   const [filterPhase, setFilterPhase] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterBranch, setFilterBranch] = useState("all");
+  const [filterBroker, setFilterBroker] = useState("all");
+  const [filterCustodian, setFilterCustodian] = useState("all");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -83,6 +92,8 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
     if (filterPhase !== "all") r = r.filter(s => s.phase === filterPhase);
     if (filterStatus !== "all") r = r.filter(s => s.status === filterStatus);
     if (filterBranch !== "all") r = r.filter(s => s.branch === filterBranch);
+    if (filterBroker !== "all") r = r.filter(s => s.brokerCode === filterBroker || s.broker === filterBroker);
+    if (filterCustodian !== "all") r = r.filter(s => s.custodianCode === filterCustodian || s.custodian === filterCustodian);
     if (filterDateFrom) r = r.filter(s => s.date >= filterDateFrom);
     if (filterDateTo) r = r.filter(s => s.date <= filterDateTo);
     if (searchText.trim()) {
@@ -93,13 +104,17 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
           s.nameAr.includes(searchText.trim()) ||
           s.nationalId.includes(q) ||
           s.unifiedCode.includes(q) ||
-          s.id.toLowerCase().includes(q)
+          s.id.toLowerCase().includes(q) ||
+          (s.broker ?? "").toLowerCase().includes(q) ||
+          (s.brokerCode ?? "").toLowerCase().includes(q) ||
+          (s.custodian ?? "").toLowerCase().includes(q) ||
+          (s.custodianCode ?? "").toLowerCase().includes(q)
       );
     }
     if (activeReport === "allocation") r = r.filter(s => s.status === "Allocated");
     if (activeReport === "refund") r = r.filter(s => s.status === "Refunded");
     return r;
-  }, [subscriptions, filterIpo, filterPhase, filterStatus, filterBranch, filterDateFrom, filterDateTo, searchText, activeReport]);
+  }, [subscriptions, filterIpo, filterPhase, filterStatus, filterBranch, filterBroker, filterCustodian, filterDateFrom, filterDateTo, searchText, activeReport]);
 
   const stats = useMemo(() => {
     const totalSubs = filtered.length;
@@ -130,6 +145,10 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
         [t.rptNID]: s.nationalId,
         [t.rptUnifiedCode]: s.unifiedCode,
         [t.rptBranch]: s.branch,
+        [t.rptBroker]: s.broker ?? "—",
+        [t.rptBrokerCode]: s.brokerCode ?? "—",
+        [t.rptCustodian]: s.custodian ?? "—",
+        [t.rptCustodianCode]: s.custodianCode ?? "—",
         [t.rptIPO]: getIpoName(s.ipoId),
         [t.rptPhase]: s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge,
         [t.rptRequestedShares]: s.requestedShares,
@@ -144,6 +163,10 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
         [t.rptSubId]: s.id,
         [t.rptName]: lang === "ar" ? s.nameAr : s.nameEn,
         [t.rptNID]: s.nationalId,
+        [t.rptBroker]: s.broker ?? "—",
+        [t.rptBrokerCode]: s.brokerCode ?? "—",
+        [t.rptCustodian]: s.custodian ?? "—",
+        [t.rptCustodianCode]: s.custodianCode ?? "—",
         [t.rptIPO]: getIpoName(s.ipoId),
         [t.rptPhase]: s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge,
         [t.rptRequestedShares]: s.requestedShares,
@@ -159,6 +182,10 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
       [t.rptSubId]: s.id,
       [t.rptName]: lang === "ar" ? s.nameAr : s.nameEn,
       [t.rptNID]: s.nationalId,
+      [t.rptBroker]: s.broker ?? "—",
+      [t.rptBrokerCode]: s.brokerCode ?? "—",
+      [t.rptCustodian]: s.custodian ?? "—",
+      [t.rptCustodianCode]: s.custodianCode ?? "—",
       [t.rptIPO]: getIpoName(s.ipoId),
       [t.rptPhase]: s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge,
       [t.rptAmountDue]: s.amountDue,
@@ -295,7 +322,8 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-0 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {/* Row 1 */}
             <select value={filterIpo} onChange={e => setFilterIpo(e.target.value)} className={selectCls}>
               <option value="all">{t.rptAllIpos}</option>
               {ipoStocks.map(s => (
@@ -323,6 +351,21 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
             <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className={selectCls}>
               <option value="all">{t.rptAllBranches}</option>
               {branches.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+
+            {/* Row 2 — Broker, Custodian, Date From, Date To */}
+            <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)} className={selectCls}>
+              <option value="all">{t.rptAllBrokers}</option>
+              {brokers.map(b => (
+                <option key={b.id} value={b.code}>{b.name} ({b.code})</option>
+              ))}
+            </select>
+
+            <select value={filterCustodian} onChange={e => setFilterCustodian(e.target.value)} className={selectCls}>
+              <option value="all">{t.rptAllCustodians}</option>
+              {custodians.map(c => (
+                <option key={c.id} value={c.code}>{c.name} ({c.code})</option>
+              ))}
             </select>
 
             <div className="flex items-center gap-1.5">
@@ -389,6 +432,8 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                       <TableHead className={thCls}>{t.rptName}</TableHead>
                       <TableHead className={thCls}>{t.rptNID}</TableHead>
                       <TableHead className={thCls}>{t.rptBranch}</TableHead>
+                      <TableHead className={thCls}>{t.rptBroker}</TableHead>
+                      <TableHead className={thCls}>{t.rptCustodian}</TableHead>
                       <TableHead className={thCls}>{t.rptIPO}</TableHead>
                       <TableHead className={thCls}>{t.rptPhase}</TableHead>
                       <TableHead className={`${thCls} text-end`}>{t.rptRequestedShares}</TableHead>
@@ -403,6 +448,8 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                       <TableHead className={thCls}>{t.rptSubId}</TableHead>
                       <TableHead className={thCls}>{t.rptName}</TableHead>
                       <TableHead className={thCls}>{t.rptNID}</TableHead>
+                      <TableHead className={thCls}>{t.rptBroker}</TableHead>
+                      <TableHead className={thCls}>{t.rptCustodian}</TableHead>
                       <TableHead className={thCls}>{t.rptIPO}</TableHead>
                       <TableHead className={thCls}>{t.rptPhase}</TableHead>
                       <TableHead className={`${thCls} text-end`}>{t.rptRequestedShares}</TableHead>
@@ -417,6 +464,8 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                       <TableHead className={thCls}>{t.rptSubId}</TableHead>
                       <TableHead className={thCls}>{t.rptName}</TableHead>
                       <TableHead className={thCls}>{t.rptNID}</TableHead>
+                      <TableHead className={thCls}>{t.rptBroker}</TableHead>
+                      <TableHead className={thCls}>{t.rptCustodian}</TableHead>
                       <TableHead className={thCls}>{t.rptIPO}</TableHead>
                       <TableHead className={thCls}>{t.rptPhase}</TableHead>
                       <TableHead className={`${thCls} text-end`}>{t.rptAmountDue}</TableHead>
@@ -430,7 +479,7 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={14} className="text-center py-16 text-muted-foreground">
                       <BarChart2 className="w-10 h-10 mx-auto mb-3 opacity-20" />
                       <p className="font-bold text-sm">{t.rptNoResults}</p>
                     </TableCell>
@@ -447,6 +496,16 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                           </TableCell>
                           <TableCell className="font-mono text-xs">{s.nationalId}</TableCell>
                           <TableCell className="text-xs">{s.branch}</TableCell>
+                          <TableCell className="text-xs">
+                            {s.broker
+                              ? <><p className="font-bold">{s.broker}</p><p className="text-[10px] font-mono text-muted-foreground">{s.brokerCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {s.custodian
+                              ? <><p className="font-bold">{s.custodian}</p><p className="text-[10px] font-mono text-muted-foreground">{s.custodianCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell className="text-xs font-bold">{getIpoName(s.ipoId)}</TableCell>
                           <TableCell>
                             <PhaseBadge phase={s.phase} coveredLabel={t.coveredPhaseBadge} uncoveredLabel={t.uncoveredPhaseBadge} />
@@ -466,6 +525,16 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                             <p className="text-[10px] text-muted-foreground">{lang === "ar" ? s.nameEn : s.nameAr}</p>
                           </TableCell>
                           <TableCell className="font-mono text-xs">{s.nationalId}</TableCell>
+                          <TableCell className="text-xs">
+                            {s.broker
+                              ? <><p className="font-bold">{s.broker}</p><p className="text-[10px] font-mono text-muted-foreground">{s.brokerCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {s.custodian
+                              ? <><p className="font-bold">{s.custodian}</p><p className="text-[10px] font-mono text-muted-foreground">{s.custodianCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell className="text-xs font-bold">{getIpoName(s.ipoId)}</TableCell>
                           <TableCell>
                             <PhaseBadge phase={s.phase} coveredLabel={t.coveredPhaseBadge} uncoveredLabel={t.uncoveredPhaseBadge} />
@@ -491,13 +560,23 @@ export function Reports({ subscriptions, ipoStocks }: ReportsProps) {
                             <p className="text-[10px] text-muted-foreground">{lang === "ar" ? s.nameEn : s.nameAr}</p>
                           </TableCell>
                           <TableCell className="font-mono text-xs">{s.nationalId}</TableCell>
+                          <TableCell className="text-xs">
+                            {s.broker
+                              ? <><p className="font-bold">{s.broker}</p><p className="text-[10px] font-mono text-muted-foreground">{s.brokerCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {s.custodian
+                              ? <><p className="font-bold">{s.custodian}</p><p className="text-[10px] font-mono text-muted-foreground">{s.custodianCode}</p></>
+                              : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
                           <TableCell className="text-xs font-bold">{getIpoName(s.ipoId)}</TableCell>
                           <TableCell>
                             <PhaseBadge phase={s.phase} coveredLabel={t.coveredPhaseBadge} uncoveredLabel={t.uncoveredPhaseBadge} />
                           </TableCell>
                           <TableCell className="text-end text-sm">{fmtNum(s.amountDue)}</TableCell>
-                          <TableCell className="text-end text-sm">{fmtNum(s.amountPaid)}</TableCell>
-                          <TableCell className="text-end font-black text-sm text-red-600">{fmtNum(s.refundAmount)}</TableCell>
+                          <TableCell className="text-end text-sm font-bold text-green-700 dark:text-green-400">{fmtNum(s.amountPaid)}</TableCell>
+                          <TableCell className="text-end text-sm font-black text-red-600">{fmtNum(s.refundAmount)}</TableCell>
                           <TableCell className="text-xs text-muted-foreground">{s.date}</TableCell>
                         </>
                       )}
