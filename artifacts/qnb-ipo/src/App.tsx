@@ -29,6 +29,7 @@ import {
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
   Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
   ActivitySquare, Clock, TrendingDown, Database, Briefcase, Lock,
+  FileText, Copy,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1473,6 +1474,14 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [supPhase, setSupPhase] = useState<"all" | "covered" | "uncovered">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+  // FIX MCDR Allocation check state — subscriptions
+  const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
+  const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
+  const [fixMcdrVerifiedMap, setFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
+  // FIX MCDR Allocation check state — broker batches
+  const [batchFixMcdrId, setBatchFixMcdrId] = useState<string | null>(null);
+  const [batchFixMcdrMsgMap, setBatchFixMcdrMsgMap] = useState<Record<string, string>>({});
+  const [batchFixMcdrVerifiedMap, setBatchFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
   // Follow Up + FIX state
   const [followUpSearch, setFollowUpSearch] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState("All");
@@ -1496,6 +1505,66 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
   const kycPending = kycRecords.filter(r => r.status === "Pending Review");
   const batchPending = filteredBatches.filter(b => b.status === "Pending Review");
+
+  // FIX MCDR helpers — subscriptions
+  const generateSubFix = (sub: Subscription) => {
+    const stock = ipoStocks.find(s => s.id === sub.ipoId);
+    const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
+    const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const msg = [
+      `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
+      `56=MCDR`, `34=1`, `52=${ts}`,
+      `11=${sub.id}`, `1=${sub.account}`, `55=${stock?.symbol ?? "IPO"}`,
+      `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
+      `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
+    ].join("\n");
+    setFixMcdrMsgMap(prev => ({ ...prev, [sub.id]: msg }));
+  };
+  const verifySubMcdr = (sub: Subscription) => {
+    const passes = sub.unifiedCode !== "8800318";
+    setFixMcdrVerifiedMap(prev => ({ ...prev, [sub.id]: passes }));
+    if (passes) {
+      toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
+    } else {
+      onUpdateStatus(sub.id, "Pending MCDR Allocation");
+      toast({ title: lang === "ar" ? "فشل التحقق من MCDR" : "MCDR Verification Failed", description: t.supFixMcdrFailMsg, variant: "destructive" });
+      setFixMcdrSubId(null);
+    }
+  };
+
+  // FIX MCDR helpers — broker batches
+  const generateBatchFix = (batch: BrokerBatch) => {
+    const stock = ipoStocks.find(s => s.id === batch.ipoId);
+    const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+    const lines: string[] = [
+      `=== FIX 4.4 MCDR CHECK — ${batch.broker} | ${batch.id} ===`,
+      `IPO: ${batch.ipoName} | Clients: ${batch.clients.length} | Generated: ${new Date().toLocaleString()}`,
+      "",
+    ];
+    batch.clients.forEach((c, i) => {
+      const seq = String(i + 1).padStart(3, "0");
+      lines.push(
+        `--- Client ${seq}: ${c.clientName} (${c.unifiedCode}) ---`,
+        `8=FIX.4.4`, `9=175`, `35=D`, `49=QNB-CLEARING`, `56=MCDR`,
+        `34=${i + 1}`, `52=${ts}`,
+        `11=${batch.id}-${seq}`, `55=${stock?.symbol ?? "IPO"}`,
+        `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`,
+        `38=${c.qty}`, `44=${c.qty > 0 ? (c.cost / c.qty).toFixed(2) : "0"}`,
+        `40=1`, `60=${ts}`, `10=000`, ``,
+      );
+    });
+    setBatchFixMcdrMsgMap(prev => ({ ...prev, [batch.id]: lines.join("\n") }));
+  };
+  const verifyBatchMcdr = (batch: BrokerBatch) => {
+    const hasFailing = batch.clients.some(c => c.unifiedCode === "8800318");
+    const passes = !hasFailing;
+    setBatchFixMcdrVerifiedMap(prev => ({ ...prev, [batch.id]: passes }));
+    if (passes) {
+      toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
+    } else {
+      toast({ title: lang === "ar" ? "فشل التحقق من MCDR" : "MCDR Verification Failed", description: t.supFixMcdrBatchFailMsg, variant: "destructive" });
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -1580,11 +1649,19 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                           <p className="text-xl font-black">{batch.clients.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)}</p>
                           <p className="text-[10px] text-muted-foreground font-bold uppercase">{t.egp}</p>
                         </div>
-                        {batch.status === "Pending Review" && (
+                        {batch.status === "Pending Review" && batchFixMcdrVerifiedMap[batch.id] === true && (
                           <>
                             <button onClick={() => { onApproveBatch(batch.id, "Approved"); toast({ title: t.batchApproveBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-colors"><CheckCircle2 className="w-3.5 h-3.5" />{t.batchApproveBtn}</button>
                             <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><X className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
                           </>
+                        )}
+                        {batch.status === "Pending Review" && batchFixMcdrVerifiedMap[batch.id] !== true && (
+                          <button
+                            onClick={() => setBatchFixMcdrId(prev => prev === batch.id ? null : batch.id)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black border transition-colors ${batchFixMcdrId === batch.id ? "bg-primary/10 border-primary text-primary" : batchFixMcdrVerifiedMap[batch.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-primary/30 text-primary hover:bg-primary/5"}`}>
+                            <Zap className="w-3.5 h-3.5" />
+                            {batchFixMcdrVerifiedMap[batch.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
+                          </button>
                         )}
                         <button onClick={() => setExpandedBatch(expandedBatch === batch.id ? null : batch.id)} className="px-3 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">{expandedBatch === batch.id ? (lang === "ar" ? "إخفاء" : "Hide") : (lang === "ar" ? "عرض التفاصيل" : "View Details")}</button>
                       </div>
@@ -1615,6 +1692,59 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         )}
                       </div>
                     )}
+
+                    {/* ── FIX MCDR Allocation Check Panel (Broker Batch) ── */}
+                    {batchFixMcdrId === batch.id && batch.status === "Pending Review" && (
+                      <div className="space-y-3 pt-3 border-t-2 border-primary/20">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-primary" />
+                            <div>
+                              <p className="font-black text-sm">{t.supFixMcdrTitle}</p>
+                              <p className="text-xs text-muted-foreground">{t.supFixMcdrDesc}</p>
+                            </div>
+                          </div>
+                          <button onClick={() => setBatchFixMcdrId(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕</button>
+                        </div>
+                        {(() => {
+                          const batchFixMsg = batchFixMcdrMsgMap[batch.id];
+                          const batchVerified = batchFixMcdrVerifiedMap[batch.id];
+                          return (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap gap-3 items-center">
+                                <Button size="sm" variant="outline" onClick={() => generateBatchFix(batch)} disabled={!!batchFixMsg}>
+                                  <FileText className="w-3.5 h-3.5 me-2" />{batchFixMsg ? (lang === "ar" ? "تم التوليد ✓" : "Generated ✓") : t.supFixMcdrGenerate}
+                                </Button>
+                                {batchFixMsg && batchVerified === undefined && (
+                                  <Button size="sm" onClick={() => verifyBatchMcdr(batch)}>
+                                    <Zap className="w-3.5 h-3.5 me-2" />{t.supFixMcdrVerify}
+                                  </Button>
+                                )}
+                                {batchVerified === true && (
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-black">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />{t.supFixMcdrPassMsg}
+                                  </div>
+                                )}
+                                {batchVerified === false && (
+                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-xl text-xs font-black">
+                                    <X className="w-3.5 h-3.5" />{t.supFixMcdrBatchFailMsg}
+                                  </div>
+                                )}
+                                {batchFixMsg && (
+                                  <button onClick={() => { navigator.clipboard.writeText(batchFixMsg); toast({ title: t.fixCopied }); }}
+                                    className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                                    <Copy className="w-3 h-3" />{t.fixCopyBtn}
+                                  </button>
+                                )}
+                              </div>
+                              {batchFixMsg && (
+                                <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-52 leading-relaxed whitespace-pre-wrap">{batchFixMsg}</pre>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -1627,10 +1757,22 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
       {supTab === "subs" && (
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div><h2 className="text-2xl font-black tracking-tight">{t.checkerTitle}</h2><p className="text-muted-foreground text-sm">{t.checkerDesc}</p></div>
-            <div className="flex gap-2 flex-wrap">
-              {selected.size > 0 && <Button size="sm" onClick={() => handleApprove([...selected])}><CheckCircle2 className="w-4 h-4 me-2" />{t.approveBtn} ({selected.size})</Button>}
-              {pending.length > 0 && <Button size="sm" variant="outline" onClick={() => handleApprove(pending.map(s => s.id))}><UserCheck className="w-4 h-4 me-2" />{t.approveAllBtn}</Button>}
+            <div>
+              <h2 className="text-2xl font-black tracking-tight">{t.checkerTitle}</h2>
+              <p className="text-muted-foreground text-sm">{t.checkerDesc}</p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(() => {
+                const mcdrVerified = pending.filter(s => fixMcdrVerifiedMap[s.id] === true);
+                return mcdrVerified.length > 0 ? (
+                  <Button size="sm" onClick={() => handleApprove(mcdrVerified.map(s => s.id))}>
+                    <CheckCircle2 className="w-4 h-4 me-2" />{t.approveAllBtn} ({mcdrVerified.length})
+                  </Button>
+                ) : null;
+              })()}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border border-primary/20 rounded-xl text-[10px] font-black text-primary/70 uppercase tracking-wider">
+                <Zap className="w-3 h-3" />{t.supFixMcdrBtn} {lang === "ar" ? "مطلوب قبل الاعتماد" : "required before approval"}
+              </div>
             </div>
           </div>
           {pending.length > 0 && <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3 text-orange-700 dark:text-orange-400 font-bold text-sm">{t.pendingReviewCount(pending.length)}</div>}
@@ -1659,7 +1801,23 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
                         <TableCell><SubBadge status={sub.status} /></TableCell>
-                        <TableCell>{sub.status === "Pending Review" && <div className="flex gap-2"><button onClick={() => handleApprove([sub.id])} className="text-green-600 font-black text-[10px] uppercase hover:underline">{t.approveBtn}</button><button className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button></div>}</TableCell>
+                        <TableCell>
+                          {sub.status === "Pending Review" && (
+                            fixMcdrVerifiedMap[sub.id] === true ? (
+                              <div className="flex gap-2">
+                                <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
+                                <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); setFixMcdrVerifiedMap(prev => { const n = {...prev}; delete n[sub.id]; return n; }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setFixMcdrSubId(prev => prev === sub.id ? null : sub.id)}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-colors whitespace-nowrap ${fixMcdrSubId === sub.id ? "bg-primary/10 border-primary text-primary" : fixMcdrVerifiedMap[sub.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                                <Zap className="w-3 h-3" />
+                                {fixMcdrVerifiedMap[sub.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
+                              </button>
+                            )
+                          )}
+                        </TableCell>
                       </TableRow>
                     ); })}
                   </TableBody>
@@ -1667,6 +1825,70 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
               </div>
             </CardContent>
           </Card>
+
+          {/* ── FIX MCDR Allocation Check Panel ── */}
+          {fixMcdrSubId && (() => {
+            const sub = subscriptions.find(s => s.id === fixMcdrSubId);
+            if (!sub) return null;
+            const stock = ipoStocks.find(s => s.id === sub.ipoId);
+            const ipoName = stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : sub.ipoId;
+            const fixMsg = fixMcdrMsgMap[fixMcdrSubId];
+            const verified = fixMcdrVerifiedMap[fixMcdrSubId];
+            return (
+              <Card className="border-2 border-primary/30 bg-primary/5 dark:bg-primary/10">
+                <CardContent className="pt-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-primary" />
+                        <span className="font-black text-sm tracking-tight">{t.supFixMcdrTitle}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{t.supFixMcdrDesc}</p>
+                    </div>
+                    <button onClick={() => { setFixMcdrSubId(null); }} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕ {lang === "ar" ? "إغلاق" : "Close"}</button>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-background rounded-xl border border-border/50">
+                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.colInvestor}</p><p className="font-bold text-sm mt-0.5">{clientName(sub.nameAr, sub.nameEn, lang)}</p></div>
+                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{lang === "ar" ? "الكود الموحد" : "Unified Code"}</p><p className="font-mono text-sm mt-0.5">{sub.unifiedCode}</p></div>
+                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.colIPOStock}</p><p className="font-bold text-sm mt-0.5 text-primary">{ipoName}</p></div>
+                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.sharesCol}</p><p className="font-bold text-sm mt-0.5">{sub.requestedShares.toLocaleString(numLocale)}</p></div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <Button size="sm" variant="outline" onClick={() => generateSubFix(sub)} disabled={!!fixMsg}>
+                      <FileText className="w-3.5 h-3.5 me-2" />{fixMsg ? (lang === "ar" ? "تم التوليد ✓" : "Generated ✓") : t.supFixMcdrGenerate}
+                    </Button>
+                    {fixMsg && verified === undefined && (
+                      <Button size="sm" onClick={() => verifySubMcdr(sub)}>
+                        <Zap className="w-3.5 h-3.5 me-2" />{t.supFixMcdrVerify}
+                      </Button>
+                    )}
+                    {verified === true && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-black">
+                        <CheckCircle2 className="w-3.5 h-3.5" />{t.supFixMcdrPassMsg}
+                      </div>
+                    )}
+                    {verified === false && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-xl text-xs font-black">
+                        <X className="w-3.5 h-3.5" />{t.supFixMcdrFailMsg}
+                      </div>
+                    )}
+                    {fixMsg && (
+                      <button onClick={() => { navigator.clipboard.writeText(fixMsg); toast({ title: t.fixCopied }); }}
+                        className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
+                        <Copy className="w-3 h-3" />{t.fixCopyBtn}
+                      </button>
+                    )}
+                  </div>
+
+                  {fixMsg && (
+                    <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-36 leading-relaxed whitespace-pre-wrap">{fixMsg}</pre>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
         </div>
       )}
 
