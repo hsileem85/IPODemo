@@ -3620,8 +3620,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   </div>
 
                   {/* MCDR allocation verification */}
-                  {cashVerified && (
-                    <div className="space-y-3">
+                  <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.mcdrVerification}</p>
                         {!mcdrVerifiedAll
@@ -3663,8 +3662,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                           </Table>
                         </div>
                       )}
-                    </div>
-                  )}
+                  </div>
 
                   <div className="flex justify-between pt-2 border-t border-border/50">
                     <Button variant="outline" onClick={() => { setBrokerCashStatus({}); setBrokerMcdrStatus({}); setBrokerStep(3); }}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
