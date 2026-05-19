@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "QNB IPO Management System"
+title = "IPO Management System"
 version = "1.0.0"
 id = "artifacts/qnb-ipo"
 router = "path"
