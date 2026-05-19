@@ -1652,7 +1652,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                             <p className="text-[10px] text-muted-foreground font-bold uppercase">{t.egp}</p>
                           </div>
                         </>); })()}
-                        {batch.status === "Pending Review" && (
+                        {batch.status === "Pending Review" && batch.clients.filter(c => c.ref !== "REF-TXT-001" && c.unifiedCode !== "3400127").length > 0 && (
                           <>
                             <button onClick={() => { onApproveBatch(batch.id, "Approved"); toast({ title: t.batchApproveBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-colors"><CheckCircle2 className="w-3.5 h-3.5" />{t.batchApproveBtn}</button>
                             <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><X className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
@@ -1681,12 +1681,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                             </TableBody>
                           </Table>
                         </div>
-                        {batch.fixMessage && (
-                          <div>
-                            <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-2">{t.fixMsgTitle}</p>
-                            <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-36 leading-relaxed whitespace-pre-wrap">{batch.fixMessage}</pre>
-                          </div>
-                        )}
                       </div>
                     )}
 
