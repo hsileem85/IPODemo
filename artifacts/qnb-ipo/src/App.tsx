@@ -3277,7 +3277,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         const parseCSV = (text: string): BrokerClient[] =>
           text.split('\n').filter(l => l.trim()).slice(1).map(line => {
             const p = line.split(',');
-            return { clientName: p[0]?.trim() ?? "", brokerCode: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "", ref: p[6]?.trim() ?? "", custodian: p[7]?.trim() ?? "", ipoName: stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : "" };
+            return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? (stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : ""), unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "", brokerCode: p[6]?.trim() ?? "", custodian: p[7]?.trim() ?? "", ref: p[8]?.trim() ?? "" };
           }).filter(c => c.clientName);
 
         const handleFileUpload = (file: File) => {
