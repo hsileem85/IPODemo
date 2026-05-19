@@ -1843,6 +1843,8 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         const followUpSubs = subscriptions.filter(s =>
           s.status === "Pending Cash" || s.status === "Pending MCDR Allocation"
         ).filter(s => {
+          if (supIpoId !== "all" && s.ipoId !== supIpoId) return false;
+          if (supPhase !== "all" && s.phase !== supPhase) return false;
           const name = (s.nameAr + " " + s.nameEn + " " + s.unifiedCode).toLowerCase();
           if (followUpSearch && !name.includes(followUpSearch.toLowerCase())) return false;
           if (followUpFilter !== "All" && s.status !== followUpFilter) return false;
@@ -1917,7 +1919,12 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm truncate">{clientName(s.nameAr, s.nameEn, lang)}</p>
                         <p className="text-xs font-mono text-muted-foreground">{s.unifiedCode} · {s.id}</p>
-                        <SubBadge status={s.status} />
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <SubBadge status={s.status} />
+                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                            <Layers className="w-2.5 h-2.5" />{s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-xs font-black text-primary shrink-0">{s.amountDue.toLocaleString(numLocale)} {t.egp}</p>
                     </div>
@@ -2710,45 +2717,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               </CardContent>
             </Card>
 
-            {/* FIX 4.4 Allocation Message Generation */}
-            {storedAllocationRatio !== null && (
-              <Card className="border-primary/20">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-primary/70 mb-1">FIX 4.4</p>
-                      <CardTitle className="text-base">{t.fixAllocTitle}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-0.5">{t.fixAllocDesc}</p>
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      {!fixAllocMsg ? (
-                        <Button size="sm" onClick={handleGenerateFixAlloc}>
-                          <Zap className="w-4 h-4 me-2" />{t.fixAllocGenerateBtn}
-                        </Button>
-                      ) : (
-                        <>
-                          <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(fixAllocMsg); setFixAllocCopied(true); setTimeout(() => setFixAllocCopied(false), 2000); }}>
-                            {fixAllocCopied ? t.fixAllocCopied : t.fixCopyBtn}
-                          </Button>
-                          {!fixAllocSent ? (
-                            <Button size="sm" onClick={() => { setFixAllocSent(true); toast({ title: t.fixAllocSent }); }}>
-                              <Zap className="w-4 h-4 me-2" />{t.fixAllocSubmit}
-                            </Button>
-                          ) : (
-                            <Badge className="bg-emerald-500 text-white px-3 py-1.5 text-xs font-black">{t.fixAllocSent}</Badge>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                {fixAllocMsg && (
-                  <CardContent className="pt-0">
-                    <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-64 leading-relaxed whitespace-pre-wrap">{fixAllocMsg}</pre>
-                  </CardContent>
-                )}
-              </Card>
-            )}
           </div>
         );
       })()}
@@ -4500,15 +4468,15 @@ function IPOSystem() {
   };
   const handleForgotPassword = () => setRecoveredPassword(forgotUsername === defaultUsername ? defaultPassword : "");
   const handleAllocate = (allocationRatio: number, matchedCodes: Set<string>) => {
-    // Only allocate subs matched (fully or partially) in reconciliation
-    // allocatedShares = Math.floor(investorRequestedShares * allocationRatio)
+    // Only allocate uncovered-phase subs matched in reconciliation
     setSubscriptions(prev => prev.map(s => {
+      if (s.phase !== "uncovered") return s;
       if (s.status !== "Verified") return s;
       if (!matchedCodes.has(s.unifiedCode)) return s;
       return { ...s, allocatedShares: Math.floor(s.requestedShares * allocationRatio), status: "Allocated" as const };
     }));
   };
-  const handleRefund = () => setSubscriptions(prev => prev.map(s => s.status !== "Allocated" ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
+  const handleRefund = () => setSubscriptions(prev => prev.map(s => (s.phase !== "uncovered" || s.status !== "Allocated") ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
   const handleApprove = (ids: string[]) => setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
   const handleNewSubscription = (s: Subscription) => setSubscriptions(prev => [s, ...prev]);
   const handleNewKYC = (r: KYCRecord) => setKycRecords(prev => [r, ...prev]);
