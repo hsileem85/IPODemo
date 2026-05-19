@@ -148,6 +148,7 @@ const INITIAL_SUBSCRIPTIONS: Subscription[] = [
   { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14", phase: "covered", custodian: "Misr for Central Clearing", custodianCode: "MCDR", broker: "Beltone Financial", brokerCode: "BLT" },
   { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "CI Capital", brokerCode: "CIC" },
   { id: "TX-9905", nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", nationalId: "29203154321098", account: "100078923", unifiedCode: "3400127", requestedShares: 12000, amountDue: 15000, amountPaid: 15000, allocatedShares: 0, refundAmount: 0, status: "Pending MCDR Allocation", branch: "Cairo-Main", submittedAt: "2026-05-15 10:20", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "QNB Custody Services", custodianCode: "QNBC", broker: "EFG Hermes Securities", brokerCode: "EFG" },
+  { id: "REF-TXT-001", nameAr: "طارق سالم منصور", nameEn: "Tarek Salem Mansour", nationalId: "28709141234599", account: "100091234", unifiedCode: "6600891", requestedShares: 7500, amountDue: 9375, amountPaid: 0, allocatedShares: 0, refundAmount: 0, status: "Pending Cash", branch: "Alex-Branch", submittedAt: "2026-05-15 14:05", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "Beltone Financial", brokerCode: "BLT" },
 ];
 
 const INITIAL_MCDR = [
@@ -1521,7 +1522,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     setFixMcdrMsgMap(prev => ({ ...prev, [sub.id]: msg }));
   };
   const verifySubMcdr = (sub: Subscription) => {
-    const passes = sub.unifiedCode !== "8800318";
+    const passes = sub.unifiedCode !== "8800318" && sub.unifiedCode !== "3400127";
     setFixMcdrVerifiedMap(prev => ({ ...prev, [sub.id]: passes }));
     if (passes) {
       toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
@@ -1584,7 +1585,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
         `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
       ].join("\n");
-      const passes = sub.unifiedCode !== "8800318";
+      const passes = sub.unifiedCode !== "8800318" && sub.unifiedCode !== "3400127";
       newVerified[sub.id] = passes;
       if (!passes) failedIds.push(sub.id);
     });
@@ -1872,11 +1873,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   <TableHeader>
                     <TableRow className="bg-orange-50/50 dark:bg-orange-900/10">
                       <TableHead className="w-10"></TableHead>
-                      {[t.colInvestor, t.colIPOStock, t.phaseCol, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
+                      {[t.colInvestor, t.colIPOStock, t.phaseCol, t.colBranch, t.colBroker, t.colCustodian, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus, t.colAction].map(col => <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-orange-600 whitespace-nowrap">{col}</TableHead>)}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {shown.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => {
+                    {shown.length === 0 ? <TableRow><TableCell colSpan={11} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow> : shown.map(sub => {
                       const ipoStock = ipoStocks.find(s => s.id === sub.ipoId);
                       const ipoName = ipoStock ? (lang === "ar" ? ipoStock.securityNameAr : ipoStock.securityNameEn) : sub.ipoId;
                       return (
@@ -1886,6 +1887,8 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         <TableCell><p className="font-bold text-sm text-primary whitespace-nowrap">{ipoName}</p><p className="text-[10px] font-mono text-muted-foreground">{ipoStock?.code ?? ""}</p></TableCell>
                         <TableCell><span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border whitespace-nowrap ${sub.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}><Layers className="w-3 h-3" />{sub.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}</span></TableCell>
                         <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                        <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.broker ?? "—"}</TableCell>
+                        <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.custodian ?? "—"}</TableCell>
                         <TableCell className="text-sm font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
                         <TableCell className="text-sm font-black text-primary">{sub.amountDue.toLocaleString(numLocale)} {t.egp}</TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
@@ -2569,18 +2572,20 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               <div className="overflow-x-auto rounded-xl border border-border/50">
                 <Table>
                   <TableHeader><TableRow className="bg-muted/30">
-                    {[t.colInvestor, t.colBranch, t.colIPOName, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
+                    {[t.colInvestor, t.colBranch, t.colBroker, t.colCustodian, t.colIPOName, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
                       <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
                     ))}
                   </TableRow></TableHeader>
                   <TableBody>
                     {pageSubs.length === 0 && brokerClientCount === 0 ? (
-                      <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
                     ) : <>
                       {pageSubs.map(sub => (
                         <TableRow key={sub.id} className="hover:bg-muted/30">
                           <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-[10px] font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
                           <TableCell className="text-sm font-bold text-muted-foreground">{sub.branch}</TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.broker ?? "—"}</TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.custodian ?? "—"}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{boActiveStock ? (lang === "ar" ? boActiveStock.securityNameAr : boActiveStock.securityNameEn) : "—"}</TableCell>
                           <TableCell className="font-bold text-sm">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
                           <TableCell className="font-black text-sm text-primary">{sub.amountPaid.toLocaleString(numLocale)}</TableCell>
@@ -3049,7 +3054,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">
-                        {[t.colInvestor, t.colBranch, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
+                        {[t.colInvestor, t.colBranch, t.colBroker, t.colCustodian, t.sharesCol, t.totalAmtLabel, t.colSubmittedAt, t.colStatus].map(col => (
                           <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
                         ))}
                       </TableRow>
@@ -3059,6 +3064,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                         <TableRow key={sub.id} className="hover:bg-muted/30">
                           <TableCell><p className="font-bold text-sm">{clientName(sub.nameAr, sub.nameEn, lang)}</p><p className="text-xs font-mono text-muted-foreground">{sub.unifiedCode}</p></TableCell>
                           <TableCell className="text-sm text-muted-foreground font-bold">{sub.branch}</TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.broker ?? "—"}</TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{sub.custodian ?? "—"}</TableCell>
                           <TableCell className="font-bold">{sub.requestedShares.toLocaleString(numLocale)}</TableCell>
                           <TableCell className="font-black text-primary">{sub.amountPaid.toLocaleString(numLocale)} {t.egp}</TableCell>
                           <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
