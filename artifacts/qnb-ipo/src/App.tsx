@@ -1566,6 +1566,83 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     }
   };
 
+  // Bulk FIX MCDR check — all pending subscriptions at once
+  const handleCheckAllSubs = () => {
+    const unchecked = pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined);
+    if (unchecked.length === 0) return;
+    const newMsgs: Record<string, string> = {};
+    const newVerified: Record<string, boolean> = {};
+    const failedIds: string[] = [];
+    unchecked.forEach(sub => {
+      const stock = ipoStocks.find(s => s.id === sub.ipoId);
+      const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
+      const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+      newMsgs[sub.id] = [
+        `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
+        `56=MCDR`, `34=1`, `52=${ts}`,
+        `11=${sub.id}`, `1=${sub.account}`, `55=${stock?.symbol ?? "IPO"}`,
+        `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
+        `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
+      ].join("\n");
+      const passes = sub.unifiedCode !== "8800318";
+      newVerified[sub.id] = passes;
+      if (!passes) failedIds.push(sub.id);
+    });
+    setFixMcdrMsgMap(prev => ({ ...prev, ...newMsgs }));
+    setFixMcdrVerifiedMap(prev => ({ ...prev, ...newVerified }));
+    failedIds.forEach(id => onUpdateStatus(id, "Pending MCDR Allocation"));
+    setFixMcdrSubId(null);
+    const verifiedCount = unchecked.length - failedIds.length;
+    toast({
+      title: lang === "ar" ? "نتائج فحص FIX MCDR" : "FIX MCDR Check Results",
+      description: t.supFixMcdrCheckAllResult(verifiedCount, failedIds.length),
+      variant: failedIds.length > 0 ? "destructive" : "default",
+    });
+  };
+
+  // Bulk FIX MCDR check — all pending broker batches at once
+  const handleCheckAllBatches = () => {
+    const unchecked = batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined);
+    if (unchecked.length === 0) return;
+    const newMsgs: Record<string, string> = {};
+    const newVerified: Record<string, boolean> = {};
+    let failedCount = 0;
+    unchecked.forEach(batch => {
+      const stock = ipoStocks.find(s => s.id === batch.ipoId);
+      const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+      const lines: string[] = [
+        `=== FIX 4.4 MCDR CHECK — ${batch.broker} | ${batch.id} ===`,
+        `IPO: ${batch.ipoName} | Clients: ${batch.clients.length} | Generated: ${new Date().toLocaleString()}`,
+        "",
+      ];
+      batch.clients.forEach((c, i) => {
+        const seq = String(i + 1).padStart(3, "0");
+        lines.push(
+          `--- Client ${seq}: ${c.clientName} (${c.unifiedCode}) ---`,
+          `8=FIX.4.4`, `9=175`, `35=D`, `49=QNB-CLEARING`, `56=MCDR`,
+          `34=${i + 1}`, `52=${ts}`,
+          `11=${batch.id}-${seq}`, `55=${stock?.symbol ?? "IPO"}`,
+          `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`,
+          `38=${c.qty}`, `44=${c.qty > 0 ? (c.cost / c.qty).toFixed(2) : "0"}`,
+          `40=1`, `60=${ts}`, `10=000`, ``,
+        );
+      });
+      newMsgs[batch.id] = lines.join("\n");
+      const hasFailing = batch.clients.some(c => c.unifiedCode === "8800318");
+      newVerified[batch.id] = !hasFailing;
+      if (hasFailing) failedCount++;
+    });
+    setBatchFixMcdrMsgMap(prev => ({ ...prev, ...newMsgs }));
+    setBatchFixMcdrVerifiedMap(prev => ({ ...prev, ...newVerified }));
+    setBatchFixMcdrId(null);
+    const verifiedCount = unchecked.length - failedCount;
+    toast({
+      title: lang === "ar" ? "نتائج فحص FIX MCDR" : "FIX MCDR Check Results",
+      description: t.supFixMcdrCheckAllBatchResult(verifiedCount, failedCount),
+      variant: failedCount > 0 ? "destructive" : "default",
+    });
+  };
+
   return (
     <div className="space-y-5">
       {/* Sub-tabs */}
@@ -1621,7 +1698,14 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
       {/* Broker Batches panel */}
       {supTab === "broker" && (
         <div className="space-y-6">
-          <div><h2 className="text-2xl font-black tracking-tight">{t.brokerBatchesTitle}</h2><p className="text-muted-foreground text-sm">{t.fixMsgDesc}</p></div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div><h2 className="text-2xl font-black tracking-tight">{t.brokerBatchesTitle}</h2><p className="text-muted-foreground text-sm">{t.fixMsgDesc}</p></div>
+            {batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined).length > 0 && (
+              <Button size="sm" variant="outline" onClick={handleCheckAllBatches}>
+                <Zap className="w-4 h-4 me-2" />{t.supFixMcdrCheckAll} ({batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined).length})
+              </Button>
+            )}
+          </div>
           {filteredBatches.length === 0 ? (
             <Card><CardContent className="py-16 text-center text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-3 opacity-30" /><p className="font-bold">{t.noRecords}</p></CardContent></Card>
           ) : (
@@ -1762,6 +1846,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
               <p className="text-muted-foreground text-sm">{t.checkerDesc}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined).length > 0 && (
+                <Button size="sm" variant="outline" onClick={handleCheckAllSubs}>
+                  <Zap className="w-4 h-4 me-2" />{t.supFixMcdrCheckAll} ({pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined).length})
+                </Button>
+              )}
               {(() => {
                 const mcdrVerified = pending.filter(s => fixMcdrVerifiedMap[s.id] === true);
                 return mcdrVerified.length > 0 ? (
