@@ -3315,10 +3315,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
         const verifyMcdr = () => {
           const result: Record<string, "pass" | "fail"> = {};
-          brokerCodes.forEach(code => {
-            const hasFail = (brokerGroups[code] ?? []).some(c => c.unifiedCode === "3400127");
-            result[code] = hasFail ? "fail" : "pass";
-          });
+          brokerAllClients.forEach(c => { result[c.unifiedCode] = (c.unifiedCode === "3400127") ? "fail" : "pass"; });
           setBrokerMcdrStatus(result);
         };
 
@@ -3326,6 +3323,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         const mcdrVerifiedAll = Object.keys(brokerMcdrStatus).length > 0;
         const cashPassCount = Object.values(brokerCashStatus).filter(v => v === "pass").length;
         const cashFailCount = Object.values(brokerCashStatus).filter(v => v === "fail").length;
+        const mcdrPassCount = Object.values(brokerMcdrStatus).filter(v => v === "pass").length;
+        const mcdrFailCount = Object.values(brokerMcdrStatus).filter(v => v === "fail").length;
         const totalQty = brokerAllClients.reduce((s, c) => s + c.qty, 0);
         const totalCost = brokerAllClients.reduce((s, c) => s + c.cost, 0);
 
@@ -3625,25 +3624,45 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.mcdrVerification}</p>
-                        {!mcdrVerifiedAll && <Button size="sm" variant="outline" className="border-primary text-primary font-bold" onClick={verifyMcdr}><Zap className="w-3.5 h-3.5 me-1" />{t.verifyAll}</Button>}
-                      </div>
-                      <div className="space-y-2">
-                        {brokerCodes.map(code => {
-                          const st = brokerMcdrStatus[code];
-                          return (
-                            <div key={code} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${st === "pass" ? "border-green-500/30 bg-green-500/5" : st === "fail" ? "border-red-500/30 bg-red-500/5" : "border-border/50 bg-muted/20"}`}>
-                              <div className="flex items-center gap-2">
-                                <Building2 className="w-4 h-4 text-primary" />
-                                <span className="font-bold text-sm">{code}</span>
-                                <span className="text-xs text-muted-foreground">{(brokerGroups[code] ?? []).length} {t.totalClients}</span>
-                              </div>
-                              {st === "pass" && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{t.mcdrPass}</Badge>}
-                              {st === "fail" && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{t.mcdrFail}</Badge>}
-                              {!st && <span className="text-xs text-muted-foreground font-mono">—</span>}
+                        {!mcdrVerifiedAll
+                          ? <Button size="sm" variant="outline" className="border-primary text-primary font-bold" onClick={verifyMcdr}><Zap className="w-3.5 h-3.5 me-1" />{t.verifyAll}</Button>
+                          : <div className="flex gap-2">
+                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{mcdrPassCount} {t.mcdrPass}</Badge>
+                              {mcdrFailCount > 0 && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{mcdrFailCount} {t.mcdrFail}</Badge>}
                             </div>
-                          );
-                        })}
+                        }
                       </div>
+                      {mcdrVerifiedAll && (
+                        <div className="overflow-x-auto rounded-xl border border-border/50">
+                          <Table>
+                            <TableHeader><TableRow className="bg-muted/30">
+                              {[t.colClientName, t.colUnifiedCode, t.brokerLabel, t.colCustodian, t.colSubQty, t.colCost, t.colRef, "Status"].map(h => (
+                                <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>
+                              ))}
+                            </TableRow></TableHeader>
+                            <TableBody>
+                              {brokerAllClients.map((c, i) => {
+                                const st = brokerMcdrStatus[c.unifiedCode];
+                                return (
+                                  <TableRow key={i} className="hover:bg-muted/30">
+                                    <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                    <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                    <TableCell className="font-bold text-sm text-muted-foreground">{c.brokerCode}</TableCell>
+                                    <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
+                                    <TableCell className="font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                    <TableCell className="font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
+                                    <TableCell className="font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
+                                    <TableCell>
+                                      {st === "pass" && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{t.mcdrPass}</Badge>}
+                                      {st === "fail" && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{t.mcdrFail}</Badge>}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      )}
                     </div>
                   )}
 
