@@ -4818,7 +4818,35 @@ function IPOSystem() {
             />
           )}
           {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} />}
-          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b))} ipoStocks={ipoStocks} onUpdateStatus={(id, status) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s))} />}
+          {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => {
+            setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b));
+            if (action === "Approved") {
+              const batch = brokerBatches.find(b => b.id === id);
+              if (batch && batch.status === "Pending Review") {
+                const newSubs: Subscription[] = batch.clients.map((c, i) => {
+                  const status: SubStatus = c.ref === "REF-TXT-001" ? "Pending Cash"
+                    : c.unifiedCode === "3400127" ? "Pending MCDR Allocation"
+                    : "Approved";
+                  return {
+                    id: `BRK-${batch.id}-${i}`,
+                    nameAr: c.clientName, nameEn: c.clientName,
+                    nationalId: "—", account: "—",
+                    unifiedCode: c.unifiedCode,
+                    requestedShares: c.qty,
+                    amountDue: c.cost,
+                    amountPaid: status === "Pending Cash" ? 0 : c.cost,
+                    allocatedShares: 0, refundAmount: 0,
+                    status, branch: lang === "ar" ? `وسيط: ${batch.broker}` : `Broker: ${batch.broker}`,
+                    submittedAt: batch.submittedAt,
+                    ipoId: batch.ipoId, date: c.date,
+                    phase: batch.phase,
+                    custodian: c.custodian, broker: batch.broker, brokerCode: c.brokerCode,
+                  };
+                });
+                setSubscriptions(prev => [...prev, ...newSubs]);
+              }
+            }
+          }} ipoStocks={ipoStocks} onUpdateStatus={(id, status) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s))} />}
           {activeView === "BackOffice" && <BackOffice
             subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
             activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks}
