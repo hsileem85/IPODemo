@@ -1522,7 +1522,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     setFixMcdrMsgMap(prev => ({ ...prev, [sub.id]: msg }));
   };
   const verifySubMcdr = (sub: Subscription) => {
-    const passes = sub.unifiedCode !== "8800318" && sub.unifiedCode !== "3400127";
+    const passes = sub.unifiedCode !== "3400127";
     setFixMcdrVerifiedMap(prev => ({ ...prev, [sub.id]: passes }));
     if (passes) {
       toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
@@ -1585,7 +1585,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
         `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
       ].join("\n");
-      const passes = sub.unifiedCode !== "8800318" && sub.unifiedCode !== "3400127";
+      const passes = sub.unifiedCode !== "3400127";
       newVerified[sub.id] = passes;
       if (!passes) failedIds.push(sub.id);
     });
@@ -3314,7 +3314,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         const verifyMcdr = () => {
           const result: Record<string, "pass" | "fail"> = {};
           brokerCodes.forEach(code => {
-            const hasFail = (brokerGroups[code] ?? []).some(c => c.unifiedCode === "8800318" || c.unifiedCode === "3400127");
+            const hasFail = (brokerGroups[code] ?? []).some(c => c.unifiedCode === "3400127");
             result[code] = hasFail ? "fail" : "pass";
           });
           setBrokerMcdrStatus(result);
