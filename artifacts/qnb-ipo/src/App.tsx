@@ -3563,7 +3563,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   })}
                   <div className="flex justify-between pt-2">
                     <Button variant="outline" onClick={() => setBrokerStep(2)}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
-                    <Button disabled={!allFIXGenerated} onClick={() => setBrokerStep(4)}>{t.brokerStepNext} <ChevronRight className="w-4 h-4 ms-1" /></Button>
+                    <Button disabled={!allFIXGenerated} onClick={() => { setBrokerCashStatus({}); setBrokerMcdrStatus({}); setBrokerStep(4); }}>{t.brokerStepNext} <ChevronRight className="w-4 h-4 ms-1" /></Button>
                   </div>
                 </CardContent>
               </Card>
@@ -3667,7 +3667,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   )}
 
                   <div className="flex justify-between pt-2 border-t border-border/50">
-                    <Button variant="outline" onClick={() => setBrokerStep(3)}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
+                    <Button variant="outline" onClick={() => { setBrokerCashStatus({}); setBrokerMcdrStatus({}); setBrokerStep(3); }}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
                     <Button disabled={!mcdrVerifiedAll} onClick={submitAll}><Send className="w-4 h-4 me-2" />{t.submitAllBatches}</Button>
                   </div>
                 </CardContent>
