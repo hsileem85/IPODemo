@@ -1179,7 +1179,7 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-interface BrokerClient { clientName: string; brokerCode?: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; ref?: string; }
+interface BrokerClient { clientName: string; brokerCode?: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; ref?: string; custodian?: string; }
 interface MCDRRow { clientName: string; ipoName: string; unifiedCode: string; eligibleQty: number; subscribedQty: number; settlementDate: string; }
 interface ReconRow { name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string; }
 interface FrozenSnapshot { totalSubscriptionsCount: number; eligibleIPOShares: number; hasMcdr: boolean; totalSharesSubscribed: number; totalCashDisplay: string; coverageRatio: number; uncoveredGap: number; }
@@ -1755,7 +1755,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                       <div className="space-y-3 pt-2 border-t border-border">
                         <div className="overflow-x-auto rounded-xl border border-border/50">
                           <Table>
-                            <TableHeader><TableRow className="bg-muted/30">{[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef].map(h => <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>)}</TableRow></TableHeader>
+                            <TableHeader><TableRow className="bg-muted/30">{[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef, t.colCustodian].map(h => <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>)}</TableRow></TableHeader>
                             <TableBody>
                               {batch.clients.map((c, i) => (
                                 <TableRow key={i} className="hover:bg-muted/30">
@@ -1765,6 +1765,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                                   <TableCell className="font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="font-mono text-sm font-bold text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
+                                  <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -2602,7 +2603,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                           <TableCell><p className="font-bold text-sm">{c.clientName}</p><p className="text-[10px] font-mono text-muted-foreground">{c.unifiedCode}</p></TableCell>
                           <TableCell className="text-sm font-bold text-muted-foreground">{lang === "ar" ? `وسيط: ${b.broker}` : `Broker: ${b.broker}`}</TableCell>
                           <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{b.broker}</TableCell>
-                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">—</TableCell>
+                          <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{boActiveStock ? (lang === "ar" ? boActiveStock.securityNameAr : boActiveStock.securityNameEn) : "—"}</TableCell>
                           <TableCell className="font-bold text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                           <TableCell className="font-black text-sm text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
@@ -3112,7 +3113,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/30">
-                            {[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef].map(col => (
+                            {[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef, t.colCustodian].map(col => (
                               <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
                             ))}
                           </TableRow>
@@ -3126,6 +3127,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                               <TableCell className="font-mono text-sm font-bold">{c.qty.toLocaleString(numLocale)}</TableCell>
                               <TableCell className="font-mono text-sm font-black text-primary">{c.cost.toLocaleString(numLocale)}</TableCell>
                               <TableCell className="font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
+                              <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -3275,7 +3277,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         const parseCSV = (text: string): BrokerClient[] =>
           text.split('\n').filter(l => l.trim()).slice(1).map(line => {
             const p = line.split(',');
-            return { clientName: p[0]?.trim() ?? "", brokerCode: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "", ref: p[6]?.trim() ?? "", ipoName: stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : "" };
+            return { clientName: p[0]?.trim() ?? "", brokerCode: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "", ref: p[6]?.trim() ?? "", custodian: p[7]?.trim() ?? "", ipoName: stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : "" };
           }).filter(c => c.clientName);
 
         const handleFileUpload = (file: File) => {
@@ -3483,8 +3485,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader><TableRow className="bg-muted/20">
-                              {["#", t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef].map((h, i) => (
-                                <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 4 ? "text-end" : ""}`}>{h}</TableHead>
+                              {["#", t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef, t.colCustodian].map((h, i) => (
+                                <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 4 && i <= 6 ? "text-end" : ""}`}>{h}</TableHead>
                               ))}
                             </TableRow></TableHeader>
                             <TableBody>
@@ -3497,6 +3499,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                                   <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="text-end font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
+                                  <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -3588,7 +3591,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       <div className="overflow-x-auto rounded-xl border border-border/50">
                         <Table>
                           <TableHeader><TableRow className="bg-muted/30">
-                            {[t.colClientName, t.colUnifiedCode, t.brokerLabel, t.colSubQty, t.colCost, t.colRef, "Status"].map(h => (
+                            {[t.colClientName, t.colUnifiedCode, t.brokerLabel, t.colCustodian, t.colSubQty, t.colCost, t.colRef, "Status"].map(h => (
                               <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>
                             ))}
                           </TableRow></TableHeader>
@@ -3600,6 +3603,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                                   <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
                                   <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
                                   <TableCell className="font-bold text-sm text-muted-foreground">{c.brokerCode}</TableCell>
+                                  <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                                   <TableCell className="font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
