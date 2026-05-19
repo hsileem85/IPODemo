@@ -1479,10 +1479,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
   const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
   const [fixMcdrVerifiedMap, setFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
-  // FIX MCDR Allocation check state — broker batches
-  const [batchFixMcdrId, setBatchFixMcdrId] = useState<string | null>(null);
-  const [batchFixMcdrMsgMap, setBatchFixMcdrMsgMap] = useState<Record<string, string>>({});
-  const [batchFixMcdrVerifiedMap, setBatchFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
   // Follow Up + FIX state
   const [followUpSearch, setFollowUpSearch] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState("All");
@@ -1533,39 +1529,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     }
   };
 
-  // FIX MCDR helpers — broker batches
-  const generateBatchFix = (batch: BrokerBatch) => {
-    const stock = ipoStocks.find(s => s.id === batch.ipoId);
-    const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-    const lines: string[] = [
-      `=== FIX 4.4 MCDR CHECK — ${batch.broker} | ${batch.id} ===`,
-      `IPO: ${batch.ipoName} | Clients: ${batch.clients.length} | Generated: ${new Date().toLocaleString()}`,
-      "",
-    ];
-    batch.clients.forEach((c, i) => {
-      const seq = String(i + 1).padStart(3, "0");
-      lines.push(
-        `--- Client ${seq}: ${c.clientName} (${c.unifiedCode}) ---`,
-        `8=FIX.4.4`, `9=175`, `35=D`, `49=QNB-CLEARING`, `56=MCDR`,
-        `34=${i + 1}`, `52=${ts}`,
-        `11=${batch.id}-${seq}`, `55=${stock?.symbol ?? "IPO"}`,
-        `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`,
-        `38=${c.qty}`, `44=${c.qty > 0 ? (c.cost / c.qty).toFixed(2) : "0"}`,
-        `40=1`, `60=${ts}`, `10=000`, ``,
-      );
-    });
-    setBatchFixMcdrMsgMap(prev => ({ ...prev, [batch.id]: lines.join("\n") }));
-  };
-  const verifyBatchMcdr = (batch: BrokerBatch) => {
-    const hasFailing = batch.clients.some(c => c.unifiedCode === "8800318");
-    const passes = !hasFailing;
-    setBatchFixMcdrVerifiedMap(prev => ({ ...prev, [batch.id]: passes }));
-    if (passes) {
-      toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
-    } else {
-      toast({ title: lang === "ar" ? "فشل التحقق من MCDR" : "MCDR Verification Failed", description: t.supFixMcdrBatchFailMsg, variant: "destructive" });
-    }
-  };
 
   // Bulk FIX MCDR check — all pending subscriptions at once
   const handleCheckAllSubs = () => {
@@ -1601,48 +1564,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     });
   };
 
-  // Bulk FIX MCDR check — all pending broker batches at once
-  const handleCheckAllBatches = () => {
-    const unchecked = batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined);
-    if (unchecked.length === 0) return;
-    const newMsgs: Record<string, string> = {};
-    const newVerified: Record<string, boolean> = {};
-    let failedCount = 0;
-    unchecked.forEach(batch => {
-      const stock = ipoStocks.find(s => s.id === batch.ipoId);
-      const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-      const lines: string[] = [
-        `=== FIX 4.4 MCDR CHECK — ${batch.broker} | ${batch.id} ===`,
-        `IPO: ${batch.ipoName} | Clients: ${batch.clients.length} | Generated: ${new Date().toLocaleString()}`,
-        "",
-      ];
-      batch.clients.forEach((c, i) => {
-        const seq = String(i + 1).padStart(3, "0");
-        lines.push(
-          `--- Client ${seq}: ${c.clientName} (${c.unifiedCode}) ---`,
-          `8=FIX.4.4`, `9=175`, `35=D`, `49=QNB-CLEARING`, `56=MCDR`,
-          `34=${i + 1}`, `52=${ts}`,
-          `11=${batch.id}-${seq}`, `55=${stock?.symbol ?? "IPO"}`,
-          `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`,
-          `38=${c.qty}`, `44=${c.qty > 0 ? (c.cost / c.qty).toFixed(2) : "0"}`,
-          `40=1`, `60=${ts}`, `10=000`, ``,
-        );
-      });
-      newMsgs[batch.id] = lines.join("\n");
-      const hasFailing = batch.clients.some(c => c.unifiedCode === "8800318");
-      newVerified[batch.id] = !hasFailing;
-      if (hasFailing) failedCount++;
-    });
-    setBatchFixMcdrMsgMap(prev => ({ ...prev, ...newMsgs }));
-    setBatchFixMcdrVerifiedMap(prev => ({ ...prev, ...newVerified }));
-    setBatchFixMcdrId(null);
-    const verifiedCount = unchecked.length - failedCount;
-    toast({
-      title: lang === "ar" ? "نتائج فحص FIX MCDR" : "FIX MCDR Check Results",
-      description: t.supFixMcdrCheckAllBatchResult(verifiedCount, failedCount),
-      variant: failedCount > 0 ? "destructive" : "default",
-    });
-  };
 
   return (
     <div className="space-y-5">
@@ -1701,11 +1622,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         <div className="space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div><h2 className="text-2xl font-black tracking-tight">{t.brokerBatchesTitle}</h2><p className="text-muted-foreground text-sm">{t.fixMsgDesc}</p></div>
-            {batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined).length > 0 && (
-              <Button size="sm" variant="outline" onClick={handleCheckAllBatches}>
-                <Zap className="w-4 h-4 me-2" />{t.supFixMcdrCheckAll} ({batchPending.filter(b => batchFixMcdrVerifiedMap[b.id] === undefined).length})
-              </Button>
-            )}
           </div>
           {filteredBatches.length === 0 ? (
             <Card><CardContent className="py-16 text-center text-muted-foreground"><Building2 className="w-8 h-8 mx-auto mb-3 opacity-30" /><p className="font-bold">{t.noRecords}</p></CardContent></Card>
@@ -1722,31 +1638,25 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${batch.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}><Layers className="w-3 h-3" />{batch.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}</span>
                         </div>
                         <p className="font-black text-lg">{batch.broker}</p>
-                        <p className="text-sm text-muted-foreground font-bold">{batch.ipoName} · {t.batchClients(batch.clients.length)} · {batch.paymentMethod}</p>
+                        {(() => { const vc = batch.clients.filter(c => c.ref !== "REF-TXT-001" && c.unifiedCode !== "3400127"); return <p className="text-sm text-muted-foreground font-bold">{batch.ipoName} · {t.batchClients(vc.length)} · {batch.paymentMethod}</p>; })()}
                         <p className="text-xs text-muted-foreground font-mono">{lang === "ar" ? "أُرسلت:" : "Submitted:"} {batch.submittedAt}</p>
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <div className="text-end">
-                          <p className="text-xl font-black text-primary">{batch.clients.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)}</p>
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase">{lang === "ar" ? "إجمالي الأسهم" : "Total Shares"}</p>
-                        </div>
-                        <div className="text-end">
-                          <p className="text-xl font-black">{batch.clients.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)}</p>
-                          <p className="text-[10px] text-muted-foreground font-bold uppercase">{t.egp}</p>
-                        </div>
-                        {batch.status === "Pending Review" && batchFixMcdrVerifiedMap[batch.id] === true && (
+                        {(() => { const vc = batch.clients.filter(c => c.ref !== "REF-TXT-001" && c.unifiedCode !== "3400127"); return (<>
+                          <div className="text-end">
+                            <p className="text-xl font-black text-primary">{vc.reduce((a, c) => a + c.qty, 0).toLocaleString(numLocale)}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase">{lang === "ar" ? "إجمالي الأسهم" : "Total Shares"}</p>
+                          </div>
+                          <div className="text-end">
+                            <p className="text-xl font-black">{vc.reduce((a, c) => a + c.cost, 0).toLocaleString(numLocale)}</p>
+                            <p className="text-[10px] text-muted-foreground font-bold uppercase">{t.egp}</p>
+                          </div>
+                        </>); })()}
+                        {batch.status === "Pending Review" && (
                           <>
                             <button onClick={() => { onApproveBatch(batch.id, "Approved"); toast({ title: t.batchApproveBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition-colors"><CheckCircle2 className="w-3.5 h-3.5" />{t.batchApproveBtn}</button>
                             <button onClick={() => { onApproveBatch(batch.id, "Rejected"); toast({ title: t.batchRejectBtn, description: batch.broker }); }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 text-xs font-black transition-colors"><X className="w-3.5 h-3.5" />{t.batchRejectBtn}</button>
                           </>
-                        )}
-                        {batch.status === "Pending Review" && batchFixMcdrVerifiedMap[batch.id] !== true && (
-                          <button
-                            onClick={() => setBatchFixMcdrId(prev => prev === batch.id ? null : batch.id)}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black border transition-colors ${batchFixMcdrId === batch.id ? "bg-primary/10 border-primary text-primary" : batchFixMcdrVerifiedMap[batch.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-primary/30 text-primary hover:bg-primary/5"}`}>
-                            <Zap className="w-3.5 h-3.5" />
-                            {batchFixMcdrVerifiedMap[batch.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
-                          </button>
                         )}
                         <button onClick={() => setExpandedBatch(expandedBatch === batch.id ? null : batch.id)} className="px-3 py-2 rounded-xl border border-border text-xs font-bold text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors">{expandedBatch === batch.id ? (lang === "ar" ? "إخفاء" : "Hide") : (lang === "ar" ? "عرض التفاصيل" : "View Details")}</button>
                       </div>
@@ -1757,7 +1667,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                           <Table>
                             <TableHeader><TableRow className="bg-muted/30">{[t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost, t.colRef, t.colCustodian].map(h => <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>)}</TableRow></TableHeader>
                             <TableBody>
-                              {batch.clients.map((c, i) => (
+                              {batch.clients.filter(c => c.ref !== "REF-TXT-001" && c.unifiedCode !== "3400127").map((c, i) => (
                                 <TableRow key={i} className="hover:bg-muted/30">
                                   <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
                                   <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
@@ -1780,58 +1690,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                       </div>
                     )}
 
-                    {/* ── FIX MCDR Allocation Check Panel (Broker Batch) ── */}
-                    {batchFixMcdrId === batch.id && batch.status === "Pending Review" && (
-                      <div className="space-y-3 pt-3 border-t-2 border-primary/20">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Zap className="w-4 h-4 text-primary" />
-                            <div>
-                              <p className="font-black text-sm">{t.supFixMcdrTitle}</p>
-                              <p className="text-xs text-muted-foreground">{t.supFixMcdrDesc}</p>
-                            </div>
-                          </div>
-                          <button onClick={() => setBatchFixMcdrId(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕</button>
-                        </div>
-                        {(() => {
-                          const batchFixMsg = batchFixMcdrMsgMap[batch.id];
-                          const batchVerified = batchFixMcdrVerifiedMap[batch.id];
-                          return (
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap gap-3 items-center">
-                                <Button size="sm" variant="outline" onClick={() => generateBatchFix(batch)} disabled={!!batchFixMsg}>
-                                  <FileText className="w-3.5 h-3.5 me-2" />{batchFixMsg ? (lang === "ar" ? "تم التوليد ✓" : "Generated ✓") : t.supFixMcdrGenerate}
-                                </Button>
-                                {batchFixMsg && batchVerified === undefined && (
-                                  <Button size="sm" onClick={() => verifyBatchMcdr(batch)}>
-                                    <Zap className="w-3.5 h-3.5 me-2" />{t.supFixMcdrVerify}
-                                  </Button>
-                                )}
-                                {batchVerified === true && (
-                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-black">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />{t.supFixMcdrPassMsg}
-                                  </div>
-                                )}
-                                {batchVerified === false && (
-                                  <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-xl text-xs font-black">
-                                    <X className="w-3.5 h-3.5" />{t.supFixMcdrBatchFailMsg}
-                                  </div>
-                                )}
-                                {batchFixMsg && (
-                                  <button onClick={() => { navigator.clipboard.writeText(batchFixMsg); toast({ title: t.fixCopied }); }}
-                                    className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                                    <Copy className="w-3 h-3" />{t.fixCopyBtn}
-                                  </button>
-                                )}
-                              </div>
-                              {batchFixMsg && (
-                                <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-52 leading-relaxed whitespace-pre-wrap">{batchFixMsg}</pre>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
               ))}
