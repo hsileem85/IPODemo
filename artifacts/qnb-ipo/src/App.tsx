@@ -24,7 +24,7 @@ import {
   MessageSquare, Mail, Smartphone, Upload as UploadIcon,
   Filter, Send as SendIcon, CheckCheck, AlertCircle, X,
   FileUser, Building2, MapPin, CreditCard, AlertTriangle,
-  ClipboardCheck, FileCheck, ChevronRight, ListFilter,
+  ClipboardCheck, FileCheck, ChevronRight, ChevronLeft, ListFilter,
   LayoutDashboard, TrendingUp, Activity, ArrowUpRight, ChevronUp,
   BarChart3, ShieldAlert, Wallet, UserCheck2, CalendarClock, RefreshCw,
   Zap, Network, ChevronDown as ChevronDownIcon, PlusCircle, CheckSquare,
@@ -1179,7 +1179,7 @@ function CustomerComms() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Front Office (with KYC sub-tabs)
 // ─────────────────────────────────────────────────────────────────────────────
-interface BrokerClient { clientName: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; }
+interface BrokerClient { clientName: string; brokerCode?: string; ipoName: string; unifiedCode: string; qty: number; cost: number; date: string; }
 interface MCDRRow { clientName: string; ipoName: string; unifiedCode: string; eligibleQty: number; subscribedQty: number; settlementDate: string; }
 interface ReconRow { name: string; branch: string; unifiedCode: string; eligibleShares: number; subscribedShares: number; remainingShares: number; status: string; source: string; }
 interface FrozenSnapshot { totalSubscriptionsCount: number; eligibleIPOShares: number; hasMcdr: boolean; totalSharesSubscribed: number; totalCashDisplay: string; coverageRatio: number; uncoveredGap: number; }
@@ -2181,10 +2181,13 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const [fixAllocMsg, setFixAllocMsg] = useState("");
   const [fixAllocCopied, setFixAllocCopied] = useState(false);
   const [fixAllocSent, setFixAllocSent] = useState(false);
-  // Multi-broker state
-  const [selectedBrokerIds, setSelectedBrokerIds] = useState<Set<string>>(new Set());
-  const [multiBrokerFiles, setMultiBrokerFiles] = useState<Record<string, { file: File; clients: BrokerClient[] }>>({});
+  // Broker wizard state
+  const [brokerStep, setBrokerStep] = useState<1 | 2 | 3 | 4>(1);
+  const [brokerAllClients, setBrokerAllClients] = useState<BrokerClient[]>([]);
+  const [brokerAllFile, setBrokerAllFile] = useState<File | null>(null);
   const [multiBrokerFIX, setMultiBrokerFIX] = useState<Record<string, string>>({});
+  const [brokerCashStatus, setBrokerCashStatus] = useState<Record<string, "pass" | "fail">>({});
+  const [brokerMcdrStatus, setBrokerMcdrStatus] = useState<Record<string, "pass" | "fail">>({});
   const brokerRef = useRef<HTMLInputElement>(null);
   const mcdrRef = useRef<HTMLInputElement>(null);
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
@@ -3253,227 +3256,392 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       {/* ── BROKER SUBSCRIPTIONS TAB ── */}
       {boTab === "Broker" && (() => {
         const stock = ipoStocks.find(s => s.id === brokerIPO);
-        const allSelected = INITIAL_BROKERS.length > 0 && INITIAL_BROKERS.every(b => selectedBrokerIds.has(b.id));
-        const someSelected = INITIAL_BROKERS.some(b => selectedBrokerIds.has(b.id));
+
+        // Group all clients by broker code
+        const brokerGroups = brokerAllClients.reduce<Record<string, BrokerClient[]>>((acc, c) => {
+          const code = c.brokerCode ?? "UNKNOWN";
+          if (!acc[code]) acc[code] = [];
+          acc[code].push(c);
+          return acc;
+        }, {});
+        const brokerCodes = Object.keys(brokerGroups);
 
         const parseCSV = (text: string): BrokerClient[] =>
           text.split('\n').filter(l => l.trim()).slice(1).map(line => {
             const p = line.split(',');
-            return { clientName: p[0]?.trim() ?? "", ipoName: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "" };
+            return { clientName: p[0]?.trim() ?? "", brokerCode: p[1]?.trim() ?? "", unifiedCode: p[2]?.trim() ?? "", qty: parseInt(p[3]?.trim() ?? "0", 10) || 0, cost: parseFloat(p[4]?.trim() ?? "0") || 0, date: p[5]?.trim() ?? "", ipoName: stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : "" };
           }).filter(c => c.clientName);
 
-        const toggleBroker = (id: string) => {
-          setSelectedBrokerIds(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) {
-              next.delete(id);
-              setMultiBrokerFiles(f => { const n = { ...f }; delete n[id]; return n; });
-              setMultiBrokerFIX(f => { const n = { ...f }; delete n[id]; return n; });
-            } else next.add(id);
-            return next;
-          });
-        };
-
-        const toggleAll = () => {
-          if (allSelected) { setSelectedBrokerIds(new Set()); setMultiBrokerFiles({}); setMultiBrokerFIX({}); }
-          else setSelectedBrokerIds(new Set(INITIAL_BROKERS.map(b => b.id)));
-        };
-
-        const handleFileForBroker = (brokerId: string, file: File) => {
+        const handleFileUpload = (file: File) => {
+          setBrokerAllFile(file);
           const reader = new FileReader();
           reader.onload = (ev) => {
             const clients = parseCSV(ev.target?.result as string);
-            setMultiBrokerFiles(prev => ({ ...prev, [brokerId]: { file, clients } }));
-            setMultiBrokerFIX(prev => { const n = { ...prev }; delete n[brokerId]; return n; });
+            setBrokerAllClients(clients);
+            setMultiBrokerFIX({}); setBrokerCashStatus({}); setBrokerMcdrStatus({});
           };
           reader.readAsText(file);
         };
 
-        const generateFixForBroker = (brokerId: string) => {
-          const brokerData = INITIAL_BROKERS.find(b => b.id === brokerId);
-          const fileData = multiBrokerFiles[brokerId];
-          if (!brokerData || !fileData || !stock) return;
+        const generateFixForCode = (code: string) => {
+          if (!stock) return;
+          const clients = brokerGroups[code] ?? [];
           const symbol = stock.symbol ?? brokerIPO;
           const price = stock.pricePerShare ?? 0;
           const now = new Date();
           const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
           const batchId = `BRK${Date.now().toString().slice(-6)}`;
-          const lines = fileData.clients.map((c, i) =>
-            `8=FIX.4.2|35=D|49=QNB|56=${brokerData.code}|34=${i+1}|52=${ts}|11=${batchId}-${String(i+1).padStart(3,'0')}|55=${symbol}|54=1|38=${c.qty}|44=${price.toFixed(2)}|40=2|453=1|448=${c.unifiedCode}|447=P|452=1|10=000`
+          const lines = clients.map((c, i) =>
+            `8=FIX.4.2|35=D|49=QNB|56=${code}|34=${i+1}|52=${ts}|11=${batchId}-${String(i+1).padStart(3,'0')}|55=${symbol}|54=1|38=${c.qty}|44=${price.toFixed(2)}|40=2|453=1|448=${c.unifiedCode}|447=P|452=1|10=000`
           );
-          setMultiBrokerFIX(prev => ({ ...prev, [brokerId]: `=== GROUP IPO SUBSCRIPTION — FIX 4.2 ===\nBroker: ${brokerData.code} | Symbol: ${symbol} | Records: ${fileData.clients.length} | Batch: ${batchId}\n\n${lines.join('\n')}` }));
+          setMultiBrokerFIX(prev => ({ ...prev, [code]: `=== GROUP IPO SUBSCRIPTION — FIX 4.2 ===\nBroker: ${code} | Symbol: ${symbol} | Records: ${clients.length} | Batch: ${batchId}\n\n${lines.join('\n')}` }));
         };
 
-        const canGenerateAll = INITIAL_BROKERS.some(b => selectedBrokerIds.has(b.id) && multiBrokerFiles[b.id] && !multiBrokerFIX[b.id]);
-        const canSubmitAll = INITIAL_BROKERS.some(b => selectedBrokerIds.has(b.id) && multiBrokerFIX[b.id]);
-        const totalClientsAll = Object.values(multiBrokerFiles).reduce((s, f) => s + f.clients.length, 0);
+        const allFIXGenerated = brokerCodes.length > 0 && brokerCodes.every(c => multiBrokerFIX[c]);
+
+        const verifyCash = () => {
+          const result: Record<string, "pass" | "fail"> = {};
+          brokerAllClients.forEach(c => { result[c.unifiedCode] = (c.unifiedCode === "8800318" || c.unifiedCode === "3400127") ? "fail" : "pass"; });
+          setBrokerCashStatus(result);
+        };
+
+        const verifyMcdr = () => {
+          const result: Record<string, "pass" | "fail"> = {};
+          brokerCodes.forEach(code => {
+            const hasFail = (brokerGroups[code] ?? []).some(c => c.unifiedCode === "8800318" || c.unifiedCode === "3400127");
+            result[code] = hasFail ? "fail" : "pass";
+          });
+          setBrokerMcdrStatus(result);
+        };
+
+        const cashVerified = Object.keys(brokerCashStatus).length > 0;
+        const mcdrVerifiedAll = Object.keys(brokerMcdrStatus).length > 0;
+        const cashPassCount = Object.values(brokerCashStatus).filter(v => v === "pass").length;
+        const cashFailCount = Object.values(brokerCashStatus).filter(v => v === "fail").length;
+        const totalQty = brokerAllClients.reduce((s, c) => s + c.qty, 0);
+        const totalCost = brokerAllClients.reduce((s, c) => s + c.cost, 0);
+
+        const resetWizard = () => {
+          setBrokerStep(1); setBrokerAllClients([]); setBrokerAllFile(null);
+          setMultiBrokerFIX({}); setBrokerCashStatus({}); setBrokerMcdrStatus({});
+          setBrokerIPO(""); setBrokerPayMethod("Bank Transfer"); setBrokerTxRef("");
+        };
 
         const submitAll = () => {
-          INITIAL_BROKERS.filter(b => selectedBrokerIds.has(b.id) && multiBrokerFIX[b.id]).forEach(brokerData => {
-            const fileData = multiBrokerFiles[brokerData.id];
-            if (!fileData) return;
+          brokerCodes.filter(code => multiBrokerFIX[code]).forEach(code => {
+            const clients = brokerGroups[code] ?? [];
             const batch: BrokerBatch = {
-              id: `BRK-${Date.now()}-${brokerData.id}`,
-              broker: brokerData.code, ipoId: brokerIPO,
+              id: `BRK-${Date.now()}-${code}`,
+              broker: code, ipoId: brokerIPO,
               ipoName: lang === "ar" ? (stock?.securityNameAr ?? brokerIPO) : (stock?.securityNameEn ?? brokerIPO),
-              clients: fileData.clients, paymentMethod: brokerPayMethod,
-              txRef: brokerTxRef, fixMessage: multiBrokerFIX[brokerData.id],
+              clients, paymentMethod: brokerPayMethod,
+              txRef: brokerTxRef, fixMessage: multiBrokerFIX[code],
               submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
-              status: "Pending Review",
-              phase: stock?.phase ?? "covered",
+              status: "Pending Review", phase: stock?.phase ?? "covered",
             };
             onSubmitBatch(batch);
           });
-          toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(totalClientsAll) });
-          setSelectedBrokerIds(new Set()); setMultiBrokerFiles({}); setMultiBrokerFIX({});
-          setBrokerIPO(""); setBrokerTxRef(""); setBrokerPayMethod("Bank Transfer");
+          toast({ title: t.toastSentTitle, description: t.brokerFileLoaded(brokerAllClients.length) });
+          resetWizard();
         };
+
+        const steps = [t.brokerWizardStep1, t.brokerWizardStep2, t.brokerWizardStep3, t.brokerWizardStep4];
 
         return (
           <div className="space-y-4">
-            {/* Shared settings */}
-            <Card>
-              <CardHeader><CardTitle>{t.brokerUploadTitle}</CardTitle><CardDescription>{t.brokerUploadDesc}</CardDescription></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.eventLabel}</p>
-                    <select value={brokerIPO} onChange={e => { setBrokerIPO(e.target.value); setMultiBrokerFIX({}); }} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                      <option value="">{t.selectIPO}</option>
-                      {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
-                    </select>
-                    {brokerIPO && stock && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${stock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
-                        <Layers className="w-3 h-3" />
-                        {stock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-                      </span>
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.paymentLabel}</p>
-                    <select value={brokerPayMethod} onChange={e => setBrokerPayMethod(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
-                      <option value="Bank Transfer">{t.payTransfer}</option>
-                      <option value="Debit Note">{t.payDebitNote}</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.txRefLabel}</p>
-                    <Input placeholder={t.txRefPlaceholder} dir="ltr" value={brokerTxRef} onChange={e => setBrokerTxRef(e.target.value)} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Broker selection + per-broker upload */}
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle>{t.brokerLabel}</CardTitle>
-                  <div className="flex items-center gap-3">
-                    {someSelected && <Badge variant="outline" className="text-primary border-primary/30 font-black">{t.brokersSelected(selectedBrokerIds.size)}</Badge>}
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleAll}
-                        className="w-4 h-4 rounded accent-primary"
-                      />
-                      <span className="text-sm font-bold">{allSelected ? t.deselectAll : t.selectAllBrokers}</span>
-                    </label>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {INITIAL_BROKERS.map(broker => {
-                  const isChecked = selectedBrokerIds.has(broker.id);
-                  const fileData = multiBrokerFiles[broker.id];
-                  const fixMsg = multiBrokerFIX[broker.id];
-                  return (
-                    <div key={broker.id} className={`rounded-xl border transition-all ${isChecked ? "border-primary/40 bg-primary/5" : "border-border/50 bg-muted/20"}`}>
-                      {/* Broker row */}
-                      <div className="flex items-center gap-3 p-3">
-                        <input
-                          type="checkbox"
-                          id={`chk-${broker.id}`}
-                          checked={isChecked}
-                          onChange={() => toggleBroker(broker.id)}
-                          className="w-4 h-4 rounded accent-primary cursor-pointer flex-shrink-0"
-                        />
-                        <label htmlFor={`chk-${broker.id}`} className="flex items-center gap-3 cursor-pointer flex-1 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Building2 className="w-4 h-4 text-primary" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm truncate">{broker.name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{broker.code} · {broker.email}</p>
-                          </div>
-                          {fileData && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px] flex-shrink-0"><CheckCircle2 className="w-3 h-3 me-1" />{t.brokerFileLoaded(fileData.clients.length)}</Badge>}
-                          {fixMsg && <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-bold text-[10px] flex-shrink-0">FIX ✓</Badge>}
-                        </label>
-                        {isChecked && brokerIPO && (
-                          <>
-                            <input
-                              type="file"
-                              accept=".csv"
-                              className="hidden"
-                              id={`file-${broker.id}`}
-                              onChange={e => { const f = e.target.files?.[0]; if (f) handleFileForBroker(broker.id, f); e.target.value = ""; }}
-                            />
-                            {!fileData ? (
-                              <Button size="sm" variant="outline" className="flex-shrink-0" onClick={() => document.getElementById(`file-${broker.id}`)?.click()}>
-                                <Upload className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}
-                              </Button>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                {!fixMsg && (
-                                  <Button size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => generateFixForBroker(broker.id)}>
-                                    <Zap className="w-3.5 h-3.5 me-1" />{t.fixGenerateBtn}
-                                  </Button>
-                                )}
-                                <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => { setMultiBrokerFiles(f => { const n = { ...f }; delete n[broker.id]; return n; }); setMultiBrokerFIX(f => { const n = { ...f }; delete n[broker.id]; return n; }); }}>
-                                  <X className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
-                            )}
-                          </>
-                        )}
+            {/* ── Step indicator ── */}
+            <div className="flex items-start">
+              {steps.map((label, i) => {
+                const stepNum = (i + 1) as 1 | 2 | 3 | 4;
+                const isDone = brokerStep > stepNum;
+                const isActive = brokerStep === stepNum;
+                return (
+                  <div key={i} className="flex items-start flex-1">
+                    <div className="flex flex-col items-center gap-1 flex-1">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-black border-2 transition-all ${isDone ? "bg-primary border-primary text-primary-foreground" : isActive ? "border-primary text-primary bg-primary/5" : "border-border text-muted-foreground"}`}>
+                        {isDone ? <CheckCircle2 className="w-4 h-4" /> : stepNum}
                       </div>
-                      {/* Inline FIX preview */}
-                      {isChecked && fixMsg && (
-                        <div className="px-4 pb-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.fixMsgTitle}</p>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(fixMsg); toast({ title: t.fixCopied }); }}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-border text-[10px] font-bold hover:text-primary transition-all"
-                            >
-                              <FileSpreadsheet className="w-3 h-3" />{t.fixCopyBtn}
-                            </button>
-                          </div>
-                          <pre className="bg-zinc-900 text-green-400 rounded-lg p-3 font-mono text-[10px] overflow-x-auto max-h-32 leading-relaxed whitespace-pre-wrap">{fixMsg}</pre>
-                        </div>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide text-center leading-tight px-1 ${isActive ? "text-primary" : isDone ? "text-primary/60" : "text-muted-foreground"}`}>{label}</span>
+                    </div>
+                    {i < steps.length - 1 && <div className={`h-0.5 flex-1 mt-4 mx-1 transition-all ${isDone ? "bg-primary" : "bg-border"}`} />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Step 1: Upload ── */}
+            {brokerStep === 1 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t.brokerWizardStep1}</CardTitle>
+                  <CardDescription className="font-mono text-xs">{t.brokerCsvHint}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.eventLabel}</p>
+                      <select value={brokerIPO} onChange={e => { setBrokerIPO(e.target.value); setMultiBrokerFIX({}); }} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <option value="">{t.selectIPO}</option>
+                        {ipoStocks.map(s => <option key={s.id} value={s.id}>{lang === "ar" ? s.securityNameAr : s.securityNameEn}</option>)}
+                      </select>
+                      {brokerIPO && stock && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black border ${stock.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                          <Layers className="w-3 h-3" />{stock.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                        </span>
                       )}
                     </div>
-                  );
-                })}
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.paymentLabel}</p>
+                      <select value={brokerPayMethod} onChange={e => setBrokerPayMethod(e.target.value)} className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">
+                        <option value="Bank Transfer">{t.payTransfer}</option>
+                        <option value="Debit Note">{t.payDebitNote}</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{t.txRefLabel}</p>
+                      <Input placeholder={t.txRefPlaceholder} dir="ltr" value={brokerTxRef} onChange={e => setBrokerTxRef(e.target.value)} />
+                    </div>
+                  </div>
+                  {!brokerAllFile ? (
+                    <div
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-14 gap-4 cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
+                      onClick={() => brokerRef.current?.click()}
+                    >
+                      <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-6 h-6 text-muted-foreground" /></div>
+                      <div className="text-center">
+                        <p className="font-bold">{t.uploadBrokerBtn}</p>
+                        <p className="text-xs text-muted-foreground mt-1 font-mono">{t.brokerCsvHint}</p>
+                      </div>
+                      <input ref={brokerRef} type="file" accept=".csv" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+                      <Button variant="outline" onClick={e => { e.stopPropagation(); brokerRef.current?.click(); }}><Upload className="w-4 h-4 me-2" />{t.uploadBrokerBtn}</Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                      <div className="flex items-center gap-3 text-green-700 dark:text-green-400">
+                        <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                        <div>
+                          <p className="font-bold text-sm">{brokerAllFile.name}</p>
+                          <p className="text-xs">{t.brokerFileLoaded(brokerAllClients.length)} · {t.brokersFound(brokerCodes.length)}</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => { setBrokerAllFile(null); setBrokerAllClients([]); setMultiBrokerFIX({}); setBrokerCashStatus({}); setBrokerMcdrStatus({}); }}>
+                        <X className="w-3.5 h-3.5 me-1" />{t.uploadBrokerBtn}
+                      </Button>
+                    </div>
+                  )}
+                  <div className="flex justify-end">
+                    <Button disabled={!brokerIPO || brokerAllClients.length === 0} onClick={() => setBrokerStep(2)}>
+                      {t.brokerStepNext} <ChevronRight className="w-4 h-4 ms-1" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-                {/* Bulk action buttons */}
-                {someSelected && brokerIPO && (
-                  <div className="flex flex-wrap gap-3 pt-2 border-t border-border/50">
-                    {canGenerateAll && (
-                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => INITIAL_BROKERS.filter(b => selectedBrokerIds.has(b.id) && multiBrokerFiles[b.id] && !multiBrokerFIX[b.id]).forEach(b => generateFixForBroker(b.id))}>
+            {/* ── Step 2: Review Requests ── */}
+            {brokerStep === 2 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <CardTitle>{t.brokerWizardStep2}</CardTitle>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { v: t.brokersFound(brokerCodes.length), c: "text-primary border-primary/30" },
+                        { v: `${brokerAllClients.length} ${t.totalClients}`, c: "" },
+                        { v: `${totalQty.toLocaleString(numLocale)} ${t.shares}`, c: "" },
+                        { v: `${totalCost.toLocaleString(numLocale)} ${t.egp}`, c: "text-green-600 border-green-500/30" },
+                      ].map(({ v, c }) => <Badge key={v} variant="outline" className={`font-bold text-xs ${c}`}>{v}</Badge>)}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {brokerCodes.map(code => {
+                    const clients = brokerGroups[code] ?? [];
+                    const grpQty = clients.reduce((s, c) => s + c.qty, 0);
+                    const grpCost = clients.reduce((s, c) => s + c.cost, 0);
+                    return (
+                      <div key={code} className="rounded-xl border border-border/50 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-primary" />
+                            <span className="font-black text-sm text-primary">{code}</span>
+                            <Badge variant="outline" className="text-[10px] font-bold">{clients.length} {t.totalClients}</Badge>
+                          </div>
+                          <div className="flex gap-4 text-xs font-bold text-muted-foreground">
+                            <span>{grpQty.toLocaleString(numLocale)} {t.shares}</span>
+                            <span className="text-primary font-black">{grpCost.toLocaleString(numLocale)} {t.egp}</span>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader><TableRow className="bg-muted/20">
+                              {["#", t.colClientName, t.colUnifiedCode, t.colDate, t.colSubQty, t.colCost].map((h, i) => (
+                                <TableHead key={i} className={`font-black text-[10px] uppercase tracking-widest text-muted-foreground ${i >= 4 ? "text-end" : ""}`}>{h}</TableHead>
+                              ))}
+                            </TableRow></TableHeader>
+                            <TableBody>
+                              {clients.map((c, i) => (
+                                <TableRow key={i} className="hover:bg-muted/30">
+                                  <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
+                                  <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                  <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
+                                  <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                  <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between pt-2">
+                    <Button variant="outline" onClick={() => setBrokerStep(1)}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
+                    <Button onClick={() => setBrokerStep(3)}>{t.brokerStepNext} <ChevronRight className="w-4 h-4 ms-1" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Step 3: Generate FIX ── */}
+            {brokerStep === 3 && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{t.brokerWizardStep3}</CardTitle>
+                    {!allFIXGenerated && (
+                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => brokerCodes.forEach(generateFixForCode)}>
                         <Zap className="w-4 h-4 me-2" />{t.generateFixAll}
                       </Button>
                     )}
-                    {canSubmitAll && (
-                      <Button onClick={submitAll}>
-                        <Send className="w-4 h-4 me-2" />{t.submitAllBatches}
-                      </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {brokerCodes.map(code => {
+                    const clients = brokerGroups[code] ?? [];
+                    const fixMsg = multiBrokerFIX[code];
+                    return (
+                      <div key={code} className={`rounded-xl border transition-all ${fixMsg ? "border-blue-500/30 bg-blue-500/5" : "border-border/50 bg-muted/10"}`}>
+                        <div className="flex items-center gap-3 p-3">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Building2 className="w-4 h-4 text-primary" /></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-black text-sm">{code}</p>
+                            <p className="text-xs text-muted-foreground">{clients.length} {t.totalClients}</p>
+                          </div>
+                          {fixMsg
+                            ? <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-black text-[10px]">FIX ✓</Badge>
+                            : <Button size="sm" variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold flex-shrink-0" onClick={() => generateFixForCode(code)}>
+                                <Zap className="w-3.5 h-3.5 me-1" />{t.fixGenerateBtn}
+                              </Button>
+                          }
+                        </div>
+                        {fixMsg && (
+                          <div className="px-4 pb-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{t.fixMsgTitle}</p>
+                              <button onClick={() => { navigator.clipboard.writeText(fixMsg); toast({ title: t.fixCopied }); }} className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-border text-[10px] font-bold hover:text-primary transition-all">
+                                <FileSpreadsheet className="w-3 h-3" />{t.fixCopyBtn}
+                              </button>
+                            </div>
+                            <pre className="bg-zinc-900 text-green-400 rounded-lg p-3 font-mono text-[10px] overflow-x-auto max-h-32 leading-relaxed whitespace-pre-wrap">{fixMsg}</pre>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between pt-2">
+                    <Button variant="outline" onClick={() => setBrokerStep(2)}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
+                    <Button disabled={!allFIXGenerated} onClick={() => setBrokerStep(4)}>{t.brokerStepNext} <ChevronRight className="w-4 h-4 ms-1" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Step 4: Verify & Submit ── */}
+            {brokerStep === 4 && (
+              <Card>
+                <CardHeader><CardTitle>{t.brokerWizardStep4}</CardTitle></CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Cash verification */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.cashVerification}</p>
+                      {!cashVerified
+                        ? <Button size="sm" variant="outline" className="border-primary text-primary font-bold" onClick={verifyCash}><Zap className="w-3.5 h-3.5 me-1" />{t.verifyAll}</Button>
+                        : <div className="flex gap-2">
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{cashPassCount} {t.cashPass}</Badge>
+                            {cashFailCount > 0 && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{cashFailCount} {t.cashFail}</Badge>}
+                          </div>
+                      }
+                    </div>
+                    {cashVerified && (
+                      <div className="overflow-x-auto rounded-xl border border-border/50">
+                        <Table>
+                          <TableHeader><TableRow className="bg-muted/30">
+                            {[t.colClientName, t.colUnifiedCode, t.brokerLabel, t.colSubQty, t.colCost, "Status"].map(h => (
+                              <TableHead key={h} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{h}</TableHead>
+                            ))}
+                          </TableRow></TableHeader>
+                          <TableBody>
+                            {brokerAllClients.map((c, i) => {
+                              const st = brokerCashStatus[c.unifiedCode];
+                              return (
+                                <TableRow key={i} className="hover:bg-muted/30">
+                                  <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                  <TableCell className="font-bold text-sm text-muted-foreground">{c.brokerCode}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                  <TableCell className="font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
+                                  <TableCell>
+                                    {st === "pass" && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{t.cashPass}</Badge>}
+                                    {st === "fail" && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{t.cashFail}</Badge>}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
                     )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  {/* MCDR allocation verification */}
+                  {cashVerified && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">{t.mcdrVerification}</p>
+                        {!mcdrVerifiedAll && <Button size="sm" variant="outline" className="border-primary text-primary font-bold" onClick={verifyMcdr}><Zap className="w-3.5 h-3.5 me-1" />{t.verifyAll}</Button>}
+                      </div>
+                      <div className="space-y-2">
+                        {brokerCodes.map(code => {
+                          const st = brokerMcdrStatus[code];
+                          return (
+                            <div key={code} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${st === "pass" ? "border-green-500/30 bg-green-500/5" : st === "fail" ? "border-red-500/30 bg-red-500/5" : "border-border/50 bg-muted/20"}`}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-primary" />
+                                <span className="font-bold text-sm">{code}</span>
+                                <span className="text-xs text-muted-foreground">{(brokerGroups[code] ?? []).length} {t.totalClients}</span>
+                              </div>
+                              {st === "pass" && <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 font-bold text-[10px]"><CheckCircle2 className="w-3 h-3 me-1" />{t.mcdrPass}</Badge>}
+                              {st === "fail" && <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-[10px]"><AlertCircle className="w-3 h-3 me-1" />{t.mcdrFail}</Badge>}
+                              {!st && <span className="text-xs text-muted-foreground font-mono">—</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between pt-2 border-t border-border/50">
+                    <Button variant="outline" onClick={() => setBrokerStep(3)}><ChevronLeft className="w-4 h-4 me-1" />{t.brokerStepBack}</Button>
+                    <Button disabled={!mcdrVerifiedAll} onClick={submitAll}><Send className="w-4 h-4 me-2" />{t.submitAllBatches}</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         );
       })()}
