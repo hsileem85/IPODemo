@@ -38,6 +38,7 @@ jobs:
         run: pnpm run build
         env:
           PORT: 3000
+          BASE_PATH: "/IPODemo/"
           
       - name: Setup Pages
         uses: actions/configure-pages@v4
