@@ -4436,11 +4436,14 @@ function IPOSystem() {
   const [prefs, setPrefs] = useState<UserPrefs>({ darkMode: false, notifications: true, lang: "en" });
   const [showProfile, setShowProfile] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifRead, setNotifRead] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState<SystemUser>(INITIAL_USERS[4]);
   const [ipoStocks, setIpoStocks] = useState<IPOStock[]>(INITIAL_IPO_STOCKS);
   const [activeStockId, setActiveStockId] = useState<string>(INITIAL_IPO_STOCKS[0]?.id ?? "");
   const [brokerBatches, setBrokerBatches] = useState<BrokerBatch[]>([]);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
   const activeStock = ipoStocks.find(s => s.id === activeStockId) ?? null;
 
   const t = T[lang];
@@ -4454,7 +4457,10 @@ function IPOSystem() {
   }, [prefs.darkMode]);
 
   useEffect(() => {
-    function handle(e: MouseEvent) { if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false); }
+    function handle(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setShowUserMenu(false);
+      if (notifPanelRef.current && !notifPanelRef.current.contains(e.target as Node)) setShowNotifPanel(false);
+    }
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, []);
@@ -4611,10 +4617,84 @@ function IPOSystem() {
               </div>
             </div>
             <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
-            <button className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors">
-              {prefs.notifications ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-              {prefs.notifications && <span className="absolute top-1 end-1 w-2 h-2 bg-primary rounded-full" />}
-            </button>
+            {(() => {
+              const pendingApprovals = subscriptions.filter(s => s.status === "Pending Review").length;
+              const pendingKYC = kycRecords.filter(r => r.status === "Pending Review").length;
+              const pendingBatches = brokerBatches.filter(b => b.status === "Pending Review").length;
+              const pendingCash = subscriptions.filter(s => s.status === "Pending Cash").length;
+              const pendingMCDR = subscriptions.filter(s => s.status === "Pending MCDR Allocation").length;
+              const totalCount = pendingApprovals + pendingKYC + pendingBatches + pendingCash + pendingMCDR;
+              const hasUnread = prefs.notifications && totalCount > 0 && !notifRead;
+              type NotifItem = { icon: React.ElementType; color: string; dot: string; label: string; count: number; view: string; };
+              const items: NotifItem[] = [
+                { icon: ClipboardList, color: "text-primary", dot: "bg-primary", label: t.notifPendingApprovals, count: pendingApprovals, view: "Supervisor" },
+                { icon: User, color: "text-violet-600", dot: "bg-violet-500", label: t.notifPendingKYC, count: pendingKYC, view: "Supervisor" },
+                { icon: Building2, color: "text-amber-600", dot: "bg-amber-500", label: t.notifPendingBatches, count: pendingBatches, view: "Supervisor" },
+                { icon: AlertCircle, color: "text-red-500", dot: "bg-red-500", label: t.notifPendingCash, count: pendingCash, view: "Supervisor" },
+                { icon: Layers, color: "text-purple-600", dot: "bg-purple-500", label: t.notifPendingMCDR, count: pendingMCDR, view: "Supervisor" },
+              ].filter(item => item.count > 0);
+              return (
+                <div className="relative" ref={notifPanelRef}>
+                  <button
+                    onClick={() => { setShowNotifPanel(v => !v); setNotifRead(true); }}
+                    className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {prefs.notifications ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                    {hasUnread && (
+                      <span className="absolute -top-1 -end-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center leading-none">
+                        {totalCount > 99 ? "99+" : totalCount}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifPanel && (
+                    <div className={`absolute top-full mt-2 ${isRTL ? "left-0" : "right-0"} w-80 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden`}>
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+                        <div className="flex items-center gap-2">
+                          <Bell className="w-4 h-4 text-primary" />
+                          <p className="font-black text-sm text-foreground">{t.notifPanelTitle}</p>
+                          {totalCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-black rounded-full">{totalCount}</span>
+                          )}
+                        </div>
+                        {totalCount > 0 && (
+                          <button onClick={() => setNotifRead(true)} className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors">{t.notifPanelMarkAll}</button>
+                        )}
+                      </div>
+                      <div className="max-h-80 overflow-y-auto">
+                        {items.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
+                            <Bell className="w-8 h-8 opacity-20" />
+                            <p className="text-sm font-bold">{t.notifPanelEmpty}</p>
+                          </div>
+                        ) : items.map((item, idx) => {
+                          const Icon = item.icon;
+                          return (
+                            <button key={idx} onClick={() => { setActiveView(item.view as typeof activeView); setShowNotifPanel(false); }}
+                              className="w-full flex items-start gap-3 px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition-colors text-start last:border-b-0">
+                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${item.color} bg-current/10`} style={{ backgroundColor: "color-mix(in srgb, currentColor 10%, transparent)" }}>
+                                <div className={item.color}><Icon className="w-4 h-4" /></div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-foreground leading-snug">{item.label}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{t.notifGoTo} {item.view === "Supervisor" ? (lang === "ar" ? "المشرف / المدقق" : "Supervisor / Checker") : item.view}</p>
+                              </div>
+                              <span className={`shrink-0 min-w-[22px] h-[22px] px-1.5 ${item.dot} text-white text-[11px] font-black rounded-full flex items-center justify-center`}>
+                                {item.count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {items.length > 0 && (
+                        <div className="px-4 py-2.5 border-t border-border bg-muted/20">
+                          <p className="text-[10px] font-bold text-muted-foreground text-center">{lang === "ar" ? "انقر على أي إشعار للانتقال مباشرةً" : "Click any alert to navigate directly"}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div className="relative" ref={userMenuRef}>
               <button onClick={() => setShowUserMenu(v => !v)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted transition-colors">
                 <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-black">{loggedInUser.name.charAt(0)}</div>
