@@ -1201,7 +1201,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   subscriptions: Subscription[];
   custodians: Custodian[];
 }) {
-  const { t, lang } = useLang();
+  const { t, lang, isRTL } = useLang();
   const { toast } = useToast();
   const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
   const [cashVerified, setCashVerified] = useState<boolean | null>(null);
@@ -1330,6 +1330,10 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.unifiedCodeLabel}</label>
                         <Input value={ucInput} onChange={e => { setUcInput(e.target.value); setFoundClient(null); }} onBlur={() => setFoundClient(MOCK_CLIENTS[ucInput] ?? null)} placeholder={t.unifiedCodePlaceholder} dir="ltr" />
                         <p className="text-xs text-muted-foreground">{t.unifiedCodeHint}</p>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.clientNameLabel}</label>
+                        <Input value={foundClient ? clientName(foundClient.nameAr, foundClient.nameEn, lang) : ""} disabled placeholder={t.clientNamePlaceholder} dir={isRTL ? "rtl" : "ltr"} className="bg-muted/50" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
