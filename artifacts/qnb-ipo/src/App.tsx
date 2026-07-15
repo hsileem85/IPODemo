@@ -130,6 +130,7 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
   "8800318": { nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", unifiedCode: "8800318", nationalId: "28512111234567", account: "100003456", isBankClient: true, bankAccountNo: "EG290011-10034-56", cashBalance: 150000, eligibleShares: 12000, email: "hussein.salim@email.com", mobile: "+201001234567", type: "individual" },
   "7700123": { nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", unifiedCode: "7700123", nationalId: "29001011234567", account: "100234567", isBankClient: true, bankAccountNo: "EG290011-23456-78", cashBalance: 85000, eligibleShares: 8000, email: "ahmed.ali@email.com", mobile: "+201112345678", type: "individual" },
   "3400127": { nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", unifiedCode: "3400127", nationalId: "29203154321098", account: "100078923", isBankClient: true, bankAccountNo: "EG290011-07892-31", cashBalance: 200000, eligibleShares: 15000, email: "mona.kamal@email.com", mobile: "+201554321098", type: "individual" },
+  "8800317": { nameAr: "", nameEn: "", unifiedCode: "8800317", nationalId: "—", account: "—", isBankClient: false, bankAccountNo: "", cashBalance: 0, eligibleShares: 0, email: "", mobile: "", type: "individual" },
 };
 
 const INITIAL_BROKERS: Broker[] = [
@@ -1210,6 +1211,8 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [foundClient, setFoundClient] = useState<ClientRecord | null>(null);
   const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
   const [selectedCustodian, setSelectedCustodian] = useState<string>("");
+  const [enteredName, setEnteredName] = useState("");
+  const [enteredNameEn, setEnteredNameEn] = useState("");
   const [txRef, setTxRef] = useState("");
   const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -1226,6 +1229,8 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
     setStep(1); setUcInput(""); setFoundClient(null); setPendingSub(null);
     form.reset({ requestedShares: 0, paymentMethod: paymentOptions[0].v });
     setSelectedCustodian("");
+    setEnteredName("");
+    setEnteredNameEn("");
     setTxRef(""); setSubDate(new Date().toISOString().slice(0, 10));
     setCashVerified(null);
   };
@@ -1245,8 +1250,9 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
     const custodianObj = custodians.find(c => c.id === selectedCustodian) ?? null;
   const sub: Subscription = {
       id: "TX-" + Math.floor(1000 + Math.random() * 9000),
-      nameAr: foundClient.nameAr, nameEn: foundClient.nameEn,
-      nationalId: foundClient.nationalId, account: foundClient.account, unifiedCode: foundClient.unifiedCode,
+      nameAr: foundClient.isBankClient ? foundClient.nameAr : enteredName,
+      nameEn: foundClient.isBankClient ? foundClient.nameEn : enteredNameEn,
+      nationalId: foundClient.isBankClient ? foundClient.nationalId : "—", account: foundClient.isBankClient ? foundClient.account : "—", unifiedCode: foundClient.unifiedCode,
       requestedShares: values.requestedShares, amountDue: values.requestedShares * price,
       amountPaid: values.requestedShares * price,
       allocatedShares: 0, refundAmount: 0, status: "Pending Review",
@@ -1333,7 +1339,14 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.clientNameLabel}</label>
-                        <Input value={foundClient ? clientName(foundClient.nameAr, foundClient.nameEn, lang) : ""} disabled placeholder={t.clientNamePlaceholder} dir={isRTL ? "rtl" : "ltr"} className="bg-muted/50" />
+                        {foundClient && !foundClient.isBankClient ? (
+                          <div className="space-y-2">
+                            <Input value={enteredName} onChange={e => setEnteredName(e.target.value)} placeholder={t.clientNamePlaceholder} dir="rtl" />
+                            <Input value={enteredNameEn} onChange={e => setEnteredNameEn(e.target.value)} placeholder={lang === "ar" ? "اسم العميل بالإنجليزية" : "Client name in English"} dir="ltr" />
+                          </div>
+                        ) : (
+                          <Input value={foundClient ? clientName(foundClient.nameAr, foundClient.nameEn, lang) : ""} disabled placeholder={t.clientNamePlaceholder} dir={isRTL ? "rtl" : "ltr"} className="bg-muted/50" />
+                        )}
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
@@ -1362,21 +1375,23 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                           <div>
                             <p className="text-primary-foreground/70 text-xs font-bold uppercase tracking-widest mb-1">{t.mcdrVerified}</p>
-                            <h3 className="text-xl font-bold">{clientName(foundClient.nameAr, foundClient.nameEn, lang)}</h3>
+                            <h3 className="text-xl font-bold">{foundClient.isBankClient ? clientName(foundClient.nameAr, foundClient.nameEn, lang) : (lang === "ar" ? (enteredName || "—") : (enteredNameEn || "—"))}</h3>
                             <div className="flex flex-wrap gap-3 mt-2 text-sm text-primary-foreground/80">
                               <span>{t.unifiedCode}: <span className="font-mono text-primary-foreground">{foundClient.unifiedCode}</span></span>
-                              <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>
-                              <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-white/10 text-primary-foreground/70 border-white/20"}>{foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}</Badge>
+                              {foundClient.isBankClient && <span>{t.accountNo}: <span className="font-mono text-primary-foreground">{foundClient.account}</span></span>}
+                              <Badge variant="outline" className={foundClient.isBankClient ? "bg-green-500/20 text-green-100 border-green-300/30" : "bg-amber-500/20 text-amber-100 border-amber-300/30"}>{foundClient.isBankClient ? t.bankClientYes : t.bankClientNo}</Badge>
                             </div>
                           </div>
                           <Button variant="secondary" className="shrink-0 font-bold" onClick={() => setStep(2)}>{t.nextStep}</Button>
                         </div>
-                        <div className="border-t border-white/20 pt-4">
-                          <div className="bg-white/10 rounded-xl p-3 inline-block">
-                            <p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p>
-                            <p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p>
+                        {foundClient.isBankClient && (
+                          <div className="border-t border-white/20 pt-4">
+                            <div className="bg-white/10 rounded-xl p-3 inline-block">
+                              <p className="text-primary-foreground/60 text-xs mb-1">{t.eligibleIPOLabel}</p>
+                              <p className="font-black text-lg">{foundClient.eligibleShares.toLocaleString(numLocale)} <span className="text-sm font-normal">{t.shares}</span></p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
                   </CardContent>
@@ -1394,7 +1409,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                           <div className="md:col-span-2 space-y-4">
                             <FormField control={form.control} name="requestedShares" render={({ field }) => (<FormItem><FormLabel>{t.sharesLabel}</FormLabel><FormControl><Input type="number" placeholder="0" dir="ltr" {...field} /></FormControl><FormMessage /></FormItem>)} />
                             <FormField control={form.control} name="paymentMethod" render={({ field }) => (<FormItem><FormLabel>{t.paymentLabel}</FormLabel><FormControl><select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none" {...field}>{paymentOptions.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select></FormControl><FormMessage /></FormItem>)} />
-                            {foundClient && <div className="p-4 bg-muted/50 rounded-xl border"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div>}
+                            {foundClient && foundClient.isBankClient && <div className="p-4 bg-muted/50 rounded-xl border"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">{t.eligibleIPOLabel}</p><p className="font-black text-primary">{foundClient.eligibleShares.toLocaleString(numLocale)} {t.shares}</p></div>}
                           </div>
                           <Card className="bg-muted/50 border-dashed">
                             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">{t.orderSummary}</CardTitle></CardHeader>
