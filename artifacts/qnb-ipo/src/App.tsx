@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   Landmark, FileSpreadsheet, ArrowLeftRight, Printer, Send, Upload,
   CheckCircle2, Globe, Users, ShieldCheck, ClipboardList, UserPlus,
@@ -1509,6 +1510,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
+  const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
   // FIX MCDR Allocation check state — subscriptions
   const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
   const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
@@ -1818,6 +1820,16 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
           {expandedSubId && (() => {
             const sub = subscriptions.find(s => s.id === expandedSubId);
             if (!sub) return null;
+            const DOC_MAP: Record<string, string> = {
+              "National ID Copy": "/IPODemo/doc_nid.png",
+              "Signed Subscription Form": "/IPODemo/doc_form.png",
+              "Custodian Statement": "/IPODemo/doc_statement.png",
+              "POA (if applicable)": "/IPODemo/doc_poa.png",
+              "نسخة البطاقة القومية": "/IPODemo/doc_nid.png",
+              "نموذج الاكتتاب الموقع": "/IPODemo/doc_form.png",
+              "بيان الحافظ": "/IPODemo/doc_statement.png",
+              "توكيل رسمي (إن وجد)": "/IPODemo/doc_poa.png",
+            };
             return (
               <Card className="border-2 border-primary/30 bg-primary/5 dark:bg-primary/10">
                 <CardContent className="pt-5 space-y-4">
@@ -1831,21 +1843,43 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                     </div>
                     <button onClick={() => setExpandedSubId(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕ {lang === "ar" ? "إغلاق" : "Close"}</button>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {(sub.uploadedDocs && sub.uploadedDocs.length > 0) ? sub.uploadedDocs.map((doc, i) => (
-                      <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/40 bg-green-50/50 dark:bg-green-900/10">
-                        <CheckCheck className="w-4 h-4 text-green-600 shrink-0" />
-                        <span className="text-sm font-bold">{doc}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{lang === "ar" ? "مرفوع" : "UPLOADED"}</span>
-                      </div>
-                    )) : (
-                      <p className="text-xs text-muted-foreground">{lang === "ar" ? "لا توجد مستندات مرفوعة" : "No documents uploaded"}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {(sub.uploadedDocs && sub.uploadedDocs.length > 0) ? sub.uploadedDocs.map((doc, i) => {
+                      const imgUrl = DOC_MAP[doc] ?? "/IPODemo/doc_nid.png";
+                      return (
+                        <div key={i} className="border rounded-xl overflow-hidden bg-background hover:shadow-md transition-shadow cursor-pointer" onClick={() => setDocPreviewUrl(imgUrl)}>
+                          <div className="aspect-[4/3] bg-muted/50 overflow-hidden flex items-center justify-center">
+                            <img src={imgUrl} alt={doc} className="w-full h-full object-cover" loading="lazy" />
+                          </div>
+                          <div className="p-2.5 flex items-center gap-1.5">
+                            <CheckCheck className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                            <span className="text-xs font-bold truncate">{doc}</span>
+                          </div>
+                        </div>
+                      );
+                    }) : (
+                      <p className="text-xs text-muted-foreground col-span-full">{lang === "ar" ? "لا توجد مستندات مرفوعة" : "No documents uploaded"}</p>
                     )}
                   </div>
                 </CardContent>
               </Card>
             );
           })()}
+
+          {/* Document preview dialog */}
+          <Dialog open={!!docPreviewUrl} onOpenChange={open => !open && setDocPreviewUrl(null)}>
+            <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
+              <DialogHeader className="px-6 pt-6 pb-2">
+                <DialogTitle>{lang === "ar" ? "معاينة المستند" : "Document Preview"}</DialogTitle>
+                <DialogDescription>{lang === "ar" ? "اضغط خارج المربع أو اضغط Escape للإغلاق" : "Click outside or press Escape to close"}</DialogDescription>
+              </DialogHeader>
+              {docPreviewUrl && (
+                <div className="px-6 pb-6 overflow-auto max-h-[70vh]">
+                  <img src={docPreviewUrl} alt="Document" className="w-full h-auto rounded-lg border" />
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           {/* ── FIX MCDR Allocation Check Panel ── */}
           {fixMcdrSubId && (() => {
