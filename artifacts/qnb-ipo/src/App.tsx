@@ -146,11 +146,11 @@ const INITIAL_CUSTODIANS: Custodian[] = [
 ];
 
 const INITIAL_SUBSCRIPTIONS: Subscription[] = [
-  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13", phase: "covered", custodian: "QNB Custody Services", custodianCode: "QNBC", broker: "EFG Hermes Securities", brokerCode: "EFG" },
-  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14", phase: "covered", custodian: "Misr for Central Clearing", custodianCode: "MCDR", broker: "Beltone Financial", brokerCode: "BLT" },
-  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "CI Capital", brokerCode: "CIC" },
-  { id: "TX-9905", nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", nationalId: "29203154321098", account: "100078923", unifiedCode: "3400127", requestedShares: 12000, amountDue: 15000, amountPaid: 15000, allocatedShares: 0, refundAmount: 0, status: "Pending MCDR Allocation", branch: "Cairo-Main", submittedAt: "2026-05-15 10:20", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "QNB Custody Services", custodianCode: "QNBC", broker: "EFG Hermes Securities", brokerCode: "EFG" },
-  { id: "REF-TXT-001", nameAr: "طارق سالم منصور", nameEn: "Tarek Salem Mansour", nationalId: "28709141234599", account: "100091234", unifiedCode: "6600891", requestedShares: 7500, amountDue: 9375, amountPaid: 0, allocatedShares: 0, refundAmount: 0, status: "Pending Cash", branch: "Alex-Branch", submittedAt: "2026-05-15 14:05", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "Beltone Financial", brokerCode: "BLT" },
+  { id: "TX-9901", nameAr: "أحمد محمد علي", nameEn: "Ahmed Mohamed Ali", nationalId: "29001011234567", account: "100234567", unifiedCode: "7700123", requestedShares: 10000, amountDue: 12500, amountPaid: 12500, allocatedShares: 0, refundAmount: 0, status: "Verified", branch: "Cairo-Main", submittedAt: "2026-05-13 09:10", ipoId: "IPO-ADIB", date: "2026-05-13", phase: "covered", custodian: "QNB Custody Services", custodianCode: "QNBC", broker: "EFG Hermes Securities", brokerCode: "EFG", uploadedDocs: ["National ID Copy", "Signed Subscription Form", "Custodian Statement"] },
+  { id: "TX-9903", nameAr: "حسين سليم محمد علي", nameEn: "Hussein Salim Mohamed Ali", nationalId: "28512111234567", account: "100003456", unifiedCode: "8800318", requestedShares: 8000, amountDue: 10000, amountPaid: 10000, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Giza-Hub", submittedAt: "2026-05-14 08:45", ipoId: "IPO-ADIB", date: "2026-05-14", phase: "covered", custodian: "Misr for Central Clearing", custodianCode: "MCDR", broker: "Beltone Financial", brokerCode: "BLT", uploadedDocs: ["National ID Copy", "Signed Subscription Form"] },
+  { id: "TX-9904", nameAr: "رنا الشافعي إبراهيم", nameEn: "Rana El-Shafei Ibrahim", nationalId: "28805051234568", account: "100334455", unifiedCode: "7744312", requestedShares: 5000, amountDue: 6250, amountPaid: 6250, allocatedShares: 0, refundAmount: 0, status: "Pending Review", branch: "Alex-Branch", submittedAt: "2026-05-14 11:30", ipoId: "IPO-EDITA", date: "2026-05-14", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "CI Capital", brokerCode: "CIC", uploadedDocs: ["National ID Copy", "Custodian Statement", "POA (if applicable)"] },
+  { id: "TX-9905", nameAr: "منى كمال عبد الرحمن", nameEn: "Mona Kamal Abdel Rahman", nationalId: "29203154321098", account: "100078923", unifiedCode: "3400127", requestedShares: 12000, amountDue: 15000, amountPaid: 15000, allocatedShares: 0, refundAmount: 0, status: "Pending MCDR Allocation", branch: "Cairo-Main", submittedAt: "2026-05-15 10:20", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "QNB Custody Services", custodianCode: "QNBC", broker: "EFG Hermes Securities", brokerCode: "EFG", uploadedDocs: ["National ID Copy", "Signed Subscription Form", "Custodian Statement"] },
+  { id: "REF-TXT-001", nameAr: "طارق سالم منصور", nameEn: "Tarek Salem Mansour", nationalId: "28709141234599", account: "100091234", unifiedCode: "6600891", requestedShares: 7500, amountDue: 9375, amountPaid: 0, allocatedShares: 0, refundAmount: 0, status: "Pending Cash", branch: "Alex-Branch", submittedAt: "2026-05-15 14:05", ipoId: "IPO-ADIB", date: "2026-05-15", phase: "covered", custodian: "CIB Custodian", custodianCode: "CIBC", broker: "Beltone Financial", brokerCode: "BLT", uploadedDocs: ["National ID Copy"] },
 ];
 
 const INITIAL_MCDR = [
@@ -1813,6 +1813,39 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Uploaded Documents Panel ── */}
+          {expandedSubId && (() => {
+            const sub = subscriptions.find(s => s.id === expandedSubId);
+            if (!sub) return null;
+            return (
+              <Card className="border-2 border-primary/30 bg-primary/5 dark:bg-primary/10">
+                <CardContent className="pt-5 space-y-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-primary" />
+                        <span className="font-black text-sm tracking-tight">{lang === "ar" ? "المستندات المرفوعة" : "Uploaded Documents"}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{clientName(sub.nameAr, sub.nameEn, lang)} · {sub.unifiedCode}</p>
+                    </div>
+                    <button onClick={() => setExpandedSubId(null)} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕ {lang === "ar" ? "إغلاق" : "Close"}</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(sub.uploadedDocs && sub.uploadedDocs.length > 0) ? sub.uploadedDocs.map((doc, i) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-500/40 bg-green-50/50 dark:bg-green-900/10">
+                        <CheckCheck className="w-4 h-4 text-green-600 shrink-0" />
+                        <span className="text-sm font-bold">{doc}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">{lang === "ar" ? "مرفوع" : "UPLOADED"}</span>
+                      </div>
+                    )) : (
+                      <p className="text-xs text-muted-foreground">{lang === "ar" ? "لا توجد مستندات مرفوعة" : "No documents uploaded"}</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ── FIX MCDR Allocation Check Panel ── */}
           {fixMcdrSubId && (() => {
