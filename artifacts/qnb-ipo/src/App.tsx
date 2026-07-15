@@ -61,6 +61,7 @@ interface Subscription {
   phase: "covered" | "uncovered";
   custodian?: string; custodianCode?: string;
   broker?: string; brokerCode?: string;
+  uploadedDocs?: string[];
 }
 interface MCDRClient {
   id: number; nameAr: string; nameEn: string; unifiedCode: string; nationalId: string;
@@ -1213,6 +1214,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [selectedCustodian, setSelectedCustodian] = useState<string>("");
   const [enteredName, setEnteredName] = useState("");
   const [enteredNameEn, setEnteredNameEn] = useState("");
+  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [txRef, setTxRef] = useState("");
   const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -1231,6 +1233,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
     setSelectedCustodian("");
     setEnteredName("");
     setEnteredNameEn("");
+    setUploadedDocs([]);
     setTxRef(""); setSubDate(new Date().toISOString().slice(0, 10));
     setCashVerified(null);
   };
@@ -1260,13 +1263,14 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       ipoId: activeStock?.id ?? "", date: subDate,
       phase: activeStock?.phase ?? "covered",
       custodian: custodianObj?.name ?? "", custodianCode: custodianObj?.code ?? "",
+      uploadedDocs: [],
     };
     setPendingSub(sub); setStep(3);
   };
   const handleFinalSubmit = () => {
     if (!pendingSub) return;
     const finalStatus: SubStatus = cashVerified === false ? "Pending Cash" : "Pending Review";
-    onNewSubscription({ ...pendingSub, status: finalStatus });
+    onNewSubscription({ ...pendingSub, status: finalStatus, uploadedDocs });
     toast({ title: t.toastSentTitle, description: t.toastSentDesc(pendingSub.id) });
     resetFlow();
   };
@@ -1433,34 +1437,26 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                 <Card>
                   <CardHeader><CardTitle>{t.docsTitle}</CardTitle><CardDescription>{t.docsDesc}</CardDescription></CardHeader>
                   <CardContent className="space-y-5">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.txRefLabel}</label>
-                      <div className="flex gap-2 items-center max-w-sm">
-                        <Input value={txRef} onChange={e => { setTxRef(e.target.value); setCashVerified(null); }} placeholder={t.txRefPlaceholder} dir="ltr" className="flex-1" />
-                        <Button size="sm" variant="outline" onClick={handleVerifyCash} disabled={!txRef} className={cashVerified === true ? "border-green-500 text-green-600 hover:bg-green-50" : cashVerified === false ? "border-red-400 text-red-600 hover:bg-red-50" : ""}>
-                          {cashVerified === true ? <><CheckCircle2 className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "تم التحقق" : "Verified"}</>
-                            : cashVerified === false ? <><AlertCircle className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "فشل" : "Failed"}</>
-                            : t.verifyCashBtn}
-                        </Button>
-                      </div>
-                      {cashVerified === false && (
-                        <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 max-w-sm">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
-                          <p className="text-xs text-red-600 font-bold">{t.verifyCashFail}</p>
-                        </div>
-                      )}
-                      {cashVerified === true && (
-                        <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg px-3 py-2 max-w-sm">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                          <p className="text-xs text-green-700 font-bold">{t.verifyCashSuccess}</p>
-                        </div>
-                      )}
-                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {DOCS.map(doc => (<div key={doc} className="border-2 border-dashed border-border p-5 rounded-xl flex items-center justify-between hover:border-primary/40 transition-colors"><span className="font-bold text-sm">{doc}</span><label className="cursor-pointer"><input type="file" className="hidden" /><span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span></label></div>))}
+                      {DOCS.map(doc => {
+                        const isUploaded = uploadedDocs.includes(doc);
+                        return (
+                          <div key={doc} className={`border-2 p-5 rounded-xl flex items-center justify-between transition-colors ${isUploaded ? "border-green-500/40 bg-green-50/50 dark:bg-green-900/10" : "border-dashed border-border hover:border-primary/40"}`}>
+                            <span className="font-bold text-sm">{doc}</span>
+                            {isUploaded ? (
+                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 gap-1"><CheckCheck className="w-3.5 h-3.5" />{lang === "ar" ? "تم الرفع" : "Uploaded"}</Badge>
+                            ) : (
+                              <label className="cursor-pointer">
+                                <input type="file" className="hidden" onChange={() => setUploadedDocs(prev => [...prev, doc])} />
+                                <span className="flex items-center gap-1.5 bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"><Upload className="w-3.5 h-3.5" />{t.uploadBtn}</span>
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <Button className="mt-2 px-10" disabled={cashVerified === null} onClick={() => setStep(4)}>{lang === "ar" ? "التالي: مراجعة الطلب" : "Next: Review"}</Button>
-                    {cashVerified === null && <p className="text-xs text-muted-foreground">{lang === "ar" ? "يرجى التحقق من مرجع المعاملة أولاً" : "Please verify the transaction reference first"}</p>}
+                    <Button className="mt-2 px-10" disabled={uploadedDocs.length === 0} onClick={() => setStep(4)}>{lang === "ar" ? "التالي: مراجعة الطلب" : "Next: Review"}</Button>
+                    {uploadedDocs.length === 0 && <p className="text-xs text-muted-foreground">{lang === "ar" ? "يرجى رفع ورقة علوة على الأقل" : "Please upload at least one document"}</p>}
                   </CardContent>
                 </Card>
               )}
@@ -1478,7 +1474,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                           <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.sharesCol}</p><p className="font-bold text-primary">{pendingSub.requestedShares.toLocaleString(numLocale)} {t.shares}</p></div>
                           <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.totalAmtLabel}</p><p className="font-bold">{pendingSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
                           <div><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.statusLabel}</p><p className="font-bold text-orange-500">{t.awaitingVerif}</p></div>
-                          {txRef && <div className="col-span-2"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.txRefLabel}</p><p className="font-mono font-bold">{txRef}</p></div>}
+                          {uploadedDocs.length > 0 && <div className="col-span-2"><p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">{t.docsTitle}</p><div className="flex flex-wrap gap-1">{uploadedDocs.map(d => <Badge key={d} variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 gap-1"><CheckCheck className="w-3 h-3" />{d}</Badge>)}</div></div>}
                         </CardContent>
                       </Card>
                       <div className="flex gap-3 justify-center flex-wrap">
@@ -1512,6 +1508,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [supPhase, setSupPhase] = useState<"all" | "covered" | "uncovered">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
+  const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
   // FIX MCDR Allocation check state — subscriptions
   const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
   const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
@@ -1785,21 +1782,29 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                         <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">{sub.submittedAt}</TableCell>
                         <TableCell><SubBadge status={sub.status} /></TableCell>
                         <TableCell>
-                          {sub.status === "Pending Review" && (
-                            fixMcdrVerifiedMap[sub.id] === true ? (
-                              <div className="flex gap-2">
-                                <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
-                                <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); setFixMcdrVerifiedMap(prev => { const n = {...prev}; delete n[sub.id]; return n; }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setFixMcdrSubId(prev => prev === sub.id ? null : sub.id)}
-                                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-colors whitespace-nowrap ${fixMcdrSubId === sub.id ? "bg-primary/10 border-primary text-primary" : fixMcdrVerifiedMap[sub.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-                                <Zap className="w-3 h-3" />
-                                {fixMcdrVerifiedMap[sub.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
-                              </button>
-                            )
-                          )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => setExpandedSubId(prev => prev === sub.id ? null : sub.id)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-colors whitespace-nowrap ${expandedSubId === sub.id ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                              <FileText className="w-3 h-3" />
+                              {expandedSubId === sub.id ? (lang === "ar" ? "إخفاء المستندات" : "Hide Docs") : (lang === "ar" ? "عرض المستندات" : "View Docs")}
+                            </button>
+                            {sub.status === "Pending Review" && (
+                              fixMcdrVerifiedMap[sub.id] === true ? (
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
+                                  <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); setFixMcdrVerifiedMap(prev => { const n = {...prev}; delete n[sub.id]; return n; }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setFixMcdrSubId(prev => prev === sub.id ? null : sub.id)}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-colors whitespace-nowrap ${fixMcdrSubId === sub.id ? "bg-primary/10 border-primary text-primary" : fixMcdrVerifiedMap[sub.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
+                                  <Zap className="w-3 h-3" />
+                                  {fixMcdrVerifiedMap[sub.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
+                                </button>
+                              )
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ); })}
