@@ -1191,7 +1191,7 @@ interface BrokerBatch {
   phase: "covered" | "uncovered";
 }
 
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, subscriptions }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, subscriptions, custodians }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
@@ -1199,6 +1199,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   activeStock: IPOStock | null;
   ipoStocks: IPOStock[];
   subscriptions: Subscription[];
+  custodians: Custodian[];
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1208,6 +1209,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [ucInput, setUcInput] = useState("");
   const [foundClient, setFoundClient] = useState<ClientRecord | null>(null);
   const [pendingSub, setPendingSub] = useState<Subscription | null>(null);
+  const [selectedCustodian, setSelectedCustodian] = useState<string>("");
   const [txRef, setTxRef] = useState("");
   const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
@@ -1223,6 +1225,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const resetFlow = () => {
     setStep(1); setUcInput(""); setFoundClient(null); setPendingSub(null);
     form.reset({ requestedShares: 0, paymentMethod: paymentOptions[0].v });
+    setSelectedCustodian("");
     setTxRef(""); setSubDate(new Date().toISOString().slice(0, 10));
     setCashVerified(null);
   };
@@ -1239,7 +1242,8 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const onSubmitStep2 = (values: z.infer<typeof sharesSchema>) => {
     if (!foundClient) return;
     const price = activeStock?.pricePerShare ?? TOTAL_PER_SHARE;
-    const sub: Subscription = {
+    const custodianObj = custodians.find(c => c.id === selectedCustodian) ?? null;
+  const sub: Subscription = {
       id: "TX-" + Math.floor(1000 + Math.random() * 9000),
       nameAr: foundClient.nameAr, nameEn: foundClient.nameEn,
       nationalId: foundClient.nationalId, account: foundClient.account, unifiedCode: foundClient.unifiedCode,
@@ -1249,6 +1253,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       branch: "Cairo-Main", submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
       ipoId: activeStock?.id ?? "", date: subDate,
       phase: activeStock?.phase ?? "covered",
+      custodian: custodianObj?.name ?? "", custodianCode: custodianObj?.code ?? "",
     };
     setPendingSub(sub); setStep(3);
   };
@@ -1329,6 +1334,19 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.eventLabel}</label>
                         <select className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none">{EVENTS.map(ev => <option key={ev.value} value={ev.value}>{ev.label}</option>)}</select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.custodianLabel}</label>
+                        <select
+                          value={selectedCustodian}
+                          onChange={e => setSelectedCustodian(e.target.value)}
+                          className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background focus:ring-2 focus:ring-ring outline-none"
+                        >
+                          <option value="">{t.custodianSelectPlaceholder}</option>
+                          {custodians.map(c => (
+                            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                          ))}
+                        </select>
                       </div>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest block">{t.subDateLabel}</label>
@@ -4734,7 +4752,7 @@ function IPOSystem() {
               brokerBatches={brokerBatches}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} custodians={custodians} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => {
             setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b));
             if (action === "Approved") {
