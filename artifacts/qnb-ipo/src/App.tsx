@@ -2086,9 +2086,9 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const uncoveredMcdrEligibleTotal = uncoveredMcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   void uncoveredMcdrEligibleTotal; // used only for reconciliation, not for stat cards
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
-  const offeringSize = boActiveStock?.offeringSize ?? 0;
-  const uncoveredEligible = Math.max(0, offeringSize - coveredSharesTotal);
-  const eligibleIPOShares = page === "covered" ? offeringSize : uncoveredEligible;
+  const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
+  const uncoveredEligible = Math.max(0, storedEligible - coveredSharesTotal);
+  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredEligible;
   // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100 (covered page — percentage, capped 100)
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   // Uncovered page: raw subscription multiplier (e.g. 2.57×), NOT a percentage
@@ -2297,14 +2297,14 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               const snap = page === "covered" ? frozenSnapshot : null;
               // covered page: guard on MCDR upload; uncovered page: guard on covered snapshot existing
               const hasValue = page === "covered"
-                ? (snap ? snap.hasMcdr : offeringSize > 0)
-                : offeringSize > 0;
+                ? (snap ? snap.hasMcdr : activeMcdrRows.length > 0)
+                : storedEligible > 0;
               // covered page after finalize: show frozen gap; covered before finalize: show MCDR total; uncovered: always show fixed gap
               const eligible = page === "covered"
                 ? (snap ? snap.uncoveredGap : eligibleIPOShares)
                 : uncoveredEligible;
               const subtext = page === "covered"
-                ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : (lang === "ar" ? "حجم الطرح للاكتتاب" : "IPO Offering Size"))
+                ? (hasValue ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst)
                 : (lang === "ar" ? "ثابت — فجوة مرحلة المغطى" : "Fixed — covered phase gap");
               return (
                 <>
@@ -3786,7 +3786,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   const sanctionsOk = kycRecords.filter(r => r.sanctionsCheck).length;
 
   // ── MCDR Coverage (derived from supervisor-approved transactions) ──
-  const totalEligible = activeStock?.offeringSize ?? 0;
+  const totalEligible = activeStock?.eligibleSharesSnapshot ?? 0;
   const totalSubscribedMCDR = svApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + svBrokerShares;
   const mcdrCoveragePct = totalEligible > 0 ? Math.min(100, Math.round((totalSubscribedMCDR / totalEligible) * 100)) : 0;
   const mcdrIndivClients = svApprovedSubs.length;
