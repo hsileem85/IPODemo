@@ -4476,14 +4476,14 @@ function IPOSystem() {
   }, []);
 
   // RPA simulation: deterministic timed workflow
-  // Submitted (t=0) → RPA Allocating (t=15m) → MCDR Acknowledge (t=30m) → Manual Cash → Verified
+  // Submitted (t=0) → RPA Allocating (t=15s) → MCDR Acknowledge (t=30s) → Manual Cash → Verified
   const scheduledRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
-    const STEP_1_MS = 15 * 60 * 1000;   // 15 minutes
-    const STEP_2_MS = 15 * 60 * 1000;   // 15 minutes
+    const STEP_1_MS = 15_000;   // 15 seconds
+    const STEP_2_MS = 15_000;   // 15 seconds
 
-    // Step 1: Submitted → RPA Allocating (15 minutes)
+    // Step 1: Submitted → RPA Allocating (15 seconds)
     subscriptions.filter(s => s.status === "Submitted" && !scheduledRef.current.has(`step1-${s.id}`)).forEach(sub => {
       scheduledRef.current.add(`step1-${sub.id}`);
       const timer = setTimeout(() => {
@@ -4503,7 +4503,7 @@ function IPOSystem() {
       timers.push(timer);
     });
 
-    // Step 2: RPA Allocating → MCDR Accepted/Rejected (15 minutes after step 1, total 30m)
+    // Step 2: RPA Allocating → MCDR Accepted/Rejected (15 seconds after step 1, total 30s)
     subscriptions.filter(s => s.status === "RPA Allocating" && !scheduledRef.current.has(`step2-${s.id}`)).forEach(sub => {
       scheduledRef.current.add(`step2-${sub.id}`);
       const timer = setTimeout(() => {
