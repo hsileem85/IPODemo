@@ -1493,7 +1493,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Supervisor Checker (with KYC sub-tabs)
+// Requests Status (formerly Supervisor / Checker)
 // ─────────────────────────────────────────────────────────────────────────────
 function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch, ipoStocks, onUpdateStatus }: {
   subscriptions: Subscription[]; onApprove: (ids: string[]) => void;
