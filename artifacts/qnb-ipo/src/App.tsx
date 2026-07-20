@@ -1194,7 +1194,7 @@ interface BrokerBatch {
   phase: "covered" | "uncovered";
 }
 
-function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, subscriptions, custodians }: {
+function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, activeStock, ipoStocks, subscriptions, custodians, onUpdateStatus }: {
   onNewSubscription: (s: Subscription) => void;
   kycRecords: KYCRecord[];
   onNewKYC: (r: KYCRecord) => void;
@@ -1203,10 +1203,11 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   ipoStocks: IPOStock[];
   subscriptions: Subscription[];
   custodians: Custodian[];
+  onUpdateStatus: (id: string, status: SubStatus) => void;
 }) {
   const { t, lang, isRTL } = useLang();
   const { toast } = useToast();
-  const [foTab, setFoTab] = useState<"subs" | "kyc">("subs");
+  const [foTab, setFoTab] = useState<"subs" | "kyc" | "followup">("subs");
   const [cashVerified, setCashVerified] = useState<boolean | null>(null);
   const [step, setStep] = useState(1);
   const [ucInput, setUcInput] = useState("");
@@ -1218,6 +1219,16 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [txRef, setTxRef] = useState("");
   const [subDate, setSubDate] = useState(new Date().toISOString().slice(0, 10));
+  // Branch Follow Up state
+  const [followUpSearch, setFollowUpSearch] = useState("");
+  const [followUpFilter, setFollowUpFilter] = useState("All");
+  const [followUpSelectedId, setFollowUpSelectedId] = useState<string | null>(null);
+  const [branchFix, setBranchFix] = useState<string | null>(null);
+  const [branchFixSent, setBranchFixSent] = useState(false);
+  const [branchFixVerified, setBranchFixVerified] = useState<boolean | null>(null);
+  const selectFollowUpSub = (id: string | null) => {
+    setFollowUpSelectedId(id); setBranchFix(null); setBranchFixSent(false); setBranchFixVerified(null);
+  };
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const STEPS = [t.step1, t.step2, t.step3, t.step4];
   const DOCS = [t.doc1, t.doc2, t.doc3, t.doc4];
@@ -1281,6 +1292,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       <div className="flex gap-2 border-b border-border pb-3">
         <TabBtn id="fo-subs" active={foTab === "subs"} onClick={() => setFoTab("subs")} icon={ClipboardList}>{t.foTabSubs}</TabBtn>
         <TabBtn id="fo-kyc" active={foTab === "kyc"} onClick={() => setFoTab("kyc")} icon={FileUser}>{t.foTabKYC}</TabBtn>
+        <TabBtn id="fo-followup" active={foTab === "followup"} onClick={() => setFoTab("followup")} icon={ActivitySquare}>{t.foTabFollowUp}</TabBtn>
       </div>
 
       {foTab === "kyc" && <KYCModule records={kycRecords} onNewRecord={onNewKYC} onApproveKYC={onApproveKYC} isChecker={false} />}
@@ -1488,6 +1500,167 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
               )}
         </div>
       )}
+
+      {/* ── BRANCH FOLLOW UP TAB ── */}
+      {foTab === "followup" && (() => {
+        const followUpSubs = subscriptions.filter(s =>
+          s.status === "Pending Cash" || s.status === "Pending MCDR Allocation"
+        ).filter(s => {
+          const name = (s.nameAr + " " + s.nameEn + " " + s.unifiedCode).toLowerCase();
+          if (followUpSearch && !name.includes(followUpSearch.toLowerCase())) return false;
+          if (followUpFilter !== "All" && s.status !== followUpFilter) return false;
+          return true;
+        });
+        const selectedSub = followUpSelectedId ? subscriptions.find(s => s.id === followUpSelectedId) ?? null : null;
+        const FILTERS = ["All", "Pending Cash", "Pending MCDR Allocation"];
+
+        const handleGenerateFix = () => {
+          if (!selectedSub) return;
+          const stock = ipoStocks.find(s => s.id === selectedSub.ipoId);
+          const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
+          const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+          const lines = [
+            `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
+            `56=MCDR`, `34=1`, `52=${ts}`,
+            `11=${selectedSub.id}`, `1=${selectedSub.account}`, `55=${stock?.symbol ?? "IPO"}`,
+            `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${selectedSub.requestedShares}`,
+            `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
+          ];
+          setBranchFix(lines.join("\n"));
+        };
+        const handleVerifyMCDR = () => {
+          if (!selectedSub) return;
+          if (selectedSub.unifiedCode === "8800318") {
+            setBranchFixVerified(false);
+            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verification Failed", description: t.verifyMCDRFail, variant: "destructive" });
+          } else {
+            setBranchFixVerified(true);
+            onUpdateStatus(selectedSub.id, "Pending Review");
+            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verified", description: t.verifyMCDRSuccess });
+            selectFollowUpSub(null);
+          }
+        };
+
+        return (
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <div className="flex-1">
+                <h2 className="text-xl font-black tracking-tight">{t.followUpTitle}</h2>
+                <p className="text-muted-foreground text-sm">{t.followUpDesc}</p>
+              </div>
+              <input
+                className="border border-border rounded-xl px-3 py-2 text-sm bg-background w-full md:w-64"
+                placeholder={lang === "ar" ? "بحث بالاسم أو الرمز الموحد..." : "Search by name or unified code..."}
+                value={followUpSearch}
+                onChange={e => setFollowUpSearch(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {FILTERS.map(f => {
+                const label = f === "All" ? (lang === "ar" ? "الكل" : "All") : f === "Pending Cash" ? t.statusPendingCash : t.statusPendingMCDR;
+                return (
+                  <button key={f} onClick={() => setFollowUpFilter(f)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-black border transition-colors ${followUpFilter === f ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/40"}`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[420px]">
+              {/* List */}
+              <div className="lg:col-span-2 border border-border rounded-2xl overflow-hidden">
+                {followUpSubs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm">{lang === "ar" ? "لا توجد طلبات" : "No items"}</div>
+                ) : followUpSubs.map(s => {
+                  const isSel = followUpSelectedId === s.id;
+                  return (
+                    <div key={s.id} onClick={() => selectFollowUpSub(isSel ? null : s.id)}
+                      className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors ${isSel ? "bg-primary/8" : "hover:bg-muted/40"}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm truncate">{clientName(s.nameAr, s.nameEn, lang)}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{s.unifiedCode} · {s.id}</p>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <SubBadge status={s.status} />
+                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
+                            <Layers className="w-2.5 h-2.5" />{s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-primary shrink-0">{s.amountDue.toLocaleString(numLocale)} {t.egp}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Detail Panel */}
+              <div className="lg:col-span-3 border border-border rounded-2xl p-5 space-y-4">
+                {!selectedSub ? (
+                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">{lang === "ar" ? "اختر طلباً للمراجعة" : "Select a subscription to review"}</div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-black text-lg">{clientName(selectedSub.nameAr, selectedSub.nameEn, lang)}</p>
+                        <p className="text-xs font-mono text-muted-foreground">{selectedSub.id} · {selectedSub.unifiedCode}</p>
+                      </div>
+                      <SubBadge status={selectedSub.status} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">{t.sharesCol}</p><p className="font-black text-base mt-0.5">{selectedSub.requestedShares.toLocaleString(numLocale)}</p></div>
+                      <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">{t.totalAmtLabel}</p><p className="font-black text-base mt-0.5 text-primary">{selectedSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
+                    </div>
+
+                    {/* Pending Cash resolve */}
+                    {selectedSub.status === "Pending Cash" && (
+                      <div className="border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 rounded-xl p-4 space-y-2">
+                        <p className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">{t.statusPendingCash}</p>
+                        <p className="text-xs text-muted-foreground">{lang === "ar" ? "تأكيد استلام النقدية من الفرع وإعادة الطلب للمراجعة" : "Confirm cash received from branch and return subscription to review queue"}</p>
+                        <Button size="sm" onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); selectFollowUpSub(null); toast({ title: t.followUpResolvedCash, description: selectedSub.id }); }}>
+                          <CheckCircle2 className="w-3.5 h-3.5 me-1.5" />{lang === "ar" ? "تأكيد النقدية وإعادة للمراجعة" : "Confirm Cash & Return to Review"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Pending MCDR Allocation — FIX generation */}
+                    {selectedSub.status === "Pending MCDR Allocation" && (
+                      <div className="border border-border rounded-xl p-4 space-y-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">FIX 4.4 — {lang === "ar" ? "رسالة التخصيص" : "Allocation Message"}</p>
+                        {!branchFix ? (
+                          <Button size="sm" onClick={handleGenerateFix}><Zap className="w-3.5 h-3.5 me-1.5" />{lang === "ar" ? "إنشاء رسالة FIX" : "Generate FIX Message"}</Button>
+                        ) : !branchFixSent ? (
+                          <>
+                            <div className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{branchFix}</div>
+                            <Button size="sm" onClick={() => setBranchFixSent(true)}><Zap className="w-3.5 h-3.5 me-1.5" />{t.sendFixBtn}</Button>
+                          </>
+                        ) : (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-green-600 text-sm font-black"><CheckCircle2 className="w-4 h-4" />{t.fixSentLabel}</div>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={handleVerifyMCDR} disabled={branchFixVerified !== null}
+                                className={branchFixVerified === true ? "border-green-500 text-green-600" : branchFixVerified === false ? "border-red-400 text-red-600" : ""}>
+                                {branchFixVerified === true ? <><CheckCircle2 className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "تم التحقق" : "Verified"}</>
+                                  : branchFixVerified === false ? <><AlertCircle className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "غير مخصص" : "Not Allocated"}</>
+                                  : <><Zap className="w-3.5 h-3.5 me-1" />{t.verifyMCDRBtn}</>}
+                              </Button>
+                            </div>
+                            {branchFixVerified === false && (
+                              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+                                <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
+                                <p className="text-xs text-red-600 font-bold">{t.verifyMCDRFail}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1504,7 +1677,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
-  const [supTab, setSupTab] = useState<"subs" | "kyc" | "broker" | "followup">("subs");
+  const [supTab, setSupTab] = useState<"subs" | "kyc" | "broker">("subs");
   const [supIpoId, setSupIpoId] = useState<string>("all");
   const [supPhase, setSupPhase] = useState<"all" | "covered" | "uncovered">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -1515,17 +1688,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
   const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
   const [fixMcdrVerifiedMap, setFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
-  // Follow Up + FIX state
-  const [followUpSearch, setFollowUpSearch] = useState("");
-  const [followUpFilter, setFollowUpFilter] = useState("All");
-  const [followUpSelectedId, setFollowUpSelectedId] = useState<string | null>(null);
-  const [supFix, setSupFix] = useState<string | null>(null);
-  const [supFixSent, setSupFixSent] = useState(false);
-  const [supFixVerified, setSupFixVerified] = useState<boolean | null>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
-  const selectFollowUpSub = (id: string | null) => {
-    setFollowUpSelectedId(id); setSupFix(null); setSupFixSent(false); setSupFixVerified(null);
-  };
   const filteredSubs = subscriptions
     .filter(s => supIpoId === "all" || s.ipoId === supIpoId)
     .filter(s => supPhase === "all" || s.phase === supPhase);
@@ -1617,7 +1780,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
           {t.brokerBatchTab}
           {batchPending.length > 0 && <span className="ms-1.5 bg-teal-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center">{batchPending.length}</span>}
         </TabBtn>
-        <TabBtn id="sup-followup" active={supTab === "followup"} onClick={() => setSupTab("followup")} icon={ActivitySquare}>{t.supTabFollowUp}</TabBtn>
       </div>
 
       {/* IPO filter + Phase filter — same row */}
@@ -1947,168 +2109,6 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         </div>
       )}
 
-      {/* ── FOLLOW UP TAB ── */}
-      {supTab === "followup" && (() => {
-        const followUpSubs = subscriptions.filter(s =>
-          s.status === "Pending Cash" || s.status === "Pending MCDR Allocation"
-        ).filter(s => {
-          if (supIpoId !== "all" && s.ipoId !== supIpoId) return false;
-          if (supPhase !== "all" && s.phase !== supPhase) return false;
-          const name = (s.nameAr + " " + s.nameEn + " " + s.unifiedCode).toLowerCase();
-          if (followUpSearch && !name.includes(followUpSearch.toLowerCase())) return false;
-          if (followUpFilter !== "All" && s.status !== followUpFilter) return false;
-          return true;
-        });
-        const selectedSub = followUpSelectedId ? subscriptions.find(s => s.id === followUpSelectedId) ?? null : null;
-        const FILTERS = ["All", "Pending Cash", "Pending MCDR Allocation"];
-
-        const handleGenerateFix = () => {
-          if (!selectedSub) return;
-          const stock = ipoStocks.find(s => s.id === selectedSub.ipoId);
-          const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
-          const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-          const lines = [
-            `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
-            `56=MCDR`, `34=1`, `52=${ts}`,
-            `11=${selectedSub.id}`, `1=${selectedSub.account}`, `55=${stock?.symbol ?? "IPO"}`,
-            `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${selectedSub.requestedShares}`,
-            `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
-          ];
-          setSupFix(lines.join("\n"));
-        };
-        const handleVerifyMCDR = () => {
-          if (!selectedSub) return;
-          if (selectedSub.unifiedCode === "8800318") {
-            setSupFixVerified(false);
-            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verification Failed", description: t.verifyMCDRFail, variant: "destructive" });
-          } else {
-            setSupFixVerified(true);
-            onUpdateStatus(selectedSub.id, "Pending Review");
-            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verified", description: t.verifyMCDRSuccess });
-            selectFollowUpSub(null);
-          }
-        };
-
-        return (
-          <div className="space-y-4">
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
-              <div className="flex-1">
-                <h2 className="text-xl font-black tracking-tight">{t.supTabFollowUp}</h2>
-                <p className="text-muted-foreground text-sm">{lang === "ar" ? "اكتتابات تحتاج إلى متابعة — نقدية معلقة أو في انتظار تخصيص MCDR" : "Subscriptions requiring follow-up — Pending Cash or Pending MCDR Allocation"}</p>
-              </div>
-              <input
-                className="border border-border rounded-xl px-3 py-2 text-sm bg-background w-full md:w-64"
-                placeholder={lang === "ar" ? "بحث بالاسم أو الرمز الموحد..." : "Search by name or unified code..."}
-                value={followUpSearch}
-                onChange={e => setFollowUpSearch(e.target.value)}
-              />
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {FILTERS.map(f => {
-                const label = f === "All" ? (lang === "ar" ? "الكل" : "All") : f === "Pending Cash" ? t.statusPendingCash : t.statusPendingMCDR;
-                return (
-                  <button key={f} onClick={() => setFollowUpFilter(f)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-black border transition-colors ${followUpFilter === f ? "bg-primary text-white border-primary" : "bg-muted text-muted-foreground border-border hover:border-primary/40"}`}>
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-[420px]">
-              {/* List */}
-              <div className="lg:col-span-2 border border-border rounded-2xl overflow-hidden">
-                {followUpSubs.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm">{lang === "ar" ? "لا توجد طلبات" : "No items"}</div>
-                ) : followUpSubs.map(s => {
-                  const isSel = followUpSelectedId === s.id;
-                  return (
-                    <div key={s.id} onClick={() => selectFollowUpSub(isSel ? null : s.id)}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors ${isSel ? "bg-primary/8" : "hover:bg-muted/40"}`}>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-sm truncate">{clientName(s.nameAr, s.nameEn, lang)}</p>
-                        <p className="text-xs font-mono text-muted-foreground">{s.unifiedCode} · {s.id}</p>
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <SubBadge status={s.status} />
-                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black border ${s.phase === "covered" ? "bg-amber-500/10 text-amber-600 border-amber-500/30" : "bg-green-500/10 text-green-600 border-green-500/30"}`}>
-                            <Layers className="w-2.5 h-2.5" />{s.phase === "covered" ? t.coveredPhaseBadge : t.uncoveredPhaseBadge}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-xs font-black text-primary shrink-0">{s.amountDue.toLocaleString(numLocale)} {t.egp}</p>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Detail Panel */}
-              <div className="lg:col-span-3 border border-border rounded-2xl p-5 space-y-4">
-                {!selectedSub ? (
-                  <div className="flex items-center justify-center h-full text-muted-foreground text-sm">{lang === "ar" ? "اختر طلباً للمراجعة" : "Select a subscription to review"}</div>
-                ) : (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-black text-lg">{clientName(selectedSub.nameAr, selectedSub.nameEn, lang)}</p>
-                        <p className="text-xs font-mono text-muted-foreground">{selectedSub.id} · {selectedSub.unifiedCode}</p>
-                      </div>
-                      <SubBadge status={selectedSub.status} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">{t.sharesCol}</p><p className="font-black text-base mt-0.5">{selectedSub.requestedShares.toLocaleString(numLocale)}</p></div>
-                      <div className="bg-muted/40 rounded-xl p-3"><p className="text-[10px] font-black uppercase text-muted-foreground">{t.totalAmtLabel}</p><p className="font-black text-base mt-0.5 text-primary">{selectedSub.amountDue.toLocaleString(numLocale)} {t.egp}</p></div>
-                    </div>
-
-                    {/* Pending Cash resolve */}
-                    {selectedSub.status === "Pending Cash" && (
-                      <div className="border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 rounded-xl p-4 space-y-2">
-                        <p className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">{t.statusPendingCash}</p>
-                        <p className="text-xs text-muted-foreground">{lang === "ar" ? "تأكيد استلام النقدية من الفرع وإعادة الطلب للمراجعة" : "Confirm cash received from branch and return subscription to review queue"}</p>
-                        <Button size="sm" onClick={() => { onUpdateStatus(selectedSub.id, "Pending Review"); selectFollowUpSub(null); toast({ title: t.followUpResolvedCash, description: selectedSub.id }); }}>
-                          <CheckCircle2 className="w-3.5 h-3.5 me-1.5" />{lang === "ar" ? "تأكيد النقدية وإعادة للمراجعة" : "Confirm Cash & Return to Review"}
-                        </Button>
-                      </div>
-                    )}
-
-                    {/* Pending MCDR Allocation — FIX generation */}
-                    {selectedSub.status === "Pending MCDR Allocation" && (
-                      <div className="border border-border rounded-xl p-4 space-y-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">FIX 4.4 — {lang === "ar" ? "رسالة التخصيص" : "Allocation Message"}</p>
-                        {!supFix ? (
-                          <Button size="sm" onClick={handleGenerateFix}><Zap className="w-3.5 h-3.5 me-1.5" />{lang === "ar" ? "إنشاء رسالة FIX" : "Generate FIX Message"}</Button>
-                        ) : !supFixSent ? (
-                          <>
-                            <div className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{supFix}</div>
-                            <Button size="sm" onClick={() => setSupFixSent(true)}><Zap className="w-3.5 h-3.5 me-1.5" />{t.sendFixBtn}</Button>
-                          </>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-green-600 text-sm font-black"><CheckCircle2 className="w-4 h-4" />{t.fixSentLabel}</div>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={handleVerifyMCDR} disabled={supFixVerified !== null}
-                                className={supFixVerified === true ? "border-green-500 text-green-600" : supFixVerified === false ? "border-red-400 text-red-600" : ""}>
-                                {supFixVerified === true ? <><CheckCircle2 className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "تم التحقق" : "Verified"}</>
-                                  : supFixVerified === false ? <><AlertCircle className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "غير مخصص" : "Not Allocated"}</>
-                                  : <><Zap className="w-3.5 h-3.5 me-1" />{t.verifyMCDRBtn}</>}
-                              </Button>
-                            </div>
-                            {supFixVerified === false && (
-                              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                                <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
-                                <p className="text-xs text-red-600 font-bold">{t.verifyMCDRFail}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -4596,6 +4596,7 @@ function IPOSystem() {
   const handleNewSubscription = (s: Subscription) => setSubscriptions(prev => [s, ...prev]);
   const handleNewKYC = (r: KYCRecord) => setKycRecords(prev => [r, ...prev]);
   const handleApproveKYC = (id: string, action: "Approved" | "Rejected") => setKycRecords(prev => prev.map(r => r.id === id ? { ...r, status: action } : r));
+  const handleUpdateStatus = (id: string, status: SubStatus) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
 
   const ROLES: { key: UserRole; label: string; icon: React.ElementType }[] = [
     { key: "FrontOffice", label: t.roleFront, icon: Landmark },
@@ -4843,7 +4844,7 @@ function IPOSystem() {
               brokerBatches={brokerBatches}
             />
           )}
-          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} custodians={custodians} />}
+          {activeView === "FrontOffice" && <FrontOffice onNewSubscription={handleNewSubscription} kycRecords={kycRecords} onNewKYC={handleNewKYC} onApproveKYC={handleApproveKYC} activeStock={activeStock} ipoStocks={ipoStocks} subscriptions={subscriptions} custodians={custodians} onUpdateStatus={handleUpdateStatus} />}
           {activeView === "Supervisor" && <SupervisorChecker subscriptions={subscriptions} onApprove={handleApprove} kycRecords={kycRecords} onApproveKYC={handleApproveKYC} brokerBatches={brokerBatches} onApproveBatch={(id, action) => {
             setBrokerBatches(prev => prev.map(b => b.id === id ? { ...b, status: action } : b));
             if (action === "Approved") {
