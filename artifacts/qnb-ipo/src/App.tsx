@@ -4549,7 +4549,7 @@ function IPOSystem() {
   };
   const handleRefund = () => setSubscriptions(prev => prev.map(s => (s.phase !== "uncovered" || s.status !== "Allocated") ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
   const handleApprove = (ids: string[]) => {
-    setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
+    setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const, allocatedShares: s.phase === "covered" ? s.requestedShares : s.allocatedShares } : s));
     ids.forEach(id => {
       const sub = subscriptions.find(s => s.id === id);
       if (sub) {
@@ -4563,7 +4563,7 @@ function IPOSystem() {
     });
   };
   const handleReceiveCash = (id: string, amount: number) => {
-    setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, amountPaid: amount, status: "Verified" as const } : s));
+    setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, amountPaid: amount, status: "Verified" as const, allocatedShares: s.phase === "covered" ? s.requestedShares : s.allocatedShares } : s));
     const sub = subscriptions.find(s => s.id === id);
     if (sub) {
       const client = lang === "ar" ? sub.nameAr : sub.nameEn;
