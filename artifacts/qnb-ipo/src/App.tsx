@@ -4520,6 +4520,7 @@ function IPOSystem() {
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
   const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks" | "Brokers" | "Custodians" | "Reports">("dashboard");
   const [backOfficePage, setBackOfficePage] = useState<"covered" | "uncovered">("covered");
+  const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showClearingMenu, setShowClearingMenu] = useState(false);
   const [showBasicDataMenu, setShowBasicDataMenu] = useState(false);
   const [brokers, setBrokers] = useState<Broker[]>(INITIAL_BROKERS);
@@ -4573,6 +4574,10 @@ function IPOSystem() {
     document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, []);
+
+  useEffect(() => {
+    if (activeView === "Supervisor") setUserRole("Supervisor");
+  }, [activeView]);
 
   const handlePrefsChange = (p: Partial<UserPrefs>) => setPrefs(prev => ({ ...prev, ...p }));
   const handleLogin = () => {
@@ -4657,10 +4662,35 @@ function IPOSystem() {
                 <LayoutDashboard className="w-3.5 h-3.5" />{t.dashHome}
               </button>
               <div className="w-px bg-border self-stretch mx-0.5" />
-              {ROLES.map(({ key, label, icon: Icon }) => key === "BackOffice" ? (
+              {ROLES.map(({ key, label, icon: Icon }) => key === "FrontOffice" ? (
+                <div key={key} className="relative" onMouseEnter={() => setShowBranchMenu(true)} onMouseLeave={() => setShowBranchMenu(false)}>
+                  <button onClick={() => { setUserRole("FrontOffice"); setActiveView("FrontOffice"); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "FrontOffice" || activeView === "Supervisor" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    <Icon className="w-3.5 h-3.5" />{label}
+                    <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showBranchMenu ? "rotate-180" : ""}`} />
+                  </button>
+                  {showBranchMenu && (
+                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[10rem] py-1">
+                      <button
+                        onClick={() => { setUserRole("FrontOffice"); setActiveView("FrontOffice"); setShowBranchMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "FrontOffice" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                        <Landmark className="w-3.5 h-3.5 shrink-0" />
+                        {t.foTabSubs}
+                      </button>
+                      <div className="my-1 h-px bg-border mx-2" />
+                      <button
+                        onClick={() => { setUserRole("Supervisor"); setActiveView("Supervisor"); setShowBranchMenu(false); }}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Supervisor" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
+                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                        {t.roleSupervisor}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : key === "BackOffice" ? (
                 <div key={key} className="relative" onMouseEnter={() => setShowClearingMenu(true)} onMouseLeave={() => setShowClearingMenu(false)}>
                   <button onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" || activeView === "Supervisor" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                     <Icon className="w-3.5 h-3.5" />{label}
                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showClearingMenu ? "rotate-180" : ""}`} />
                   </button>
@@ -4677,13 +4707,6 @@ function IPOSystem() {
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${!ipoStocks.some(s => s.coveredFinalized) ? "opacity-40 cursor-not-allowed" : activeView === "BackOffice" && backOfficePage === "uncovered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
                         <span className={`w-2 h-2 rounded-full shrink-0 ${ipoStocks.some(s => s.coveredFinalized) ? "bg-green-500" : "bg-muted-foreground"}`} />
                         {t.uncoveredPhaseBadge}
-                      </button>
-                      <div className="my-1 h-px bg-border mx-2" />
-                      <button
-                        onClick={() => { setUserRole("Supervisor"); setActiveView("Supervisor"); setShowClearingMenu(false); }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Supervisor" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
-                        <Eye className="w-3.5 h-3.5 shrink-0" />
-                        {t.roleSupervisor}
                       </button>
                     </div>
                   )}
