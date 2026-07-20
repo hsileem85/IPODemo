@@ -41,7 +41,7 @@ type UserRole = "FrontOffice" | "BackOffice" | "Supervisor" | "SystemAdmin" | "C
 
 interface Broker { id: string; name: string; code: string; email: string; }
 interface Custodian { id: string; name: string; code: string; email: string; }
-type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded" | "Pending Cash" | "Pending MCDR Allocation";
+type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded" | "Pending Cash" | "Pending MCDR Allocation" | "Rejected";
 type CommChannel = "email" | "sms" | "notification";
 type CommAudience = "all" | "group" | "individual" | "upload";
 type KYCStatus = "Draft" | "Pending Review" | "Approved" | "Rejected";
@@ -88,6 +88,14 @@ interface CommMessage {
   sentBy: string;
 }
 interface UserPrefs { darkMode: boolean; notifications: boolean; lang: Lang; }
+interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: "subscription" | "kyc" | "batch" | "system";
+}
 
 interface KYCRecord {
   id: string; clientType: KYCClientType; status: KYCStatus;
@@ -235,6 +243,7 @@ function SubBadge({ status }: { status: SubStatus }) {
     "Refunded": { label: t.statusRefunded, cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
     "Pending Cash": { label: t.statusPendingCash, cls: "bg-red-500/10 text-red-600 border-red-500/20" },
     "Pending MCDR Allocation": { label: t.statusPendingMCDR, cls: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
+    "Rejected": { label: t.statusRejected, cls: "bg-red-600/10 text-red-700 border-red-600/20" },
   };
   const { label, cls } = map[status];
   return <Badge variant="outline" className={`${cls} whitespace-nowrap`}>{label}</Badge>;
@@ -1511,10 +1520,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [expandedBatch, setExpandedBatch] = useState<string | null>(null);
   const [expandedSubId, setExpandedSubId] = useState<string | null>(null);
   const [docPreviewUrl, setDocPreviewUrl] = useState<string | null>(null);
-  // FIX MCDR Allocation check state — subscriptions
-  const [fixMcdrSubId, setFixMcdrSubId] = useState<string | null>(null);
-  const [fixMcdrMsgMap, setFixMcdrMsgMap] = useState<Record<string, string>>({});
-  const [fixMcdrVerifiedMap, setFixMcdrVerifiedMap] = useState<Record<string, boolean | null>>({});
+  // RPA/MCDR state removed — handled by external system
   // Follow Up + FIX state
   const [followUpSearch, setFollowUpSearch] = useState("");
   const [followUpFilter, setFollowUpFilter] = useState("All");
@@ -1533,72 +1539,13 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     .filter(b => supIpoId === "all" || b.ipoId === supIpoId)
     .filter(b => supPhase === "all" || b.phase === supPhase);
   const pending = filteredSubs.filter(s => s.status === "Pending Review");
-  const shown = filteredSubs.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified");
+  const shown = filteredSubs.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified" || s.status === "Rejected");
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
   const kycPending = kycRecords.filter(r => r.status === "Pending Review");
   const batchPending = filteredBatches.filter(b => b.status === "Pending Review");
 
-  // FIX MCDR helpers — subscriptions
-  const generateSubFix = (sub: Subscription) => {
-    const stock = ipoStocks.find(s => s.id === sub.ipoId);
-    const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
-    const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-    const msg = [
-      `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
-      `56=MCDR`, `34=1`, `52=${ts}`,
-      `11=${sub.id}`, `1=${sub.account}`, `55=${stock?.symbol ?? "IPO"}`,
-      `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
-      `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
-    ].join("\n");
-    setFixMcdrMsgMap(prev => ({ ...prev, [sub.id]: msg }));
-  };
-  const verifySubMcdr = (sub: Subscription) => {
-    const passes = sub.unifiedCode !== "3400127";
-    setFixMcdrVerifiedMap(prev => ({ ...prev, [sub.id]: passes }));
-    if (passes) {
-      toast({ title: lang === "ar" ? "تم التحقق من MCDR ✓" : "MCDR Verified ✓", description: t.supFixMcdrPassMsg });
-    } else {
-      onUpdateStatus(sub.id, "Pending MCDR Allocation");
-      toast({ title: lang === "ar" ? "فشل التحقق من MCDR" : "MCDR Verification Failed", description: t.supFixMcdrFailMsg, variant: "destructive" });
-      setFixMcdrSubId(null);
-    }
-  };
-
-
-  // Bulk FIX MCDR check — all pending subscriptions at once
-  const handleCheckAllSubs = () => {
-    const unchecked = pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined);
-    if (unchecked.length === 0) return;
-    const newMsgs: Record<string, string> = {};
-    const newVerified: Record<string, boolean> = {};
-    const failedIds: string[] = [];
-    unchecked.forEach(sub => {
-      const stock = ipoStocks.find(s => s.id === sub.ipoId);
-      const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
-      const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-      newMsgs[sub.id] = [
-        `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
-        `56=MCDR`, `34=1`, `52=${ts}`,
-        `11=${sub.id}`, `1=${sub.account}`, `55=${stock?.symbol ?? "IPO"}`,
-        `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${sub.requestedShares}`,
-        `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
-      ].join("\n");
-      const passes = sub.unifiedCode !== "3400127";
-      newVerified[sub.id] = passes;
-      if (!passes) failedIds.push(sub.id);
-    });
-    setFixMcdrMsgMap(prev => ({ ...prev, ...newMsgs }));
-    setFixMcdrVerifiedMap(prev => ({ ...prev, ...newVerified }));
-    failedIds.forEach(id => onUpdateStatus(id, "Pending MCDR Allocation"));
-    setFixMcdrSubId(null);
-    const verifiedCount = unchecked.length - failedIds.length;
-    toast({
-      title: lang === "ar" ? "نتائج فحص FIX MCDR" : "FIX MCDR Check Results",
-      description: t.supFixMcdrCheckAllResult(verifiedCount, failedIds.length),
-      variant: failedIds.length > 0 ? "destructive" : "default",
-    });
-  };
+  // RPA: MCDR allocation handled by external system — no manual FIX checks here
 
 
   return (
@@ -1737,22 +1684,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
               <p className="text-muted-foreground text-sm">{t.checkerDesc}</p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined).length > 0 && (
-                <Button size="sm" variant="outline" onClick={handleCheckAllSubs}>
-                  <Zap className="w-4 h-4 me-2" />{t.supFixMcdrCheckAll} ({pending.filter(s => fixMcdrVerifiedMap[s.id] === undefined).length})
+              {pending.length > 0 && (
+                <Button size="sm" onClick={() => handleApprove(pending.map(s => s.id))}>
+                  <CheckCircle2 className="w-4 h-4 me-2" />{t.approveAllBtn} ({pending.length})
                 </Button>
               )}
-              {(() => {
-                const mcdrVerified = pending.filter(s => fixMcdrVerifiedMap[s.id] === true);
-                return mcdrVerified.length > 0 ? (
-                  <Button size="sm" onClick={() => handleApprove(mcdrVerified.map(s => s.id))}>
-                    <CheckCircle2 className="w-4 h-4 me-2" />{t.approveAllBtn} ({mcdrVerified.length})
-                  </Button>
-                ) : null;
-              })()}
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border border-primary/20 rounded-xl text-[10px] font-black text-primary/70 uppercase tracking-wider">
-                <Zap className="w-3 h-3" />{t.supFixMcdrBtn} {lang === "ar" ? "مطلوب قبل الاعتماد" : "required before approval"}
-              </div>
             </div>
           </div>
           {pending.length > 0 && <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-2xl px-5 py-3 text-orange-700 dark:text-orange-400 font-bold text-sm">{t.pendingReviewCount(pending.length)}</div>}
@@ -1792,19 +1728,10 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                               {expandedSubId === sub.id ? (lang === "ar" ? "إخفاء المستندات" : "Hide Docs") : (lang === "ar" ? "عرض المستندات" : "View Docs")}
                             </button>
                             {sub.status === "Pending Review" && (
-                              fixMcdrVerifiedMap[sub.id] === true ? (
-                                <div className="flex gap-2">
-                                  <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
-                                  <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); setFixMcdrVerifiedMap(prev => { const n = {...prev}; delete n[sub.id]; return n; }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setFixMcdrSubId(prev => prev === sub.id ? null : sub.id)}
-                                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-black border transition-colors whitespace-nowrap ${fixMcdrSubId === sub.id ? "bg-primary/10 border-primary text-primary" : fixMcdrVerifiedMap[sub.id] === false ? "bg-red-50 dark:bg-red-900/10 border-red-300 text-red-600" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"}`}>
-                                  <Zap className="w-3 h-3" />
-                                  {fixMcdrVerifiedMap[sub.id] === false ? t.supFixMcdrFailed : t.supFixMcdrBtn}
-                                </button>
-                              )
+                              <div className="flex gap-2">
+                                <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
+                                <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
+                              </div>
                             )}
                           </div>
                         </TableCell>
@@ -1880,70 +1807,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
               )}
             </DialogContent>
           </Dialog>
-
-          {/* ── FIX MCDR Allocation Check Panel ── */}
-          {fixMcdrSubId && (() => {
-            const sub = subscriptions.find(s => s.id === fixMcdrSubId);
-            if (!sub) return null;
-            const stock = ipoStocks.find(s => s.id === sub.ipoId);
-            const ipoName = stock ? (lang === "ar" ? stock.securityNameAr : stock.securityNameEn) : sub.ipoId;
-            const fixMsg = fixMcdrMsgMap[fixMcdrSubId];
-            const verified = fixMcdrVerifiedMap[fixMcdrSubId];
-            return (
-              <Card className="border-2 border-primary/30 bg-primary/5 dark:bg-primary/10">
-                <CardContent className="pt-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-primary" />
-                        <span className="font-black text-sm tracking-tight">{t.supFixMcdrTitle}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{t.supFixMcdrDesc}</p>
-                    </div>
-                    <button onClick={() => { setFixMcdrSubId(null); }} className="text-xs text-muted-foreground hover:text-foreground font-bold">✕ {lang === "ar" ? "إغلاق" : "Close"}</button>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-3 bg-background rounded-xl border border-border/50">
-                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.colInvestor}</p><p className="font-bold text-sm mt-0.5">{clientName(sub.nameAr, sub.nameEn, lang)}</p></div>
-                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{lang === "ar" ? "الكود الموحد" : "Unified Code"}</p><p className="font-mono text-sm mt-0.5">{sub.unifiedCode}</p></div>
-                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.colIPOStock}</p><p className="font-bold text-sm mt-0.5 text-primary">{ipoName}</p></div>
-                    <div><p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">{t.sharesCol}</p><p className="font-bold text-sm mt-0.5">{sub.requestedShares.toLocaleString(numLocale)}</p></div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <Button size="sm" variant="outline" onClick={() => generateSubFix(sub)} disabled={!!fixMsg}>
-                      <FileText className="w-3.5 h-3.5 me-2" />{fixMsg ? (lang === "ar" ? "تم التوليد ✓" : "Generated ✓") : t.supFixMcdrGenerate}
-                    </Button>
-                    {fixMsg && verified === undefined && (
-                      <Button size="sm" onClick={() => verifySubMcdr(sub)}>
-                        <Zap className="w-3.5 h-3.5 me-2" />{t.supFixMcdrVerify}
-                      </Button>
-                    )}
-                    {verified === true && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 rounded-xl text-xs font-black">
-                        <CheckCircle2 className="w-3.5 h-3.5" />{t.supFixMcdrPassMsg}
-                      </div>
-                    )}
-                    {verified === false && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-xl text-xs font-black">
-                        <X className="w-3.5 h-3.5" />{t.supFixMcdrFailMsg}
-                      </div>
-                    )}
-                    {fixMsg && (
-                      <button onClick={() => { navigator.clipboard.writeText(fixMsg); toast({ title: t.fixCopied }); }}
-                        className="text-xs font-bold text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
-                        <Copy className="w-3 h-3" />{t.fixCopyBtn}
-                      </button>
-                    )}
-                  </div>
-
-                  {fixMsg && (
-                    <pre className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-36 leading-relaxed whitespace-pre-wrap">{fixMsg}</pre>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
+          {/* FIX MCDR panel removed — handled by external RPA system */}
         </div>
       )}
 
@@ -1962,32 +1826,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
         const selectedSub = followUpSelectedId ? subscriptions.find(s => s.id === followUpSelectedId) ?? null : null;
         const FILTERS = ["All", "Pending Cash", "Pending MCDR Allocation"];
 
-        const handleGenerateFix = () => {
-          if (!selectedSub) return;
-          const stock = ipoStocks.find(s => s.id === selectedSub.ipoId);
-          const price = stock?.pricePerShare ?? TOTAL_PER_SHARE;
-          const ts = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
-          const lines = [
-            `8=FIX.4.4`, `9=158`, `35=D`, `49=BRANCH-${stock?.code ?? "IPO"}`,
-            `56=MCDR`, `34=1`, `52=${ts}`,
-            `11=${selectedSub.id}`, `1=${selectedSub.account}`, `55=${stock?.symbol ?? "IPO"}`,
-            `48=${stock?.isin ?? "—"}`, `22=4`, `54=1`, `38=${selectedSub.requestedShares}`,
-            `40=1`, `44=${price}`, `60=${ts}`, `10=247`,
-          ];
-          setSupFix(lines.join("\n"));
-        };
-        const handleVerifyMCDR = () => {
-          if (!selectedSub) return;
-          if (selectedSub.unifiedCode === "8800318") {
-            setSupFixVerified(false);
-            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verification Failed", description: t.verifyMCDRFail, variant: "destructive" });
-          } else {
-            setSupFixVerified(true);
-            onUpdateStatus(selectedSub.id, "Pending Review");
-            toast({ title: lang === "ar" ? "تحقق من MCDR" : "MCDR Verified", description: t.verifyMCDRSuccess });
-            selectFollowUpSub(null);
-          }
-        };
+        // Follow Up FIX handlers removed — MCDR allocation handled by external RPA system
 
         return (
           <div className="space-y-4">
@@ -2024,7 +1863,7 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                   const isSel = followUpSelectedId === s.id;
                   return (
                     <div key={s.id} onClick={() => selectFollowUpSub(isSel ? null : s.id)}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors ${isSel ? "bg-primary/8" : "hover:bg-muted/40"}`}>
+                      className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 cursor-pointer transition-colors ${isSel ? "bg-primary/10" : "hover:bg-muted/40"}`}>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold text-sm truncate">{clientName(s.nameAr, s.nameEn, lang)}</p>
                         <p className="text-xs font-mono text-muted-foreground">{s.unifiedCode} · {s.id}</p>
@@ -2070,36 +1909,14 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                       </div>
                     )}
 
-                    {/* Pending MCDR Allocation — FIX generation */}
+                    {/* Pending MCDR Allocation — handled by external RPA system */}
                     {selectedSub.status === "Pending MCDR Allocation" && (
-                      <div className="border border-border rounded-xl p-4 space-y-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">FIX 4.4 — {lang === "ar" ? "رسالة التخصيص" : "Allocation Message"}</p>
-                        {!supFix ? (
-                          <Button size="sm" onClick={handleGenerateFix}><Zap className="w-3.5 h-3.5 me-1.5" />{lang === "ar" ? "إنشاء رسالة FIX" : "Generate FIX Message"}</Button>
-                        ) : !supFixSent ? (
-                          <>
-                            <div className="bg-zinc-900 text-green-400 rounded-xl p-4 font-mono text-[10px] overflow-x-auto max-h-48 leading-relaxed whitespace-pre-wrap">{supFix}</div>
-                            <Button size="sm" onClick={() => setSupFixSent(true)}><Zap className="w-3.5 h-3.5 me-1.5" />{t.sendFixBtn}</Button>
-                          </>
-                        ) : (
-                          <div className="space-y-3">
-                            <div className="flex items-center gap-2 text-green-600 text-sm font-black"><CheckCircle2 className="w-4 h-4" />{t.fixSentLabel}</div>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={handleVerifyMCDR} disabled={supFixVerified !== null}
-                                className={supFixVerified === true ? "border-green-500 text-green-600" : supFixVerified === false ? "border-red-400 text-red-600" : ""}>
-                                {supFixVerified === true ? <><CheckCircle2 className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "تم التحقق" : "Verified"}</>
-                                  : supFixVerified === false ? <><AlertCircle className="w-3.5 h-3.5 me-1" />{lang === "ar" ? "غير مخصص" : "Not Allocated"}</>
-                                  : <><Zap className="w-3.5 h-3.5 me-1" />{t.verifyMCDRBtn}</>}
-                              </Button>
-                            </div>
-                            {supFixVerified === false && (
-                              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                                <AlertCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 shrink-0" />
-                                <p className="text-xs text-red-600 font-bold">{t.verifyMCDRFail}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                      <div className="border border-border rounded-xl p-4 space-y-3 bg-muted/30">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Zap className="w-4 h-4 text-primary" />
+                          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{lang === "ar" ? "RPA — النظام الخارجي" : "RPA — External System"}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{lang === "ar" ? "التخصيص في MCDR يتم بواسطة روبوت RPA الخارجي. الطلب قيد المعالجة وسيتم تحديث الحالة تلقائيًا." : "MCDR allocation is handled by the external RPA robot. This request is being processed and the status will be updated automatically."}</p>
                       </div>
                     )}
                   </>
@@ -3861,7 +3678,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
   const brokerClientCount = approvedBatches.reduce((a, b) => a + b.clients.length, 0);
 
   // Supervisor-approved only — used for financial totals and MCDR coverage
-  const svApprovedSubs = filteredSubs.filter(s => s.status !== "Pending Review");
+  const svApprovedSubs = filteredSubs.filter(s => ("Approved,Verified,Allocated,Refunded,Pending Payment,Shortfall" as string).includes(s.status));
   const svApprovedBatches = filteredBatches.filter(b => b.status === "Approved");
   const svBrokerCost = svApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
   const svBrokerShares = svApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
@@ -3934,6 +3751,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
     "Pending Review": "bg-amber-500", "Approved": "bg-emerald-500", "Pending Payment": "bg-blue-500",
     "Verified": "bg-teal-500", "Shortfall": "bg-red-500", "Allocated": "bg-indigo-500", "Refunded": "bg-purple-500",
     "Pending Cash": "bg-red-600", "Pending MCDR Allocation": "bg-purple-600",
+    "Rejected": "bg-red-700",
   };
   const subStatusLabel = (s: SubStatus) => {
     const m: Record<SubStatus, string> = {
@@ -3946,6 +3764,7 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
       "Refunded": lang === "ar" ? "مرتد فائض" : "Refunded",
       "Pending Cash": lang === "ar" ? "نقدية معلقة" : "Pending Cash",
       "Pending MCDR Allocation": lang === "ar" ? "في انتظار تخصيص MCDR" : "Pending MCDR Allocation",
+      "Rejected": lang === "ar" ? "مرفوض" : "Rejected",
     };
     return m[s];
   };
@@ -4516,6 +4335,7 @@ function BasicDataScreen<T extends { id: string; name: string; code: string; ema
 }
 
 function IPOSystem() {
+  const { toast } = useToast();
   const [lang, setLang] = useState<Lang>("en");
   const [userRole, setUserRole] = useState<UserRole>("FrontOffice");
   const [activeView, setActiveView] = useState<"dashboard" | UserRole | "IPOStocks" | "Brokers" | "Custodians" | "Reports">("dashboard");
@@ -4548,6 +4368,7 @@ function IPOSystem() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifRead, setNotifRead] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loggedInUser, setLoggedInUser] = useState<SystemUser>(INITIAL_USERS[4]);
   const [ipoStocks, setIpoStocks] = useState<IPOStock[]>(INITIAL_IPO_STOCKS);
   const [activeStockId, setActiveStockId] = useState<string>(INITIAL_IPO_STOCKS[0]?.id ?? "");
@@ -4575,6 +4396,58 @@ function IPOSystem() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
+  // RPA simulation: auto-process subscriptions in background
+  const scheduledRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    // RPA: Pending Review -> Approved/Rejected (5-20s)
+    subscriptions.filter(s => s.status === "Pending Review" && !scheduledRef.current.has(`rpa-${s.id}`)).forEach(sub => {
+      scheduledRef.current.add(`rpa-${sub.id}`);
+      const delay = 5000 + Math.floor(Math.random() * 15000);
+      const timer = setTimeout(() => {
+        setSubscriptions(prev => {
+          const current = prev.find(s => s.id === sub.id);
+          if (!current || current.status !== "Pending Review") return prev;
+          const accepted = current.unifiedCode !== "3400127";
+          const newStatus: SubStatus = accepted ? "Approved" : "Rejected";
+          const client = lang === "ar" ? current.nameAr : current.nameEn;
+          pushNotification(
+            lang === "ar" ? `نتيجة RPA — ${client}` : `RPA Result — ${client}`,
+            lang === "ar" ? `تمت عملية RPA في MCDR للكود ${current.unifiedCode}: ${accepted ? "مقبول" : "مرفوض"} — الحالة: ${newStatus}`
+              : `RPA processed Unified Code ${current.unifiedCode}: ${accepted ? "Accepted" : "Rejected"} — Status: ${newStatus}`,
+            "subscription"
+          );
+          return prev.map(s => s.id === sub.id ? { ...s, status: newStatus } : s);
+        });
+      }, delay);
+      timers.push(timer);
+    });
+
+    // Cash: Approved -> Verified (8-15s)
+    subscriptions.filter(s => s.status === "Approved" && !scheduledRef.current.has(`cash-${s.id}`)).forEach(sub => {
+      scheduledRef.current.add(`cash-${sub.id}`);
+      const delay = 8000 + Math.floor(Math.random() * 7000);
+      const timer = setTimeout(() => {
+        setSubscriptions(prev => {
+          const current = prev.find(s => s.id === sub.id);
+          if (!current || current.status !== "Approved") return prev;
+          const client = lang === "ar" ? current.nameAr : current.nameEn;
+          pushNotification(
+            lang === "ar" ? `تحصيل نقدي — ${client}` : `Cash Received — ${client}`,
+            lang === "ar" ? `تم تحصيل النقد لاكتتاب ${client} وتحديث الحالة إلى Verified`
+              : `Cash received for ${client}'s subscription — status updated to Verified`,
+            "subscription"
+          );
+          return prev.map(s => s.id === sub.id ? { ...s, status: "Verified" as const } : s);
+        });
+      }, delay);
+      timers.push(timer);
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [subscriptions, lang]);
+
   useEffect(() => {
     if (activeView === "Supervisor") setUserRole("Supervisor");
   }, [activeView]);
@@ -4597,10 +4470,50 @@ function IPOSystem() {
     }));
   };
   const handleRefund = () => setSubscriptions(prev => prev.map(s => (s.phase !== "uncovered" || s.status !== "Allocated") ? s : { ...s, refundAmount: (s.requestedShares - s.allocatedShares) * PAR_VALUE, status: "Refunded" as const }));
-  const handleApprove = (ids: string[]) => setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
-  const handleNewSubscription = (s: Subscription) => setSubscriptions(prev => [s, ...prev]);
+  const handleApprove = (ids: string[]) => {
+    setSubscriptions(prev => prev.map(s => ids.includes(s.id) ? { ...s, status: "Verified" as const } : s));
+    ids.forEach(id => {
+      const sub = subscriptions.find(s => s.id === id);
+      if (sub) {
+        const client = lang === "ar" ? sub.nameAr : sub.nameEn;
+        pushNotification(
+          lang === "ar" ? `تم اعتماد اكتتاب — ${client}` : `Subscription Approved — ${client}`,
+          lang === "ar" ? `تم اعتماد اكتتاب ${client} بنجاح` : `Subscription for ${client} has been approved`,
+          "subscription"
+        );
+      }
+    });
+  };
+  const handleNewSubscription = (s: Subscription) => {
+    setSubscriptions(prev => [s, ...prev]);
+    const client = lang === "ar" ? s.nameAr : s.nameEn;
+    pushNotification(
+      lang === "ar" ? `طلب جديد — ${client}` : `New Request — ${client}`,
+      lang === "ar" ? `تم استلام طلب اكتتاب جديد من ${client} وإرساله للمراجعة` : `New subscription request received from ${client} and sent for review`,
+      "subscription"
+    );
+  };
   const handleNewKYC = (r: KYCRecord) => setKycRecords(prev => [r, ...prev]);
   const handleApproveKYC = (id: string, action: "Approved" | "Rejected") => setKycRecords(prev => prev.map(r => r.id === id ? { ...r, status: action } : r));
+
+  const pushNotification = (title: string, message: string, type: AppNotification["type"] = "system") => {
+    const n: AppNotification = {
+      id: `N-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      title,
+      message,
+      timestamp: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-EG", { hour12: false }),
+      read: false,
+      type,
+    };
+    setNotifications(prev => [n, ...prev].slice(0, 200));
+    setNotifRead(false);
+    if (prefs.notifications) {
+      toast({ title, description: message });
+    }
+  };
+
+  const markNotificationRead = (id: string) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  const markAllNotificationsRead = () => setNotifications(prev => prev.map(n => ({ ...n, read: true })));
 
   const ROLES: { key: UserRole; label: string; icon: React.ElementType }[] = [
     { key: "FrontOffice", label: t.roleFront, icon: Landmark },
@@ -4750,31 +4663,18 @@ function IPOSystem() {
             </div>
             <button onClick={() => setLang(l => l === "ar" ? "en" : "ar")} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"><Globe className="w-4 h-4" />{lang === "ar" ? "EN" : "عر"}</button>
             {(() => {
-              const pendingApprovals = subscriptions.filter(s => s.status === "Pending Review").length;
-              const pendingKYC = kycRecords.filter(r => r.status === "Pending Review").length;
-              const pendingBatches = brokerBatches.filter(b => b.status === "Pending Review").length;
-              const pendingCash = subscriptions.filter(s => s.status === "Pending Cash").length;
-              const pendingMCDR = subscriptions.filter(s => s.status === "Pending MCDR Allocation").length;
-              const totalCount = pendingApprovals + pendingKYC + pendingBatches + pendingCash + pendingMCDR;
-              const hasUnread = prefs.notifications && totalCount > 0 && !notifRead;
-              type NotifItem = { icon: React.ElementType; color: string; dot: string; label: string; count: number; view: string; };
-              const items: NotifItem[] = [
-                { icon: ClipboardList, color: "text-primary", dot: "bg-primary", label: t.notifPendingApprovals, count: pendingApprovals, view: "Supervisor" },
-                { icon: User, color: "text-violet-600", dot: "bg-violet-500", label: t.notifPendingKYC, count: pendingKYC, view: "Supervisor" },
-                { icon: Building2, color: "text-amber-600", dot: "bg-amber-500", label: t.notifPendingBatches, count: pendingBatches, view: "Supervisor" },
-                { icon: AlertCircle, color: "text-red-500", dot: "bg-red-500", label: t.notifPendingCash, count: pendingCash, view: "Supervisor" },
-                { icon: Layers, color: "text-purple-600", dot: "bg-purple-500", label: t.notifPendingMCDR, count: pendingMCDR, view: "Supervisor" },
-              ].filter(item => item.count > 0);
+              const unreadCount = notifications.filter(n => !n.read).length;
+              const hasUnread = prefs.notifications && unreadCount > 0;
               return (
                 <div className="relative" ref={notifPanelRef}>
                   <button
-                    onClick={() => { setShowNotifPanel(v => !v); setNotifRead(true); }}
+                    onClick={() => { setShowNotifPanel(v => !v); if (!showNotifPanel) { setNotifRead(true); } }}
                     className="relative p-2 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {prefs.notifications ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
                     {hasUnread && (
                       <span className="absolute -top-1 -end-1 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center leading-none">
-                        {totalCount > 99 ? "99+" : totalCount}
+                        {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     )}
                   </button>
@@ -4784,42 +4684,39 @@ function IPOSystem() {
                         <div className="flex items-center gap-2">
                           <Bell className="w-4 h-4 text-primary" />
                           <p className="font-black text-sm text-foreground">{t.notifPanelTitle}</p>
-                          {totalCount > 0 && (
-                            <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-black rounded-full">{totalCount}</span>
+                          {unreadCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[10px] font-black rounded-full">{unreadCount}</span>
                           )}
                         </div>
-                        {totalCount > 0 && (
-                          <button onClick={() => setNotifRead(true)} className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors">{t.notifPanelMarkAll}</button>
+                        {notifications.length > 0 && (
+                          <button onClick={() => { markAllNotificationsRead(); setNotifRead(true); }} className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors">{t.notifPanelMarkAll}</button>
                         )}
                       </div>
                       <div className="max-h-80 overflow-y-auto">
-                        {items.length === 0 ? (
+                        {notifications.length === 0 ? (
                           <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
                             <Bell className="w-8 h-8 opacity-20" />
                             <p className="text-sm font-bold">{t.notifPanelEmpty}</p>
                           </div>
-                        ) : items.map((item, idx) => {
-                          const Icon = item.icon;
-                          return (
-                            <button key={idx} onClick={() => { setActiveView(item.view as typeof activeView); setShowNotifPanel(false); }}
-                              className="w-full flex items-start gap-3 px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition-colors text-start last:border-b-0">
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${item.color} bg-current/10`} style={{ backgroundColor: "color-mix(in srgb, currentColor 10%, transparent)" }}>
-                                <div className={item.color}><Icon className="w-4 h-4" /></div>
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-foreground leading-snug">{item.label}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">{t.notifGoTo} {item.view === "Supervisor" ? (lang === "ar" ? "المشرف / المدقق" : "Supervisor / Checker") : item.view}</p>
-                              </div>
-                              <span className={`shrink-0 min-w-[22px] h-[22px] px-1.5 ${item.dot} text-white text-[11px] font-black rounded-full flex items-center justify-center`}>
-                                {item.count}
-                              </span>
-                            </button>
-                          );
-                        })}
+                        ) : notifications.map((n) => (
+                          <button key={n.id}
+                            onClick={() => { markNotificationRead(n.id); setShowNotifPanel(false); if (n.type === "subscription") setActiveView("Supervisor"); }}
+                            className={`w-full flex items-start gap-3 px-4 py-3 border-b border-border/50 hover:bg-muted/40 transition-colors text-start last:border-b-0 ${n.read ? "opacity-60" : ""}`}>
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${n.type === "subscription" ? "text-primary bg-primary/10" : n.type === "kyc" ? "text-violet-600 bg-violet-500/10" : n.type === "batch" ? "text-amber-600 bg-amber-500/10" : "text-muted-foreground bg-muted"}`}>
+                              {n.type === "subscription" ? <ClipboardList className="w-4 h-4" /> : n.type === "kyc" ? <User className="w-4 h-4" /> : n.type === "batch" ? <Building2 className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-foreground leading-snug">{n.title}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.message}</p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-1">{n.timestamp}</p>
+                            </div>
+                            {!n.read && <span className="shrink-0 w-2 h-2 rounded-full bg-primary mt-1.5" />}
+                          </button>
+                        ))}
                       </div>
-                      {items.length > 0 && (
+                      {notifications.length > 0 && (
                         <div className="px-4 py-2.5 border-t border-border bg-muted/20">
-                          <p className="text-[10px] font-bold text-muted-foreground text-center">{lang === "ar" ? "انقر على أي إشعار للانتقال مباشرةً" : "Click any alert to navigate directly"}</p>
+                          <p className="text-[10px] font-bold text-muted-foreground text-center">{lang === "ar" ? "انقر على أي إشعار لعرض التفاصيل" : "Click any notification to view details"}</p>
                         </div>
                       )}
                     </div>
@@ -4895,7 +4792,18 @@ function IPOSystem() {
                 setSubscriptions(prev => [...prev, ...newSubs]);
               }
             }
-          }} ipoStocks={ipoStocks} onUpdateStatus={(id, status) => setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s))} />}
+          }} ipoStocks={ipoStocks} onUpdateStatus={(id, status) => {
+            setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, status } : s));
+            const sub = subscriptions.find(s => s.id === id);
+            if (sub) {
+              const client = lang === "ar" ? sub.nameAr : sub.nameEn;
+              pushNotification(
+                lang === "ar" ? `تحديث حالة — ${client}` : `Status Update — ${client}`,
+                lang === "ar" ? `تم تحديث حالة اكتتاب ${client} إلى ${status}` : `Subscription status for ${client} updated to ${status}`,
+                "subscription"
+              );
+            }
+          }} />}
           {activeView === "BackOffice" && <BackOffice
             subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
             activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks}
