@@ -18,6 +18,7 @@ export interface IPOStock {
   phase: "covered" | "uncovered";
   coveredFinalized: boolean;
   eligibleSharesSnapshot: number;
+  offeringSize: number;
 }
 
 export const INITIAL_IPO_STOCKS: IPOStock[] = [
@@ -36,6 +37,7 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     phase: "covered",
     coveredFinalized: false,
     eligibleSharesSnapshot: 0,
+    offeringSize: 50_000_000,
   },
   {
     id: "IPO-EDITA",
@@ -52,5 +54,6 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     phase: "covered",
     coveredFinalized: false,
     eligibleSharesSnapshot: 0,
+    offeringSize: 30_000_000,
   },
 ];

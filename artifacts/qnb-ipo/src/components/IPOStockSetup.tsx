@@ -23,6 +23,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
     pricePerShare: 0,
     coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "",
     eligibleSharesSnapshot: 0,
+    offeringSize: 0,
   });
 
   const handleSave = () => {
@@ -39,7 +40,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
       description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn,
     });
     setShowAddStock(false);
-    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "", eligibleSharesSnapshot: 0 });
+    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "", eligibleSharesSnapshot: 0, offeringSize: 0 });
   };
 
   const handleFinalize = (stock: IPOStock) => {
@@ -103,6 +104,10 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.pricePerShareLabel}</label>
                 <Input type="number" min="0" step="0.01" value={newStock.pricePerShare || ""} onChange={e => setNewStock(p => ({ ...p, pricePerShare: parseFloat(e.target.value) || 0 }))} placeholder="20.00" dir="ltr" />
               </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.offeringSizeLabel}</label>
+                <Input type="number" min="0" step="1" value={newStock.offeringSize || ""} onChange={e => setNewStock(p => ({ ...p, offeringSize: parseInt(e.target.value) || 0 }))} placeholder="50000000" dir="ltr" />
+              </div>
             </div>
             <div className="border-t border-border pt-4">
               <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-3">{t.coveredPhaseLabel}</p>
@@ -154,10 +159,11 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="grid grid-cols-4 gap-2 text-xs">
                 <div><p className="text-muted-foreground">{t.stockCodeLabel}</p><p className="font-mono font-bold">{stock.code}</p></div>
                 <div><p className="text-muted-foreground">{t.stockSymbolLabel}</p><p className="font-mono font-bold">{stock.symbol}</p></div>
                 <div><p className="text-muted-foreground">{t.pricePerShareLabel}</p><p className="font-mono font-bold text-primary">{stock.pricePerShare?.toFixed(2) ?? "—"} {lang === "ar" ? "ج.م" : "EGP"}</p></div>
+                <div><p className="text-muted-foreground">{t.offeringSizeLabel}</p><p className="font-mono font-bold">{stock.offeringSize.toLocaleString(lang === "ar" ? "ar-EG" : "en-EG")}</p></div>
               </div>
               <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-xs">
                 <div className="flex justify-between">
