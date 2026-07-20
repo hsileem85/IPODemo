@@ -41,7 +41,7 @@ type UserRole = "FrontOffice" | "BackOffice" | "Supervisor" | "SystemAdmin" | "C
 
 interface Broker { id: string; name: string; code: string; email: string; }
 interface Custodian { id: string; name: string; code: string; email: string; }
-type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded" | "Pending Cash" | "Pending MCDR Allocation" | "Rejected";
+type SubStatus = "Pending Review" | "Approved" | "Pending Payment" | "Verified" | "Shortfall" | "Allocated" | "Refunded" | "Pending Cash" | "Pending MCDR Allocation" | "Rejected" | "Submitted" | "RPA Allocating" | "MCDR Accepted" | "MCDR Rejected";
 type CommChannel = "email" | "sms" | "notification";
 type CommAudience = "all" | "group" | "individual" | "upload";
 type KYCStatus = "Draft" | "Pending Review" | "Approved" | "Rejected";
@@ -244,6 +244,10 @@ function SubBadge({ status }: { status: SubStatus }) {
     "Pending Cash": { label: t.statusPendingCash, cls: "bg-red-500/10 text-red-600 border-red-500/20" },
     "Pending MCDR Allocation": { label: t.statusPendingMCDR, cls: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
     "Rejected": { label: t.statusRejected, cls: "bg-red-600/10 text-red-700 border-red-600/20" },
+    "Submitted": { label: t.statusSubmitted, cls: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+    "RPA Allocating": { label: t.statusRpaAllocating, cls: "bg-amber-600/10 text-amber-600 border-amber-600/20" },
+    "MCDR Accepted": { label: t.statusMcdrAccepted, cls: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+    "MCDR Rejected": { label: t.statusMcdrRejected, cls: "bg-red-700/10 text-red-700 border-red-700/20" },
   };
   const { label, cls } = map[status];
   return <Badge variant="outline" className={`${cls} whitespace-nowrap`}>{label}</Badge>;
@@ -1267,7 +1271,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
       nameEn: foundClient.isBankClient ? foundClient.nameEn : enteredNameEn,
       nationalId: foundClient.isBankClient ? foundClient.nationalId : "—", account: foundClient.isBankClient ? foundClient.account : "—", unifiedCode: foundClient.unifiedCode,
       requestedShares: values.requestedShares, amountDue: values.requestedShares * price,
-      amountPaid: values.requestedShares * price,
+      amountPaid: 0,
       allocatedShares: 0, refundAmount: 0, status: "Pending Review",
       branch: "Cairo-Main", submittedAt: new Date().toLocaleString(lang === "ar" ? "ar-EG" : "en-GB"),
       ipoId: activeStock?.id ?? "", date: subDate,
@@ -1279,7 +1283,7 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
   };
   const handleFinalSubmit = () => {
     if (!pendingSub) return;
-    const finalStatus: SubStatus = cashVerified === false ? "Pending Cash" : "Pending Review";
+    const finalStatus: SubStatus = cashVerified === false ? "Pending Cash" : "Submitted";
     onNewSubscription({ ...pendingSub, status: finalStatus, uploadedDocs });
     toast({ title: t.toastSentTitle, description: t.toastSentDesc(pendingSub.id) });
     resetFlow();
@@ -1504,12 +1508,13 @@ function FrontOffice({ onNewSubscription, kycRecords, onNewKYC, onApproveKYC, ac
 // ─────────────────────────────────────────────────────────────────────────────
 // Requests Status (formerly Supervisor / Checker)
 // ─────────────────────────────────────────────────────────────────────────────
-function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch, ipoStocks, onUpdateStatus }: {
+function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC, brokerBatches, onApproveBatch, ipoStocks, onUpdateStatus, onReceiveCash }: {
   subscriptions: Subscription[]; onApprove: (ids: string[]) => void;
   kycRecords: KYCRecord[]; onApproveKYC: (id: string, action: "Approved" | "Rejected") => void;
   brokerBatches: BrokerBatch[]; onApproveBatch: (id: string, action: "Approved" | "Rejected") => void;
   ipoStocks: IPOStock[];
   onUpdateStatus: (id: string, status: SubStatus) => void;
+  onReceiveCash: (id: string, amountPaid: number) => void;
 }) {
   const { t, lang } = useLang();
   const { toast } = useToast();
@@ -1528,6 +1533,12 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
   const [supFix, setSupFix] = useState<string | null>(null);
   const [supFixSent, setSupFixSent] = useState(false);
   const [supFixVerified, setSupFixVerified] = useState<boolean | null>(null);
+  // Cash Receipt Modal state
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [cashTargetSubId, setCashTargetSubId] = useState<string | null>(null);
+  const [cashReceiptAmount, setCashReceiptAmount] = useState<number>(0);
+  const openCashModal = (id: string, amount: number) => { setCashTargetSubId(id); setCashReceiptAmount(amount); setCashModalOpen(true); };
+  const closeCashModal = () => { setCashModalOpen(false); setCashTargetSubId(null); setCashReceiptAmount(0); };
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   const selectFollowUpSub = (id: string | null) => {
     setFollowUpSelectedId(id); setSupFix(null); setSupFixSent(false); setSupFixVerified(null);
@@ -1539,7 +1550,11 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
     .filter(b => supIpoId === "all" || b.ipoId === supIpoId)
     .filter(b => supPhase === "all" || b.phase === supPhase);
   const pending = filteredSubs.filter(s => s.status === "Pending Review");
-  const shown = filteredSubs.filter(s => s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified" || s.status === "Rejected");
+  const shown = filteredSubs.filter(s =>
+    s.status === "Pending Review" || s.status === "Approved" || s.status === "Verified" || s.status === "Rejected" ||
+    s.status === "Submitted" || s.status === "RPA Allocating" || s.status === "MCDR Accepted" || s.status === "MCDR Rejected" ||
+    s.status === "Pending Cash" || s.status === "Pending MCDR Allocation"
+  );
   const toggleSelect = (id: string) => setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const handleApprove = (ids: string[]) => { onApprove(ids); setSelected(new Set()); toast({ title: t.toastApprovedTitle, description: t.toastApprovedDesc(ids.length) }); };
   const kycPending = kycRecords.filter(r => r.status === "Pending Review");
@@ -1727,11 +1742,21 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
                               <FileText className="w-3 h-3" />
                               {expandedSubId === sub.id ? (lang === "ar" ? "إخفاء المستندات" : "Hide Docs") : (lang === "ar" ? "عرض المستندات" : "View Docs")}
                             </button>
+                            {/* Manual Approve/Reject for old "Pending Review" subscriptions (seed data / broker batches) */}
                             {sub.status === "Pending Review" && (
                               <div className="flex gap-2">
                                 <button onClick={() => handleApprove([sub.id])} className="flex items-center gap-1 text-green-600 font-black text-[10px] uppercase hover:underline"><CheckCircle2 className="w-3 h-3" />{t.approveBtn}</button>
                                 <button onClick={() => { onUpdateStatus(sub.id, "Rejected" as SubStatus); toast({ title: t.rejectBtn, description: clientName(sub.nameAr, sub.nameEn, lang) }); }} className="text-red-500 font-black text-[10px] uppercase hover:underline">{t.rejectBtn}</button>
                               </div>
+                            )}
+                            {/* Receive Cash button for subscriptions that got MCDR Accepted */}
+                            {sub.status === "MCDR Accepted" && (
+                              <button
+                                onClick={() => openCashModal(sub.id, sub.amountDue)}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary text-white text-[10px] font-black hover:bg-primary/90 transition-colors">
+                                <Wallet className="w-3 h-3" />
+                                {lang === "ar" ? "استلام النقد" : "Receive Cash"}
+                              </button>
                             )}
                           </div>
                         </TableCell>
@@ -1926,6 +1951,54 @@ function SupervisorChecker({ subscriptions, onApprove, kycRecords, onApproveKYC,
           </div>
         );
       })()}
+
+
+      {/* Cash Receipt Modal */}
+      <Dialog open={cashModalOpen} onOpenChange={open => !open && closeCashModal()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{lang === "ar" ? "استلام النقد" : "Receive Cash"}</DialogTitle>
+            <DialogDescription>{lang === "ar" ? "أدخل مبلغ النقد المستلم وارفع إيصال الدفع" : "Enter the cash amount received and upload the payment receipt"}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{lang === "ar" ? "المبلغ (ج.م)" : "Amount (EGP)"}</label>
+              <Input
+                type="number"
+                value={cashReceiptAmount}
+                onChange={e => setCashReceiptAmount(Number(e.target.value))}
+                className="font-mono font-bold"
+                dir="ltr"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{lang === "ar" ? "إيصال الدفع" : "Payment Receipt"}</label>
+              <div className="border-2 border-dashed border-border rounded-xl p-6 text-center space-y-2">
+                <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+                <p className="text-xs text-muted-foreground font-bold">{lang === "ar" ? "اسحب الملف هنا أو انقر للرفع" : "Drag file here or click to upload"}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (cashTargetSubId) {
+                    onReceiveCash(cashTargetSubId, cashReceiptAmount);
+                    toast({ title: lang === "ar" ? "تم استلام النقد" : "Cash Received", description: `${cashReceiptAmount.toLocaleString()} ${lang === "ar" ? "ج.م" : "EGP"}` });
+                  }
+                  closeCashModal();
+                }}
+              >
+                <CheckCircle2 className="w-4 h-4 me-2" />
+                {lang === "ar" ? "تأكيد الاستلام" : "Confirm Receipt"}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={closeCashModal}>
+                {lang === "ar" ? "إلغاء" : "Cancel"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -3752,6 +3825,8 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
     "Verified": "bg-teal-500", "Shortfall": "bg-red-500", "Allocated": "bg-indigo-500", "Refunded": "bg-purple-500",
     "Pending Cash": "bg-red-600", "Pending MCDR Allocation": "bg-purple-600",
     "Rejected": "bg-red-700",
+    "Submitted": "bg-blue-500", "RPA Allocating": "bg-amber-600",
+    "MCDR Accepted": "bg-emerald-500", "MCDR Rejected": "bg-red-700",
   };
   const subStatusLabel = (s: SubStatus) => {
     const m: Record<SubStatus, string> = {
@@ -3765,6 +3840,10 @@ function Dashboard({ subscriptions, kycRecords, users, loggedInUser, onNavigate,
       "Pending Cash": lang === "ar" ? "نقدية معلقة" : "Pending Cash",
       "Pending MCDR Allocation": lang === "ar" ? "في انتظار تخصيص MCDR" : "Pending MCDR Allocation",
       "Rejected": lang === "ar" ? "مرفوض" : "Rejected",
+      "Submitted": lang === "ar" ? "مرسل" : "Submitted",
+      "RPA Allocating": lang === "ar" ? "في تخصيص RPA" : "RPA Allocating",
+      "MCDR Accepted": lang === "ar" ? "MCDR مقبول" : "MCDR Accepted",
+      "MCDR Rejected": lang === "ar" ? "MCDR مرفوض" : "MCDR Rejected",
     };
     return m[s];
   };
@@ -4396,52 +4475,51 @@ function IPOSystem() {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  // RPA simulation: auto-process subscriptions in background
+  // RPA simulation: deterministic timed workflow
+  // Submitted (t=0) → RPA Allocating (t=5s) → MCDR Acknowledge (t=15s) → Manual Cash → Verified
   const scheduledRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
 
-    // RPA: Pending Review -> Approved/Rejected (5-20s)
-    subscriptions.filter(s => s.status === "Pending Review" && !scheduledRef.current.has(`rpa-${s.id}`)).forEach(sub => {
-      scheduledRef.current.add(`rpa-${sub.id}`);
-      const delay = 5000 + Math.floor(Math.random() * 15000);
+    // Step 1: Submitted → RPA Allocating (exactly 5 seconds)
+    subscriptions.filter(s => s.status === "Submitted" && !scheduledRef.current.has(`step1-${s.id}`)).forEach(sub => {
+      scheduledRef.current.add(`step1-${sub.id}`);
       const timer = setTimeout(() => {
         setSubscriptions(prev => {
           const current = prev.find(s => s.id === sub.id);
-          if (!current || current.status !== "Pending Review") return prev;
-          const accepted = current.unifiedCode !== "3400127";
-          const newStatus: SubStatus = accepted ? "Approved" : "Rejected";
+          if (!current || current.status !== "Submitted") return prev;
           const client = lang === "ar" ? current.nameAr : current.nameEn;
           pushNotification(
-            lang === "ar" ? `نتيجة RPA — ${client}` : `RPA Result — ${client}`,
-            lang === "ar" ? `تمت عملية RPA في MCDR للكود ${current.unifiedCode}: ${accepted ? "مقبول" : "مرفوض"} — الحالة: ${newStatus}`
-              : `RPA processed Unified Code ${current.unifiedCode}: ${accepted ? "Accepted" : "Rejected"} — Status: ${newStatus}`,
+            lang === "ar" ? `RPA تخصيص — ${client}` : `RPA Allocating — ${client}`,
+            lang === "ar" ? `بدأت عملية RPA لتخصيص الكود الموحد ${current.unifiedCode}`
+              : `RPA allocation process started for Unified Code ${current.unifiedCode}`,
+            "subscription"
+          );
+          return prev.map(s => s.id === sub.id ? { ...s, status: "RPA Allocating" as const } : s);
+        });
+      }, 5000);
+      timers.push(timer);
+    });
+
+    // Step 2: RPA Allocating → MCDR Accepted/Rejected (exactly 10 seconds after step 1, total 15s)
+    subscriptions.filter(s => s.status === "RPA Allocating" && !scheduledRef.current.has(`step2-${s.id}`)).forEach(sub => {
+      scheduledRef.current.add(`step2-${sub.id}`);
+      const timer = setTimeout(() => {
+        setSubscriptions(prev => {
+          const current = prev.find(s => s.id === sub.id);
+          if (!current || current.status !== "RPA Allocating") return prev;
+          const accepted = current.unifiedCode !== "3400127";
+          const newStatus: SubStatus = accepted ? "MCDR Accepted" : "MCDR Rejected";
+          const client = lang === "ar" ? current.nameAr : current.nameEn;
+          pushNotification(
+            lang === "ar" ? `رد MCDR — ${client}` : `MCDR Response — ${client}`,
+            lang === "ar" ? `MCDR رد على الكود الموحد ${current.unifiedCode}: ${accepted ? "مقبول" : "مرفوض"} — الحالة: ${newStatus}`
+              : `MCDR acknowledged Unified Code ${current.unifiedCode}: ${accepted ? "Accepted" : "Rejected"} — Status: ${newStatus}`,
             "subscription"
           );
           return prev.map(s => s.id === sub.id ? { ...s, status: newStatus } : s);
         });
-      }, delay);
-      timers.push(timer);
-    });
-
-    // Cash: Approved -> Verified (8-15s)
-    subscriptions.filter(s => s.status === "Approved" && !scheduledRef.current.has(`cash-${s.id}`)).forEach(sub => {
-      scheduledRef.current.add(`cash-${sub.id}`);
-      const delay = 8000 + Math.floor(Math.random() * 7000);
-      const timer = setTimeout(() => {
-        setSubscriptions(prev => {
-          const current = prev.find(s => s.id === sub.id);
-          if (!current || current.status !== "Approved") return prev;
-          const client = lang === "ar" ? current.nameAr : current.nameEn;
-          pushNotification(
-            lang === "ar" ? `تحصيل نقدي — ${client}` : `Cash Received — ${client}`,
-            lang === "ar" ? `تم تحصيل النقد لاكتتاب ${client} وتحديث الحالة إلى Verified`
-              : `Cash received for ${client}'s subscription — status updated to Verified`,
-            "subscription"
-          );
-          return prev.map(s => s.id === sub.id ? { ...s, status: "Verified" as const } : s);
-        });
-      }, delay);
+      }, 10000);
       timers.push(timer);
     });
 
@@ -4483,6 +4561,18 @@ function IPOSystem() {
         );
       }
     });
+  };
+  const handleReceiveCash = (id: string, amount: number) => {
+    setSubscriptions(prev => prev.map(s => s.id === id ? { ...s, amountPaid: amount, status: "Verified" as const } : s));
+    const sub = subscriptions.find(s => s.id === id);
+    if (sub) {
+      const client = lang === "ar" ? sub.nameAr : sub.nameEn;
+      pushNotification(
+        lang === "ar" ? `تم استلام النقد — ${client}` : `Cash Received — ${client}`,
+        lang === "ar" ? `تم تحصيل نقد اكتتاب ${client} بمبلغ ${amount.toLocaleString()} ج.م` : `Cash received for ${client}: ${amount.toLocaleString()} EGP — Status: Verified`,
+        "subscription"
+      );
+    }
   };
   const handleNewSubscription = (s: Subscription) => {
     setSubscriptions(prev => [s, ...prev]);
@@ -4803,7 +4893,7 @@ function IPOSystem() {
                 "subscription"
               );
             }
-          }} />}
+          }} onReceiveCash={handleReceiveCash} />}
           {activeView === "BackOffice" && <BackOffice
             subscriptions={subscriptions} onAllocate={handleAllocate} onRefund={handleRefund}
             activeStock={activeStock} ipoStocks={ipoStocks} onStocksChange={setIpoStocks}
