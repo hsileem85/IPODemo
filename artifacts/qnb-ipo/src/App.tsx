@@ -2053,7 +2053,12 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const uncoveredMcdrRef = useRef<HTMLInputElement>(null);
   const numLocale = lang === "ar" ? "ar-EG" : "en-US";
   // Reset to MCDR tab whenever the page (covered/uncovered) changes
-  useEffect(() => { setBoTab("MCDR"); setDrillCard(null); }, [page]);
+  useEffect(() => {
+    // On the covered page, MCDR upload + Reconciliation are disabled, so default to Cover
+    // History; elsewhere default to MCDR.
+    setBoTab(page === "covered" ? "CoveredHistory" : "MCDR");
+    setDrillCard(null);
+  }, [page]);
 
   const boActiveStock = ipoStocks.find(s => s.id === selectedBoIpoId) ?? activeStock;
 
@@ -2080,15 +2085,17 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
   const totalCashAmount = pageSubs.reduce((a, s) => a + s.amountPaid, 0) + pageBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.cost, 0), 0);
 
   // Eligible IPO Shares:
-  //   covered page  = covered MCDR upload total
-  //   uncovered page = fixed gap: covered MCDR snapshot − covered subscribed (NOT affected by uncovered MCDR upload)
+  //   covered page  = pulled from IPOStock.coveredIpoShares set in Basic Data
+  //                   (MCDR upload is no longer used to compute the eligible total).
+  //   uncovered page = fixed gap: coveredIpoShares − covered subscribed (NOT affected by uncovered MCDR upload).
   const mcdrEligibleTotal = mcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   const uncoveredMcdrEligibleTotal = uncoveredMcdrRows.reduce((a, r) => a + r.eligibleQty, 0);
   void uncoveredMcdrEligibleTotal; // used only for reconciliation, not for stat cards
   const coveredSharesTotal = coveredApprovedSubs.reduce((a, s) => a + s.requestedShares, 0) + coveredApprovedBatches.reduce((a, b) => a + b.clients.reduce((x, c) => x + c.qty, 0), 0);
-  const storedEligible = boActiveStock?.eligibleSharesSnapshot ?? 0;
+  const storedEligible = boActiveStock?.coveredIpoShares ?? 0;
   const uncoveredEligible = Math.max(0, storedEligible - coveredSharesTotal);
-  const eligibleIPOShares = page === "covered" ? mcdrEligibleTotal : uncoveredEligible;
+  const eligibleIPOShares = page === "covered" ? storedEligible : uncoveredEligible;
+  void mcdrEligibleTotal; // covered-stage eligible no longer derives from MCDR rows
   // Coverage ratio = totalSharesSubscribed / eligibleIPOShares * 100 (covered page — percentage, capped 100)
   const coverageRatio = eligibleIPOShares > 0 ? Math.min(100, Math.round((totalSharesSubscribed / eligibleIPOShares) * 100)) : 0;
   // Uncovered page: raw subscription multiplier (e.g. 2.57×), NOT a percentage
@@ -2135,10 +2142,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     setMcdrRows(rows);
     setIsReconciled(false);
     setReconRows([]);
-    // Persist eligible total into the stock so gap survives role switching
+    // Covered-page eligible total is now sourced from Basic Data > IPO Stocks (coveredIpoShares),
+    // so MCDR row upload no longer mutates the stock. Uncovered page still records the snapshot.
     if (page === "covered" && boActiveStock) {
-      const total = rows.reduce((a, r) => a + r.eligibleQty, 0);
-      onStocksChange(ipoStocks.map(s => s.id === boActiveStock.id ? { ...s, eligibleSharesSnapshot: total } : s));
+      // No-op: covered-eligible-shares come from the bank's Basic Data setting.
     }
   };
 
@@ -2295,16 +2302,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{t.eligibleSharesCard}</p>
             {(() => {
               const snap = page === "covered" ? frozenSnapshot : null;
-              // covered page: guard on MCDR upload; uncovered page: guard on covered snapshot existing
+              // covered page: guard on coveredIpoShares being set; uncovered page: guard on covered shares existing
               const hasValue = page === "covered"
-                ? (snap ? snap.hasMcdr : activeMcdrRows.length > 0)
+                ? (snap ? snap.uncoveredGap > 0 || snap.totalSharesSubscribed > 0 : storedEligible > 0)
                 : storedEligible > 0;
-              // covered page after finalize: show frozen gap; covered before finalize: show MCDR total; uncovered: always show fixed gap
+              // covered page after finalize: show frozen gap; covered before finalize: show configured coveredIpoShares; uncovered: always show fixed gap
               const eligible = page === "covered"
                 ? (snap ? snap.uncoveredGap : eligibleIPOShares)
                 : uncoveredEligible;
               const subtext = page === "covered"
-                ? (hasValue ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : t.mcdrRecords(activeMcdrRows.length)) : t.mcdrUploadFirst)
+                ? (hasValue ? (snap ? (lang === "ar" ? "فجوة غير المغطى المجمدة" : "Frozen uncovered gap") : (lang === "ar" ? "من البيانات الأساسية — أسهم التغطية" : "From Basic Data — Covered Shares")) : (lang === "ar" ? "حدد أسهم التغطية في البيانات الأساسية" : "Set Covered Shares in Basic Data"))
                 : (lang === "ar" ? "ثابت — فجوة مرحلة المغطى" : "Fixed — covered phase gap");
               return (
                 <>
@@ -2372,7 +2379,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               // Covered page: percentage display (capped at 100%)
               const snap = frozenSnapshot;
               const ratio = snap ? snap.coverageRatio : coverageRatio;
-              const hasValue = snap ? snap.hasMcdr : activeMcdrRows.length > 0;
+              const hasValue = snap ? (snap.totalSharesSubscribed > 0 || snap.uncoveredGap > 0) : storedEligible > 0;
               return (
                 <>
                   <p className={`text-2xl font-black mt-0.5 ${ratio >= 100 ? "text-red-500" : ratio > 0 ? "text-teal-600" : "text-muted-foreground"}`}>
@@ -2396,7 +2403,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
               {(() => {
                 const gap = frozenSnapshot
                   ? frozenSnapshot.uncoveredGap
-                  : (activeMcdrRows.length > 0 ? Math.max(0, eligibleIPOShares - totalSharesSubscribed) : null);
+                  : (storedEligible > 0 ? Math.max(0, eligibleIPOShares - totalSharesSubscribed) : null);
                 return (
                   <>
                     <p className={`text-2xl font-black mt-0.5 ${gap === null ? "text-muted-foreground" : gap === 0 ? "text-green-600" : "text-amber-600"}`}>
@@ -2553,8 +2560,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       {/* Tabs — split by page */}
       <div className="flex flex-wrap gap-1 border-b border-border pb-2">
         {page === "covered" && <>
-          <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-          <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
           {boActiveStock?.coveredFinalized && <TabBtn id="bo-CoveredHistory" active={boTab === "CoveredHistory"} onClick={() => setBoTab("CoveredHistory")}>{t.boTabCoveredHistory}</TabBtn>}
         </>}
         {page === "uncovered" && <>
@@ -2565,62 +2570,23 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </>}
         <TabBtn id="bo-Broker" active={boTab === "Broker"} onClick={() => setBoTab("Broker")} icon={Building2}>{t.boTabBroker}</TabBtn>
       </div>
-      {page === "covered" && (boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab("MCDR"); return null; })()}
-      {page === "covered" && !boActiveStock?.coveredFinalized && boTab === "CoveredHistory" && (() => { setBoTab("MCDR"); return null; })()}
+      {page === "covered" && (boTab === "MCDR" || boTab === "Reconciliation" || boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab(boActiveStock?.coveredFinalized ? "CoveredHistory" : "CoveredHistory"); return null; })()}
 
       {boTab === "MCDR" && page === "covered" && (
         <Card>
-          <CardHeader><CardTitle>{t.mcdrUploadTitle}</CardTitle><CardDescription>{t.mcdrUploadDesc}</CardDescription></CardHeader>
+          <CardHeader><CardTitle>{t.mcdDisabledCoveredTitle}</CardTitle><CardDescription>{t.mcdDisabledCoveredDesc}</CardDescription></CardHeader>
           <CardContent>
-            {mcdrRows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center border-2 border-dashed border-border rounded-2xl py-16 gap-5">
-                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center"><FileSpreadsheet className="w-7 h-7 text-muted-foreground" /></div>
-                <div className="text-center"><p className="font-bold">{t.mcdrUploadTitle}</p><p className="text-sm text-muted-foreground mt-1">{t.mcdrUploadDesc}</p></div>
-                <input ref={mcdrRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  const reader = new FileReader();
-                  reader.onload = ev => parseMCDR(ev.target?.result as string);
-                  reader.readAsText(file);
-                  e.target.value = "";
-                }} />
-                <Button onClick={() => mcdrRef.current?.click()}><Upload className="w-4 h-4 me-2" />{t.uploadMCDRBtn}</Button>
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-amber-300/60 dark:border-amber-700/40 rounded-2xl py-16 gap-4">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center"><FileSpreadsheet className="w-7 h-7 text-amber-600" /></div>
+              <div className="text-center max-w-md">
+                <p className="font-bold text-amber-700 dark:text-amber-400">{t.coveredIpoSharesLabel}:</p>
+                <p className="text-3xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">
+                  {(boActiveStock?.coveredIpoShares ?? 0).toLocaleString()}{" "}
+                  <span className="text-sm font-bold text-muted-foreground">{t.shares}</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-3">{t.coveredIpoSharesHint}</p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-green-600 font-bold text-sm"><CheckCircle2 className="w-5 h-5" />{t.mcdrTitle} — {t.mcdrRecords(mcdrRows.length)}</div>
-                  <Button variant="outline" size="sm" onClick={() => setMcdrRows([])}><Upload className="w-3.5 h-3.5 me-1" />{t.uploadMCDRBtn}</Button>
-                </div>
-                <div className="overflow-x-auto rounded-xl border border-border/50">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/30">
-                        {[t.colName, t.colIPOName, t.colUnified, t.colEligible, t.colSubscribed, t.colSettlementDate, t.colStatus].map(col => (
-                          <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {mcdrRows.map((r, i) => {
-                        const isFull = r.subscribedQty >= r.eligibleQty;
-                        return (
-                          <TableRow key={i} className="hover:bg-muted/30">
-                            <TableCell className="font-bold text-sm">{r.clientName}</TableCell>
-                            <TableCell className="text-sm font-bold text-primary">{r.ipoName}</TableCell>
-                            <TableCell className="text-sm font-mono font-bold">{r.unifiedCode}</TableCell>
-                            <TableCell className="text-sm font-bold">{r.eligibleQty.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-black text-primary">{r.subscribedQty.toLocaleString(numLocale)}</TableCell>
-                            <TableCell className="text-sm font-mono text-muted-foreground">{r.settlementDate}</TableCell>
-                            <TableCell><Badge variant="outline" className={isFull ? "bg-green-500/10 text-green-600 border-green-500/20" : "bg-amber-500/10 text-amber-600 border-amber-500/20"}>{isFull ? t.mcdrStatusFull : t.mcdrStatusPartial}</Badge></TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-            )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -2782,85 +2748,22 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
       })()}
 
       {boTab === "Reconciliation" && page === "covered" && (
-        <div className="space-y-3">
-          {/* Reconcile action bar */}
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                <div>
-                  <p className="font-black text-sm">{t.reconTitle}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{lang === "ar" ? "مقارنة الاكتتابات المعتمدة (أفراد + وسطاء) مع بيانات MCDR" : "Compare approved subscriptions (individuals + brokers) against MCDR data"}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {isReconciled && (
-                    <div className="flex bg-muted p-1 rounded-xl gap-1">
-                      {RECON_FILTERS.map(({ key, label }) => (
-                        <button key={key} onClick={() => setReconFilter(key)} className={`px-3 py-1 text-xs font-black rounded-lg transition-all ${reconFilter === key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
-                      ))}
-                    </div>
-                  )}
-                  {isReconciled && <Button size="sm" variant="outline" onClick={() => { exportReconCSV(filteredReconRows, lang, "reconciliation-covered.csv"); toast({ title: t.toastExported, description: t.toastExportedDesc }); }} className="shrink-0"><FileSpreadsheet className="w-4 h-4 me-2" />{t.exportReconBtn}</Button>}
-                  <Button size="sm" onClick={handleReconcile} disabled={mcdrRows.length === 0} className="shrink-0">
-                    <CheckCheck className="w-4 h-4 me-2" />{t.reconBtn}
-                  </Button>
-                </div>
+        <Card>
+          <CardHeader><CardTitle>{t.reconTitle}</CardTitle><CardDescription>{t.mcdDisabledCoveredDesc}</CardDescription></CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center border-2 border-dashed border-amber-300/60 dark:border-amber-700/40 rounded-2xl py-16 gap-3">
+              <div className="w-16 h-16 bg-amber-500/10 rounded-full flex items-center justify-center"><CheckCheck className="w-7 h-7 text-amber-600" /></div>
+              <div className="text-center max-w-md">
+                <p className="font-bold text-amber-700 dark:text-amber-400">{t.coveredIpoSharesLabel}:</p>
+                <p className="text-3xl font-black text-amber-700 dark:text-amber-400 font-mono mt-1">
+                  {(boActiveStock?.coveredIpoShares ?? 0).toLocaleString()}{" "}
+                  <span className="text-sm font-bold text-muted-foreground">{t.shares}</span>
+                </p>
+                <p className="text-sm text-muted-foreground mt-3">{t.coveredIpoSharesHint}</p>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Results table */}
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              {!isReconciled ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                  <CheckCheck className="w-10 h-10 text-muted-foreground/40" />
-                  <p className="font-bold text-sm text-muted-foreground">{mcdrRows.length === 0 ? t.reconNeedsMCDR : t.reconRunFirst}</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-border/50">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-muted/30">
-                        {[t.colInvestor, t.colBranch, t.colEligibleShares, t.colSubscribedShares, t.colRemainingShares, t.colStatus].map((col, i) => (
-                          <TableHead key={i} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground whitespace-nowrap">{col}</TableHead>
-                        ))}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredReconRows.length === 0 ? (
-                        <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">{t.noRecords}</TableCell></TableRow>
-                      ) : filteredReconRows.map((row, i) => (
-                        <TableRow key={i} className={`hover:bg-muted/30 ${row.subscribedShares === 0 ? "bg-red-500/5" : row.remainingShares > 0 ? "bg-amber-500/5" : ""}`}>
-                          <TableCell>
-                            <p className="font-bold text-sm">{row.name}</p>
-                            <p className="text-[10px] font-mono text-muted-foreground">{row.unifiedCode}</p>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground font-bold">{row.branch}</TableCell>
-                          <TableCell className="text-sm font-bold text-amber-600">{row.eligibleShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell className="text-sm font-black text-primary">{row.subscribedShares.toLocaleString(numLocale)}</TableCell>
-                          <TableCell>
-                            {row.remainingShares > 0 ? (
-                              <span className="font-black text-sm text-red-500">{row.remainingShares.toLocaleString(numLocale)}</span>
-                            ) : (
-                              <span className="font-bold text-sm text-green-600">0 ✓</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={
-                              row.status === t.statusNotSubscribed ? "bg-red-500/10 text-red-600 border-red-500/20 font-black text-[10px]" :
-                              row.remainingShares > 0 ? "bg-amber-500/10 text-amber-600 border-amber-500/20 font-black text-[10px]" :
-                              "bg-green-500/10 text-green-600 border-green-500/20 font-black text-[10px]"
-                            }>{row.status}</Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── Covered History ── */}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PlusCircle, CheckSquare, CheckCircle2, BarChart3, Info } from "lucide-react";
+import { PlusCircle, CheckSquare, CheckCircle2, BarChart3, Info, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +18,14 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [showAddStock, setShowAddStock] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editShares, setEditShares] = useState<number>(0);
   const [newStock, setNewStock] = useState<Omit<IPOStock, "id" | "phase" | "coveredFinalized">>({
     securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "",
     pricePerShare: 0,
     coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "",
     eligibleSharesSnapshot: 0,
+    coveredIpoShares: 0,
   });
 
   const handleSave = () => {
@@ -39,7 +42,7 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
       description: lang === "ar" ? newStock.securityNameAr : newStock.securityNameEn,
     });
     setShowAddStock(false);
-    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "", eligibleSharesSnapshot: 0 });
+    setNewStock({ securityNameAr: "", securityNameEn: "", code: "", symbol: "", isin: "", pricePerShare: 0, coveredStart: "", coveredEnd: "", uncoveredStart: "", uncoveredEnd: "", eligibleSharesSnapshot: 0, coveredIpoShares: 0 });
   };
 
   const handleFinalize = (stock: IPOStock) => {
@@ -50,6 +53,22 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
       title: t.coveredFinalizedLabel,
       description: lang === "ar" ? stock.securityNameAr : stock.securityNameEn,
     });
+  };
+
+  const startEditShares = (stock: IPOStock) => {
+    setEditingId(stock.id);
+    setEditShares(stock.coveredIpoShares ?? 0);
+  };
+
+  const saveShares = (stock: IPOStock) => {
+    onStocksChange?.(ipoStocks.map(s =>
+      s.id === stock.id ? { ...s, coveredIpoShares: Math.max(0, Math.floor(editShares || 0)) } : s
+    ));
+    toast({
+      title: lang === "ar" ? "تم حفظ الأسهم" : "Covered Shares Saved",
+      description: lang === "ar" ? `${stock.securityNameAr}: ${(editShares || 0).toLocaleString()}` : `${stock.securityNameEn}: ${(editShares || 0).toLocaleString()} shares`,
+    });
+    setEditingId(null);
   };
 
   return (
@@ -102,6 +121,11 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
               <div className="space-y-1">
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.pricePerShareLabel}</label>
                 <Input type="number" min="0" step="0.01" value={newStock.pricePerShare || ""} onChange={e => setNewStock(p => ({ ...p, pricePerShare: parseFloat(e.target.value) || 0 }))} placeholder="20.00" dir="ltr" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.coveredIpoSharesLabel}</label>
+                <Input type="number" min="0" step="1" value={newStock.coveredIpoShares || ""} onChange={e => setNewStock(p => ({ ...p, coveredIpoShares: parseInt(e.target.value, 10) || 0 }))} placeholder="0" dir="ltr" />
+                <p className="text-[10px] text-muted-foreground">{t.coveredIpoSharesHint}</p>
               </div>
             </div>
             <div className="border-t border-border pt-4">
@@ -158,6 +182,43 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
                 <div><p className="text-muted-foreground">{t.stockCodeLabel}</p><p className="font-mono font-bold">{stock.code}</p></div>
                 <div><p className="text-muted-foreground">{t.stockSymbolLabel}</p><p className="font-mono font-bold">{stock.symbol}</p></div>
                 <div><p className="text-muted-foreground">{t.pricePerShareLabel}</p><p className="font-mono font-bold text-primary">{stock.pricePerShare?.toFixed(2) ?? "—"} {lang === "ar" ? "ج.م" : "EGP"}</p></div>
+              </div>
+              {/* Covered IPO Shares — editable in Basic Data */}
+              <div className="bg-amber-50/60 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-3 space-y-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">{t.coveredIpoSharesLabel}</p>
+                    {editingId === stock.id ? (
+                      <Input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={editShares || ""}
+                        onChange={e => setEditShares(parseInt(e.target.value, 10) || 0)}
+                        className="h-8 text-sm font-mono font-bold mt-1"
+                        dir="ltr"
+                        disabled={readOnly}
+                      />
+                    ) : (
+                      <p className="text-lg font-black text-amber-700 dark:text-amber-400 font-mono mt-1">
+                        {(stock.coveredIpoShares ?? 0).toLocaleString()}{" "}
+                        <span className="text-xs font-bold text-muted-foreground">{t.shares}</span>
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-1">{t.coveredIpoSharesHint}</p>
+                  </div>
+                  {!readOnly && (
+                    editingId === stock.id ? (
+                      <Button size="sm" variant="default" className="h-8 shrink-0" onClick={() => saveShares(stock)}>
+                        <Save className="w-3.5 h-3.5 me-1.5" />{t.saveBtn}
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" className="h-8 shrink-0 border-amber-500 text-amber-700 hover:bg-amber-100 font-bold" onClick={() => startEditShares(stock)}>
+                        {t.editBtn}
+                      </Button>
+                    )
+                  )}
+                </div>
               </div>
               <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-xs">
                 <div className="flex justify-between">

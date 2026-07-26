@@ -18,6 +18,12 @@ export interface IPOStock {
   phase: "covered" | "uncovered";
   coveredFinalized: boolean;
   eligibleSharesSnapshot: number;
+  /**
+   * Total number of IPO shares offered in the covered phase.
+   * Set by the bank in Basic Data > IPO Stocks; replaces the MCDR-driven
+   * eligible total on the BackOffice covered clearing page.
+   */
+  coveredIpoShares: number;
 }
 
 export const INITIAL_IPO_STOCKS: IPOStock[] = [
@@ -36,6 +42,7 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     phase: "covered",
     coveredFinalized: false,
     eligibleSharesSnapshot: 0,
+    coveredIpoShares: 250000,
   },
   {
     id: "IPO-EDITA",
@@ -52,5 +59,6 @@ export const INITIAL_IPO_STOCKS: IPOStock[] = [
     phase: "covered",
     coveredFinalized: false,
     eligibleSharesSnapshot: 0,
+    coveredIpoShares: 180000,
   },
 ];
