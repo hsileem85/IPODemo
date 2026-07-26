@@ -132,7 +132,7 @@ interface KYCRecord {
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & Mock Data
 // ─────────────────────────────────────────────────────────────────────────────
-const PAR_VALUE = 18.50;
+const PAR_VALUE = 19.75;
 const ISSUE_FEES = 0.25;
 const TOTAL_PER_SHARE = PAR_VALUE + ISSUE_FEES;
 
