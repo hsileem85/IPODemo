@@ -4325,6 +4325,41 @@ function IPOSystem() {
   const [showBranchMenu, setShowBranchMenu] = useState(false);
   const [showClearingMenu, setShowClearingMenu] = useState(false);
   const [showBasicDataMenu, setShowBasicDataMenu] = useState(false);
+  // Hover-delayed close timers per dropdown so users can move their cursor
+  // from the trigger to the submenu without it vanishing on the small gap.
+  const branchMenuTimer = useRef<number | null>(null);
+  const clearingMenuTimer = useRef<number | null>(null);
+  const basicDataMenuTimer = useRef<number | null>(null);
+  const HOVER_CLOSE_DELAY_MS = 200;
+  useEffect(() => () => {
+    if (branchMenuTimer.current) window.clearTimeout(branchMenuTimer.current);
+    if (clearingMenuTimer.current) window.clearTimeout(clearingMenuTimer.current);
+    if (basicDataMenuTimer.current) window.clearTimeout(basicDataMenuTimer.current);
+  }, []);
+  const openBranchMenu = () => {
+    if (branchMenuTimer.current) { window.clearTimeout(branchMenuTimer.current); branchMenuTimer.current = null; }
+    setShowBranchMenu(true);
+  };
+  const closeBranchMenu = () => {
+    if (branchMenuTimer.current) window.clearTimeout(branchMenuTimer.current);
+    branchMenuTimer.current = window.setTimeout(() => setShowBranchMenu(false), HOVER_CLOSE_DELAY_MS);
+  };
+  const openClearingMenu = () => {
+    if (clearingMenuTimer.current) { window.clearTimeout(clearingMenuTimer.current); clearingMenuTimer.current = null; }
+    setShowClearingMenu(true);
+  };
+  const closeClearingMenu = () => {
+    if (clearingMenuTimer.current) window.clearTimeout(clearingMenuTimer.current);
+    clearingMenuTimer.current = window.setTimeout(() => setShowClearingMenu(false), HOVER_CLOSE_DELAY_MS);
+  };
+  const openBasicDataMenu = () => {
+    if (basicDataMenuTimer.current) { window.clearTimeout(basicDataMenuTimer.current); basicDataMenuTimer.current = null; }
+    setShowBasicDataMenu(true);
+  };
+  const closeBasicDataMenu = () => {
+    if (basicDataMenuTimer.current) window.clearTimeout(basicDataMenuTimer.current);
+    basicDataMenuTimer.current = window.setTimeout(() => setShowBasicDataMenu(false), HOVER_CLOSE_DELAY_MS);
+  };
   const [brokers, setBrokers] = useState<Broker[]>(INITIAL_BROKERS);
   const [custodians, setCustodians] = useState<Custodian[]>(INITIAL_CUSTODIANS);
   // Lifted BackOffice state — persists across navigation
@@ -4571,14 +4606,18 @@ function IPOSystem() {
               </button>
               <div className="w-px bg-border self-stretch mx-0.5" />
               {ROLES.map(({ key, label, icon: Icon }) => key === "FrontOffice" ? (
-                <div key={key} className="relative" onMouseEnter={() => setShowBranchMenu(true)} onMouseLeave={() => setShowBranchMenu(false)}>
+                <div key={key} className="relative" onMouseEnter={openBranchMenu} onMouseLeave={closeBranchMenu}>
                   <button onClick={() => { setUserRole("FrontOffice"); setActiveView("FrontOffice"); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "FrontOffice" || activeView === "Supervisor" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                     <Icon className="w-3.5 h-3.5" />{label}
                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showBranchMenu ? "rotate-180" : ""}`} />
                   </button>
+                  {/* Bridge wrapper: padding-top creates a hoverable buffer between the
+                      trigger button and the submenu so leaving the parent does not lose
+                      the submenu mid-traversal. */}
                   {showBranchMenu && (
-                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[10rem] py-1">
+                    <div className="absolute top-full start-0 pt-2 -mt-1 z-50">
+                    <div className="bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[10rem] py-1">
                       <button
                         onClick={() => { setUserRole("FrontOffice"); setActiveView("FrontOffice"); setShowBranchMenu(false); }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "FrontOffice" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
@@ -4593,17 +4632,19 @@ function IPOSystem() {
                         {t.roleSupervisor}
                       </button>
                     </div>
+                    </div>
                   )}
                 </div>
               ) : key === "BackOffice" ? (
-                <div key={key} className="relative" onMouseEnter={() => setShowClearingMenu(true)} onMouseLeave={() => setShowClearingMenu(false)}>
+                <div key={key} className="relative" onMouseEnter={openClearingMenu} onMouseLeave={closeClearingMenu}>
                   <button onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeView === "BackOffice" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                     <Icon className="w-3.5 h-3.5" />{label}
                     <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showClearingMenu ? "rotate-180" : ""}`} />
                   </button>
                   {showClearingMenu && (
-                    <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[10rem] py-1">
+                    <div className="absolute top-full start-0 pt-2 -mt-1 z-50">
+                    <div className="bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[10rem] py-1">
                       <button
                         onClick={() => { setUserRole("BackOffice"); setActiveView("BackOffice"); setBackOfficePage("covered"); setShowClearingMenu(false); }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "BackOffice" && backOfficePage === "covered" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
@@ -4616,6 +4657,7 @@ function IPOSystem() {
                         <span className={`w-2 h-2 rounded-full shrink-0 ${ipoStocks.some(s => s.coveredFinalized) ? "bg-green-500" : "bg-muted-foreground"}`} />
                         {t.uncoveredPhaseBadge}
                       </button>
+                    </div>
                     </div>
                   )}
                 </div>
@@ -4632,14 +4674,15 @@ function IPOSystem() {
                 <BarChart3 className="w-3.5 h-3.5" />{t.menuReports}
               </button>
               <div className="w-px bg-border self-stretch mx-0.5" />
-              <div className="relative" onMouseEnter={() => setShowBasicDataMenu(true)} onMouseLeave={() => setShowBasicDataMenu(false)}>
+              <div className="relative" onMouseEnter={openBasicDataMenu} onMouseLeave={closeBasicDataMenu}>
                 <button
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${["IPOStocks","Brokers","Custodians"].includes(activeView) ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                   <Database className="w-3.5 h-3.5" />{t.menuBasicData}
                   <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${showBasicDataMenu ? "rotate-180" : ""}`} />
                 </button>
                 {showBasicDataMenu && (
-                  <div className="absolute top-full start-0 mt-1 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden min-w-[11rem] py-1">
+                  <div className="absolute top-full start-0 pt-2 -mt-1 z-50">
+                  <div className="bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[11rem] py-1">
                     <button onClick={() => { setActiveView("IPOStocks"); setShowBasicDataMenu(false); }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "IPOStocks" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
                       <BarChart3 className="w-3.5 h-3.5" />{t.ipoStockTab}
@@ -4652,6 +4695,7 @@ function IPOSystem() {
                       className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-colors text-start ${activeView === "Custodians" ? "text-primary bg-primary/5" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
                       <Lock className="w-3.5 h-3.5" />{t.menuCustodians}
                     </button>
+                  </div>
                   </div>
                 )}
               </div>
