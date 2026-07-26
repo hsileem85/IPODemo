@@ -4860,7 +4860,12 @@ function IPOSystem() {
           />}
           {activeView === "Communications" && <CustomerComms />}
           {activeView === "SystemAdmin" && <SystemAdmin ipoStocks={ipoStocks} onStocksChange={setIpoStocks} />}
-          {activeView === "IPOStocks" && <IPOStockSetup ipoStocks={ipoStocks} onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined} readOnly={userRole !== "SystemAdmin"} />}
+          {activeView === "IPOStocks" && <IPOStockSetup
+            ipoStocks={ipoStocks}
+            onStocksChange={userRole === "SystemAdmin" ? setIpoStocks : undefined}
+            readOnly={userRole !== "SystemAdmin"}
+            onSwitchToAdmin={() => { setUserRole("SystemAdmin"); setActiveView("IPOStocks"); }}
+          />}
           {activeView === "Brokers" && (
             <BasicDataScreen
               title={t.brokersTitle} desc={t.brokersDesc} addBtn={t.addBrokerBtn}

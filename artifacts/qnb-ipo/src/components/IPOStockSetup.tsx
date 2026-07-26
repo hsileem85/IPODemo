@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PlusCircle, CheckSquare, CheckCircle2, BarChart3, Info, Save } from "lucide-react";
+import { PlusCircle, CheckSquare, CheckCircle2, BarChart3, Info, Save, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -12,9 +12,13 @@ interface IPOStockSetupProps {
   ipoStocks: IPOStock[];
   onStocksChange?: (stocks: IPOStock[]) => void;
   readOnly?: boolean;
+  /** When provided, the read-only banner surfaces a button that switches the
+   *  active role to System Admin and re-opens this same view, so non-admin
+   *  users have a single-click path to the IPO creation page. */
+  onSwitchToAdmin?: () => void;
 }
 
-export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: IPOStockSetupProps) {
+export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false, onSwitchToAdmin }: IPOStockSetupProps) {
   const { t, lang } = useLang();
   const { toast } = useToast();
   const [showAddStock, setShowAddStock] = useState(false);
@@ -77,10 +81,22 @@ export function IPOStockSetup({ ipoStocks, onStocksChange, readOnly = false }: I
         <div>
           <h3 className="text-lg font-black">{t.ipoStockTab}</h3>
           {readOnly && (
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
-              <Info className="w-3.5 h-3.5" />
-              {lang === "ar" ? "عرض فقط — التعديل متاح لمدير النظام" : "View only — modifications available to System Admin"}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5" />
+                {lang === "ar" ? "عرض فقط — التعديل متاح لمدير النظام" : "View only — create / edit in System Admin"}
+              </p>
+              {onSwitchToAdmin && (
+                <button
+                  type="button"
+                  onClick={onSwitchToAdmin}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-primary-foreground text-[11px] font-black hover:bg-primary/90 transition-colors shadow-sm"
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                  {lang === "ar" ? "فتح كمدير نظام" : "Open as System Admin"}
+                </button>
+              )}
+            </div>
           )}
         </div>
         {!readOnly && (
