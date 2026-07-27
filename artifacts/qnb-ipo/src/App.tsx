@@ -144,7 +144,7 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
 };
 
 const INITIAL_BROKERS: Broker[] = [
-  { id: "BRK-001", name: "EFG Hermes Securities", code: "EFG", email: "info@efghermes.com" },
+  { id: "BRK-001", name: "EFG Hermes Securities", code: "EFGH", email: "info@efghermes.com" },
   { id: "BRK-002", name: "Beltone Financial", code: "BLT", email: "info@beltone.com.eg" },
   { id: "BRK-003", name: "CI Capital", code: "CIC", email: "brokerage@cicapital.com.eg" },
 ];
