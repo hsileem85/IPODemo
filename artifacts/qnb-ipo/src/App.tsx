@@ -3188,16 +3188,24 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                     const clients = brokerGroups[code] ?? [];
                     const grpQty = clients.reduce((s, c) => s + c.qty, 0);
                     const grpCost = clients.reduce((s, c) => s + c.cost, 0);
+                    const grpExceeds = eligibleIPOShares > 0 && grpQty > eligibleIPOShares;
+                    const grpOverBy = Math.max(0, grpQty - eligibleIPOShares);
                     return (
-                      <div key={code} className="rounded-xl border border-border/50 overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
+                      <div key={code} className={`rounded-xl border overflow-hidden ${grpExceeds ? "border-red-500/60 bg-red-500/5" : "border-border/50"}`}>
+                        <div className={`flex items-center justify-between px-4 py-2.5 ${grpExceeds ? "bg-red-500/10" : "bg-muted/40"}`}>
                           <div className="flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-primary" />
-                            <span className="font-black text-sm text-primary">{code}</span>
+                            <Building2 className={`w-4 h-4 ${grpExceeds ? "text-red-600" : "text-primary"}`} />
+                            <span className={`font-black text-sm ${grpExceeds ? "text-red-700 dark:text-red-400" : "text-primary"}`}>{code}</span>
                             <Badge variant="outline" className="text-[10px] font-bold">{clients.length} {t.totalClients}</Badge>
+                            {grpExceeds && (
+                              <Badge variant="outline" className="text-[10px] font-black bg-red-500/15 text-red-700 border-red-500/30 animate-pulse inline-flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3" />
+                                {lang === "ar" ? `تجاوز بـ ${grpOverBy.toLocaleString(numLocale)} ${t.shares}` : `Exceeds by ${grpOverBy.toLocaleString(numLocale)} ${t.shares}`}
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex gap-4 text-xs font-bold text-muted-foreground">
-                            <span>{grpQty.toLocaleString(numLocale)} {t.shares}</span>
+                            <span className={grpExceeds ? "text-red-700 font-black" : ""}>{grpQty.toLocaleString(numLocale)} {t.shares}</span>
                             <span className="text-primary font-black">{grpCost.toLocaleString(numLocale)} {t.egp}</span>
                           </div>
                         </div>
@@ -3209,18 +3217,23 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                               ))}
                             </TableRow></TableHeader>
                             <TableBody>
-                              {clients.map((c, i) => (
-                                <TableRow key={i} className="hover:bg-muted/30">
+                              {clients.map((c, i) => {
+                                const clientExceeds = eligibleIPOShares > 0 && c.qty > eligibleIPOShares;
+                                return (
+                                <TableRow key={i} className={clientExceeds ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500" : "hover:bg-muted/30"}>
                                   <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
-                                  <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
-                                  <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
+                                  <TableCell className={`font-bold text-sm ${clientExceeds ? "text-red-700 dark:text-red-400" : ""}`}>{c.clientName}</TableCell>
+                                  <TableCell className={`font-mono text-sm ${clientExceeds ? "text-red-700 font-black" : ""}`}>{c.unifiedCode}</TableCell>
                                   <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
-                                  <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
+                                  <TableCell className={`text-end font-mono text-sm ${clientExceeds ? "text-red-700 font-black" : ""}`}>
+                                    {c.qty.toLocaleString(numLocale)}{clientExceeds && <AlertTriangle className="w-3 h-3 ms-1 inline text-red-600" />}
+                                  </TableCell>
                                   <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="text-end font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
                                   <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                                 </TableRow>
-                              ))}
+                              );
+                              })}
                             </TableBody>
                           </Table>
                         </div>
