@@ -2563,13 +2563,24 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </>}
         {page === "uncovered" && <>
           <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-          <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
+          <button
+            id="bo-Reconciliation"
+            data-testid="tab-bo-Reconciliation"
+            disabled
+            title={lang === "ar" ? "تم تعطيل المطابقة في شاشة غير المغطى" : "Reconciliation is disabled on the uncovered screen"}
+            className="px-4 py-2 text-xs font-black rounded-md text-muted-foreground/40 cursor-not-allowed border border-dashed border-border/30 bg-muted/5 flex items-center gap-1.5"
+            onClick={undefined}
+          >
+            <Lock className="w-3 h-3" />
+            {t.boTabRecon}
+          </button>
           <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
           <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
         </>}
         <TabBtn id="bo-Broker" active={boTab === "Broker"} onClick={() => setBoTab("Broker")} icon={Building2}>{t.boTabBroker}</TabBtn>
       </div>
       {page === "covered" && (boTab === "MCDR" || boTab === "Reconciliation" || boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab(boActiveStock?.coveredFinalized ? "CoveredHistory" : "CoveredHistory"); return null; })()}
+      {page === "uncovered" && boTab === "Reconciliation" && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && page === "covered" && (
         <Card>
