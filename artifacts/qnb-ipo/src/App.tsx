@@ -2734,10 +2734,12 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </Card>
           );
         }
-        // Drive refund display from reconciliation rows — largest-remainder for exact totals
-        const reconMatched = uncoveredReconRows.filter(r => r.subscribedShares > 0);
-        const allocatedAmounts = applyLargestRemainder(reconMatched.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
-        const matchedRows = reconMatched.map((r, idx) => {
+        // Drive refund display from the same allocation source. When reconciliation
+        // is disabled, uncoveredAllocationRows contains verified subscriptions and
+        // approved broker batches directly.
+        const refundRows = uncoveredAllocationRows.filter(r => r.subscribedShares > 0);
+        const allocatedAmounts = applyLargestRemainder(refundRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
+        const matchedRows = refundRows.map((r, idx) => {
           const allocated = allocatedAmounts[idx];
           const refundedShares = r.subscribedShares - allocated;
           return { name: r.name, unifiedCode: r.unifiedCode, subscribedShares: r.subscribedShares, allocated, refundedShares, refundAmount: refundedShares * PAR_VALUE };
