@@ -2497,7 +2497,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                       <TableRow key={i} className="hover:bg-muted/30">
                         <TableCell className="font-bold text-sm">{r.clientName}</TableCell>
                         <TableCell className="font-mono text-sm">{r.unifiedCode}</TableCell>
-                        <TableCell className="font-bold text-amber-600">{r.eligibleQty.toLocaleString(numLocale)}</TableCell>
                         <TableCell className="font-bold text-primary">{r.subscribedQty.toLocaleString(numLocale)}</TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{r.settlementDate}</TableCell>
                       </TableRow>
@@ -2892,7 +2891,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-muted/30">
-                        {[t.colName, t.colIPOName, t.colUnified, t.colEligible, t.colSubscribed, t.colSettlementDate, t.colStatus].map(col => (
+                        {[t.colName, t.colIPOName, t.colUnified, t.colQuantity, t.colSettlementDate, t.colStatus].map(col => (
                           <TableHead key={col} className="font-black text-[10px] uppercase tracking-widest text-muted-foreground">{col}</TableHead>
                         ))}
                       </TableRow>
@@ -2903,7 +2902,6 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                           <TableCell className="font-bold text-sm">{r.clientName}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{r.ipoName}</TableCell>
                           <TableCell className="font-mono text-sm">{r.unifiedCode}</TableCell>
-                          <TableCell className="font-bold text-amber-600">{r.eligibleQty.toLocaleString(numLocale)}</TableCell>
                           <TableCell className="font-bold text-primary">{r.subscribedQty.toLocaleString(numLocale)}</TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">{r.settlementDate}</TableCell>
                           <TableCell><Badge variant="outline" className="font-black text-[10px] bg-green-500/10 text-green-600 border-green-500/20">{lang === "ar" ? "مؤهل" : "Eligible"}</Badge></TableCell>
