@@ -3265,10 +3265,20 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>{t.brokerWizardStep3}</CardTitle>
-                    {!allFIXGenerated && (
+                    {page === "covered" && !allFIXGenerated && (
                       <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => brokerCodes.forEach(generateFixForCode)}>
                         <Zap className="w-4 h-4 me-2" />{t.generateFixAll}
                       </Button>
+                    )}
+                    {page === "uncovered" && (
+                      <button
+                        disabled
+                        title={lang === "ar" ? "تم تعطيل توليد FIX في شاشة غير المغطى — اضغط التالي مباشرة" : "Generate FIX for All is disabled on the uncovered screen — proceed with Next."}
+                        className="px-3 py-1.5 text-xs font-bold rounded-md text-muted-foreground/40 cursor-not-allowed border border-dashed border-border/30 bg-muted/5 flex items-center gap-1.5"
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        {t.generateFixAll}
+                      </button>
                     )}
                   </div>
                 </CardHeader>
