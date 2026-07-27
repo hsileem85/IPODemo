@@ -2119,9 +2119,36 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     return uncoveredReconRows;
   }, [uncoveredReconFilter, uncoveredReconRows]);
 
+  // Allocation can proceed without reconciliation. Prefer reconciled rows when
+  // available, otherwise build the same allocation input from approved uncovered
+  // individual and broker subscriptions directly.
+  const uncoveredAllocationRows = uncoveredReconRows.length > 0
+    ? uncoveredReconRows
+    : [
+        ...uncoveredApprovedSubs.map(s => ({
+          name: clientName(s.nameAr, s.nameEn, lang),
+          branch: s.branch,
+          unifiedCode: s.unifiedCode,
+          eligibleShares: s.requestedShares,
+          subscribedShares: s.requestedShares,
+          remainingShares: 0,
+          status: s.status,
+          source: "Individual",
+        })),
+        ...uncoveredApprovedBatches.flatMap(b => b.clients.map(c => ({
+          name: c.clientName,
+          branch: lang === "ar" ? "وسيط" : "Broker",
+          unifiedCode: c.unifiedCode,
+          eligibleShares: c.qty,
+          subscribedShares: c.qty,
+          remainingShares: 0,
+          status: "Approved",
+          source: "Broker",
+        }))),
+      ];
+
   const handleAllocate = () => {
-    // Only allocate clients who are fully or partially matched in reconciliation (subscribedShares > 0)
-    const matchedCodes = new Set(uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
+    const matchedCodes = new Set(uncoveredAllocationRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
     // allocationRatio = totalOfferedShares / totalRequestedShares
     const allocationRatio = totalSharesSubscribed > 0 ? uncoveredEligible / totalSharesSubscribed : 0;
     setStoredAllocationRatio(allocationRatio);
@@ -2269,7 +2296,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </div>
           )}
           {page === "uncovered" && boTab === "Allocation" && (
-            <Button size="sm" onClick={handleAllocate} disabled={uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0} title={uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0 ? (lang === "ar" ? "لا توجد طلبات قابلة للتخصيص" : "No subscriptions available to allocate") : undefined}>
+            <Button size="sm" onClick={handleAllocate} disabled={uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0} title={uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0 ? (lang === "ar" ? "لا توجد طلبات قابلة للتخصيص" : "No subscriptions available to allocate") : undefined}>
               <ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}
             </Button>
           )}
@@ -2603,7 +2630,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
       {boTab === "Allocation" && (() => {
         // Compute allocation rows upfront so header buttons and table share the same data
-        const allocMatchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
+        const allocMatchedRows = uncoveredAllocationRows.filter(r => r.subscribedShares > 0);
         const allocRatioPct = storedAllocationRatio !== null ? `${(storedAllocationRatio * 100).toFixed(1)}%` : "";
         const allocAmounts = storedAllocationRatio !== null
           ? applyLargestRemainder(allocMatchedRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible)
@@ -2665,7 +2692,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="font-bold">{t.noRecords}</p>
                     <p className="text-sm mt-1">
-                      {uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0
+                      {uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0
                         ? (lang === "ar" ? "لا توجد طلبات غير مغطى بعد. أضف اشتراكات أو اشتراكات بروكر ثم نفّذ التخصيص." : "No uncovered subscriptions yet. Add subscriptions or broker subs, then execute allocation.")
                         : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
                     </p>
