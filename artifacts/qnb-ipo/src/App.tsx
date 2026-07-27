@@ -2269,7 +2269,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </div>
           )}
           {page === "uncovered" && boTab === "Allocation" && (
-            <Button size="sm" onClick={handleAllocate} disabled={!isUncoveredReconciled || uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0} title={!isUncoveredReconciled ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً" : "Run Reconciliation first") : undefined}>
+            <Button size="sm" onClick={handleAllocate} disabled={uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0} title={uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0 ? (lang === "ar" ? "لا توجد طلبات قابلة للتخصيص" : "No subscriptions available to allocate") : undefined}>
               <ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}
             </Button>
           )}
@@ -2665,8 +2665,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="font-bold">{t.noRecords}</p>
                     <p className="text-sm mt-1">
-                      {!isUncoveredReconciled
-                        ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
+                      {uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0
+                        ? (lang === "ar" ? "لا توجد طلبات غير مغطى بعد. أضف اشتراكات أو اشتراكات بروكر ثم نفّذ التخصيص." : "No uncovered subscriptions yet. Add subscriptions or broker subs, then execute allocation.")
                         : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
                     </p>
                   </div>
