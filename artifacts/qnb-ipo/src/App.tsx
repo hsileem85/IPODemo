@@ -144,7 +144,7 @@ const MOCK_CLIENTS: Record<string, ClientRecord> = {
 };
 
 const INITIAL_BROKERS: Broker[] = [
-  { id: "BRK-001", name: "EFG Hermes Securities", code: "EFGH", email: "info@efghermes.com" },
+  { id: "BRK-001", name: "EFG Hermes Securities", code: "EFG", email: "info@efghermes.com" },
   { id: "BRK-002", name: "Beltone Financial", code: "BLT", email: "info@beltone.com.eg" },
   { id: "BRK-003", name: "CI Capital", code: "CIC", email: "brokerage@cicapital.com.eg" },
 ];
@@ -2119,36 +2119,9 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
     return uncoveredReconRows;
   }, [uncoveredReconFilter, uncoveredReconRows]);
 
-  // Allocation can proceed without reconciliation. Prefer reconciled rows when
-  // available, otherwise build the same allocation input from approved uncovered
-  // individual and broker subscriptions directly.
-  const uncoveredAllocationRows = uncoveredReconRows.length > 0
-    ? uncoveredReconRows
-    : [
-        ...uncoveredApprovedSubs.map(s => ({
-          name: clientName(s.nameAr, s.nameEn, lang),
-          branch: s.branch,
-          unifiedCode: s.unifiedCode,
-          eligibleShares: s.requestedShares,
-          subscribedShares: s.requestedShares,
-          remainingShares: 0,
-          status: s.status,
-          source: "Individual",
-        })),
-        ...uncoveredApprovedBatches.flatMap(b => b.clients.map(c => ({
-          name: c.clientName,
-          branch: lang === "ar" ? "وسيط" : "Broker",
-          unifiedCode: c.unifiedCode,
-          eligibleShares: c.qty,
-          subscribedShares: c.qty,
-          remainingShares: 0,
-          status: "Approved",
-          source: "Broker",
-        }))),
-      ];
-
   const handleAllocate = () => {
-    const matchedCodes = new Set(uncoveredAllocationRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
+    // Only allocate clients who are fully or partially matched in reconciliation (subscribedShares > 0)
+    const matchedCodes = new Set(uncoveredReconRows.filter(r => r.subscribedShares > 0).map(r => r.unifiedCode));
     // allocationRatio = totalOfferedShares / totalRequestedShares
     const allocationRatio = totalSharesSubscribed > 0 ? uncoveredEligible / totalSharesSubscribed : 0;
     setStoredAllocationRatio(allocationRatio);
@@ -2296,7 +2269,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </div>
           )}
           {page === "uncovered" && boTab === "Allocation" && (
-            <Button size="sm" onClick={handleAllocate} disabled={uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0} title={uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0 ? (lang === "ar" ? "لا توجد طلبات قابلة للتخصيص" : "No subscriptions available to allocate") : undefined}>
+            <Button size="sm" onClick={handleAllocate} disabled={!isUncoveredReconciled || uncoveredReconRows.filter(r => r.subscribedShares > 0).length === 0} title={!isUncoveredReconciled ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً" : "Run Reconciliation first") : undefined}>
               <ArrowLeftRight className="w-4 h-4 me-2" />{t.executeAlloc}
             </Button>
           )}
@@ -2590,24 +2563,13 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
         </>}
         {page === "uncovered" && <>
           <TabBtn id="bo-MCDR" active={boTab === "MCDR"} onClick={() => setBoTab("MCDR")}>{t.boTabMCDR}</TabBtn>
-          <button
-            id="bo-Reconciliation"
-            data-testid="tab-bo-Reconciliation"
-            disabled
-            title={lang === "ar" ? "تم تعطيل المطابقة في شاشة غير المغطى" : "Reconciliation is disabled on the uncovered screen"}
-            className="px-4 py-2 text-xs font-black rounded-md text-muted-foreground/40 cursor-not-allowed border border-dashed border-border/30 bg-muted/5 flex items-center gap-1.5"
-            onClick={undefined}
-          >
-            <Lock className="w-3 h-3" />
-            {t.boTabRecon}
-          </button>
+          <TabBtn id="bo-Reconciliation" active={boTab === "Reconciliation"} onClick={() => setBoTab("Reconciliation")}>{t.boTabRecon}</TabBtn>
           <TabBtn id="bo-Allocation" active={boTab === "Allocation"} onClick={() => setBoTab("Allocation")}>{t.boTabAlloc}</TabBtn>
           <TabBtn id="bo-Refunds" active={boTab === "Refunds"} onClick={() => setBoTab("Refunds")}>{t.boTabRefunds}</TabBtn>
         </>}
         <TabBtn id="bo-Broker" active={boTab === "Broker"} onClick={() => setBoTab("Broker")} icon={Building2}>{t.boTabBroker}</TabBtn>
       </div>
       {page === "covered" && (boTab === "MCDR" || boTab === "Reconciliation" || boTab === "Allocation" || boTab === "Refunds") && (() => { setBoTab(boActiveStock?.coveredFinalized ? "CoveredHistory" : "CoveredHistory"); return null; })()}
-      {page === "uncovered" && boTab === "Reconciliation" && (() => { setBoTab("MCDR"); return null; })()}
 
       {boTab === "MCDR" && page === "covered" && (
         <Card>
@@ -2630,7 +2592,7 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
 
       {boTab === "Allocation" && (() => {
         // Compute allocation rows upfront so header buttons and table share the same data
-        const allocMatchedRows = uncoveredAllocationRows.filter(r => r.subscribedShares > 0);
+        const allocMatchedRows = uncoveredReconRows.filter(r => r.subscribedShares > 0);
         const allocRatioPct = storedAllocationRatio !== null ? `${(storedAllocationRatio * 100).toFixed(1)}%` : "";
         const allocAmounts = storedAllocationRatio !== null
           ? applyLargestRemainder(allocMatchedRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible)
@@ -2692,8 +2654,8 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="font-bold">{t.noRecords}</p>
                     <p className="text-sm mt-1">
-                      {uncoveredAllocationRows.filter(r => r.subscribedShares > 0).length === 0
-                        ? (lang === "ar" ? "لا توجد طلبات غير مغطى بعد. أضف اشتراكات أو اشتراكات بروكر ثم نفّذ التخصيص." : "No uncovered subscriptions yet. Add subscriptions or broker subs, then execute allocation.")
+                      {!isUncoveredReconciled
+                        ? (lang === "ar" ? "يجب تشغيل المطابقة أولاً ثم نفّذ التخصيص." : "Run Reconciliation first, then Execute Allocation.")
                         : (lang === "ar" ? "نفّذ التخصيص من الزر أعلاه." : "Click Execute Allocation above.")}
                     </p>
                   </div>
@@ -2734,12 +2696,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
             </Card>
           );
         }
-        // Drive refund display from the same allocation source. When reconciliation
-        // is disabled, uncoveredAllocationRows contains verified subscriptions and
-        // approved broker batches directly.
-        const refundRows = uncoveredAllocationRows.filter(r => r.subscribedShares > 0);
-        const allocatedAmounts = applyLargestRemainder(refundRows.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
-        const matchedRows = refundRows.map((r, idx) => {
+        // Drive refund display from reconciliation rows — largest-remainder for exact totals
+        const reconMatched = uncoveredReconRows.filter(r => r.subscribedShares > 0);
+        const allocatedAmounts = applyLargestRemainder(reconMatched.map(r => r.subscribedShares), storedAllocationRatio, uncoveredEligible);
+        const matchedRows = reconMatched.map((r, idx) => {
           const allocated = allocatedAmounts[idx];
           const refundedShares = r.subscribedShares - allocated;
           return { name: r.name, unifiedCode: r.unifiedCode, subscribedShares: r.subscribedShares, allocated, refundedShares, refundAmount: refundedShares * PAR_VALUE };
@@ -3228,24 +3188,16 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                     const clients = brokerGroups[code] ?? [];
                     const grpQty = clients.reduce((s, c) => s + c.qty, 0);
                     const grpCost = clients.reduce((s, c) => s + c.cost, 0);
-                    const grpExceeds = eligibleIPOShares > 0 && grpQty > eligibleIPOShares;
-                    const grpOverBy = Math.max(0, grpQty - eligibleIPOShares);
                     return (
-                      <div key={code} className={`rounded-xl border overflow-hidden ${grpExceeds ? "border-red-500/60 bg-red-500/5" : "border-border/50"}`}>
-                        <div className={`flex items-center justify-between px-4 py-2.5 ${grpExceeds ? "bg-red-500/10" : "bg-muted/40"}`}>
+                      <div key={code} className="rounded-xl border border-border/50 overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-2.5 bg-muted/40">
                           <div className="flex items-center gap-2">
-                            <Building2 className={`w-4 h-4 ${grpExceeds ? "text-red-600" : "text-primary"}`} />
-                            <span className={`font-black text-sm ${grpExceeds ? "text-red-700 dark:text-red-400" : "text-primary"}`}>{code}</span>
+                            <Building2 className="w-4 h-4 text-primary" />
+                            <span className="font-black text-sm text-primary">{code}</span>
                             <Badge variant="outline" className="text-[10px] font-bold">{clients.length} {t.totalClients}</Badge>
-                            {grpExceeds && (
-                              <Badge variant="outline" className="text-[10px] font-black bg-red-500/15 text-red-700 border-red-500/30 animate-pulse inline-flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" />
-                                {lang === "ar" ? `تجاوز بـ ${grpOverBy.toLocaleString(numLocale)} ${t.shares}` : `Exceeds by ${grpOverBy.toLocaleString(numLocale)} ${t.shares}`}
-                              </Badge>
-                            )}
                           </div>
                           <div className="flex gap-4 text-xs font-bold text-muted-foreground">
-                            <span className={grpExceeds ? "text-red-700 font-black" : ""}>{grpQty.toLocaleString(numLocale)} {t.shares}</span>
+                            <span>{grpQty.toLocaleString(numLocale)} {t.shares}</span>
                             <span className="text-primary font-black">{grpCost.toLocaleString(numLocale)} {t.egp}</span>
                           </div>
                         </div>
@@ -3257,23 +3209,18 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                               ))}
                             </TableRow></TableHeader>
                             <TableBody>
-                              {clients.map((c, i) => {
-                                const clientExceeds = eligibleIPOShares > 0 && c.qty > eligibleIPOShares;
-                                return (
-                                <TableRow key={i} className={clientExceeds ? "bg-red-500/10 hover:bg-red-500/20 border-l-4 border-red-500" : "hover:bg-muted/30"}>
+                              {clients.map((c, i) => (
+                                <TableRow key={i} className="hover:bg-muted/30">
                                   <TableCell className="text-xs text-muted-foreground w-8">{i + 1}</TableCell>
-                                  <TableCell className={`font-bold text-sm ${clientExceeds ? "text-red-700 dark:text-red-400" : ""}`}>{c.clientName}</TableCell>
-                                  <TableCell className={`font-mono text-sm ${clientExceeds ? "text-red-700 font-black" : ""}`}>{c.unifiedCode}</TableCell>
+                                  <TableCell className="font-bold text-sm">{c.clientName}</TableCell>
+                                  <TableCell className="font-mono text-sm">{c.unifiedCode}</TableCell>
                                   <TableCell className="font-mono text-sm text-muted-foreground">{c.date}</TableCell>
-                                  <TableCell className={`text-end font-mono text-sm ${clientExceeds ? "text-red-700 font-black" : ""}`}>
-                                    {c.qty.toLocaleString(numLocale)}{clientExceeds && <AlertTriangle className="w-3 h-3 ms-1 inline text-red-600" />}
-                                  </TableCell>
+                                  <TableCell className="text-end font-mono text-sm">{c.qty.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="text-end font-mono text-sm text-primary font-bold">{c.cost.toLocaleString(numLocale)}</TableCell>
                                   <TableCell className="text-end font-mono text-xs text-muted-foreground">{c.ref || "—"}</TableCell>
                                   <TableCell className="text-xs font-bold text-muted-foreground whitespace-nowrap">{c.custodian || "—"}</TableCell>
                                 </TableRow>
-                              );
-                              })}
+                              ))}
                             </TableBody>
                           </Table>
                         </div>
@@ -3294,20 +3241,10 @@ function BackOffice({ subscriptions, onAllocate, onRefund, activeStock, ipoStock
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>{t.brokerWizardStep3}</CardTitle>
-                    {page === "covered" && !allFIXGenerated && (
+                    {!allFIXGenerated && (
                       <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 font-bold" onClick={() => brokerCodes.forEach(generateFixForCode)}>
                         <Zap className="w-4 h-4 me-2" />{t.generateFixAll}
                       </Button>
-                    )}
-                    {page === "uncovered" && (
-                      <button
-                        disabled
-                        title={lang === "ar" ? "تم تعطيل توليد FIX في شاشة غير المغطى — اضغط التالي مباشرة" : "Generate FIX for All is disabled on the uncovered screen — proceed with Next."}
-                        className="px-3 py-1.5 text-xs font-bold rounded-md text-muted-foreground/40 cursor-not-allowed border border-dashed border-border/30 bg-muted/5 flex items-center gap-1.5"
-                      >
-                        <Lock className="w-3.5 h-3.5" />
-                        {t.generateFixAll}
-                      </button>
                     )}
                   </div>
                 </CardHeader>
